@@ -41,10 +41,11 @@ const patch  = (t: string, q: string, b: unknown) => sb(t, q, "PATCH", b);
 const del    = (t: string, q: string) => sb(t, q, "DELETE", undefined, "return=minimal");
 
 // ── PostgREST query builder ──────────────────────────────────────────────────
-// Builds ?col=eq.val&col2=order.asc style strings
+// Manually builds ?col=eq.val strings — avoids URLSearchParams encoding @ as %40
+// which breaks PostgREST eq. filters on email columns.
 const pq = (filters: Record<string,string> = {}) => {
-  const p = new URLSearchParams(filters);
-  return p.size ? `?${p}` : "";
+  const parts = Object.entries(filters).map(([k, v]) => `${encodeURIComponent(k)}=${v}`);
+  return parts.length ? `?${parts.join("&")}` : "";
 };
 const eqf  = (col: string, val: unknown) => ({ [col]: `eq.${val}` });
 const neqf = (col: string, val: unknown) => ({ [col]: `neq.${val}` });
@@ -68,7 +69,7 @@ export const config = { api: { bodyParser: { sizeLimit: "4mb" } } };
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
-
+  try {
   const segs: string[] = Array.isArray(req.query.proxy)
     ? req.query.proxy
     : [req.query.proxy as string];
@@ -436,4 +437,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (path === "youtube-videos") return res.json({ videos: [] });
 
   return res.status(404).json({ error: `No handler for ${m} /${path}` });
+  } catch (err: any) {
+    console.error("[proxy] unhandled error:", err);
+    return res.status(500).json({ error: err?.message ?? "Internal proxy error" });
+  }
 }
