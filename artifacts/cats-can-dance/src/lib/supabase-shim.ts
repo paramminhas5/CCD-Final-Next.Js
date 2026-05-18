@@ -98,10 +98,20 @@ function buildQuery(table: string): QueryBuilder {
 }
 
 // Auth shim — routes to /api/auth/* endpoints
+const SESSION_KEY = "ccd_session_token";
+const _authListeners: Array<(event: string, session: any) => void> = [];
+
+function _fireAuthChange(event: string, session: any) {
+  _authListeners.forEach((cb) => { try { cb(event, session); } catch {} });
+}
+
 const authShim = {
   getSession: async () => {
     try {
-      const data = await api.get<{ session: any }>("/auth/session");
+      const token = typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["x-session-token"] = token;
+      const data = await api.get<{ session: any }>("/auth/session", token ? headers : undefined);
       return { data: { session: data.session }, error: null };
     } catch {
       return { data: { session: null }, error: null };
@@ -109,7 +119,14 @@ const authShim = {
   },
   signInWithOtp: async ({ email, options }: { email: string; options?: any }) => {
     try {
-      await api.post("/auth/magic-link", { email, redirectTo: options?.emailRedirectTo });
+      const res = await api.post<{ ok: boolean; token?: string; userId?: string }>(
+        "/auth/magic-link",
+        { email, redirectTo: options?.emailRedirectTo }
+      );
+      if (res.token && typeof window !== "undefined") {
+        localStorage.setItem(SESSION_KEY, res.token);
+        _fireAuthChange("SIGNED_IN", { user: { id: res.userId ?? `email:${email}` } });
+      }
       return { data: {}, error: null };
     } catch (e: any) {
       return { data: null, error: { message: e.message } };
@@ -117,18 +134,24 @@ const authShim = {
   },
   signOut: async () => {
     try {
+      if (typeof window !== "undefined") localStorage.removeItem(SESSION_KEY);
+      api.clearCache();
       await api.post("/auth/signout", {});
+      _fireAuthChange("SIGNED_OUT", null);
       return { error: null };
     } catch (e: any) {
       return { error: { message: e.message } };
     }
   },
   onAuthStateChange: (cb: (event: string, session: any) => void) => {
-    // No-op for now — Clerk handles auth state
+    _authListeners.push(cb);
     return {
       data: {
         subscription: {
-          unsubscribe: () => {},
+          unsubscribe: () => {
+            const idx = _authListeners.indexOf(cb);
+            if (idx !== -1) _authListeners.splice(idx, 1);
+          },
         },
       },
     };
@@ -191,12 +214,12 @@ const GET_FUNCTIONS = new Set([
 
 // Functions shim — routes to /api/<route>
 const functionsShim = {
-  invoke: async (name: string, opts?: { body?: any }) => {
+  invoke: async (name: string, opts?: { body?: any; headers?: Record<string, string> }) => {
     try {
       const route = FUNCTION_ROUTE[name] ?? name;
       const data = GET_FUNCTIONS.has(name)
-        ? await api.get<any>(`/${route}`)
-        : await api.post<any>(`/${route}`, opts?.body ?? {});
+        ? await api.get<any>(`/${route}`, opts?.headers)
+        : await api.post<any>(`/${route}`, opts?.body ?? {}, opts?.headers);
       return { data, error: null };
     } catch (e: any) {
       return { data: null, error: { message: e.message } };

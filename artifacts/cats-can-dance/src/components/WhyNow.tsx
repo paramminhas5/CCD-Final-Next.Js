@@ -2,6 +2,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import catRaver from "@/assets/cat-raver.png";
 import cloud from "@/assets/cloud.png";
+import { imgUrl } from "@/lib/img";
 
 const shifts = [
   { t: "Culture has become commerce.", d: "People no longer buy products alone. They buy identity, belonging, experiences." },
@@ -21,8 +22,8 @@ const WhyNow = () => {
 
   return (
     <section ref={ref} id="whynow" className="relative bg-magenta border-b-4 border-ink py-12 md:py-20 overflow-hidden">
-      <motion.img src={cloud} style={{ x: cloudX }} alt="" className="absolute top-20 right-0 w-72 opacity-80" />
-      <motion.img src={catRaver} style={{ y: catY }} alt="" className="absolute right-4 md:right-16 top-1/2 w-40 md:w-64 hidden sm:block" />
+      <motion.img src={imgUrl(cloud)} style={{ x: cloudX }} alt="" className="absolute top-20 right-0 w-72 opacity-80" />
+      <motion.img src={imgUrl(catRaver)} style={{ y: catY }} alt="" className="absolute right-4 md:right-16 top-1/2 w-40 md:w-64 hidden sm:block" />
 
       <div className="container relative z-10">
         <p className="font-display text-acid-yellow text-lg md:text-xl mb-3">/ WHY NOW</p>

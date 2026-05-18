@@ -3,6 +3,7 @@ import Head from "next/head";
 import "./ccd.css";
 import ccdLogo from "@/assets/ccd-logo.png";
 import socialLogo from "@/assets/social-logo.png";
+import { imgUrl } from "@/lib/img";
 
 type TabId = "op" | "ops";
 
@@ -77,9 +78,9 @@ const CcdxSocial = () => {
 
   const Lockup = ({ size = 28 }: { size?: number }) => (
     <span className="ccd-lockup" style={{ ["--lh" as never]: `${size}px` } as React.CSSProperties}>
-      <img src={ccdLogo} alt="CatsCaNDance" className="ccd-lg ccd-lg-ccd" />
+      <img src={imgUrl(ccdLogo)} alt="CatsCaNDance" className="ccd-lg ccd-lg-ccd" />
       <span className="ccd-lx">×</span>
-      <img src={socialLogo} alt="Social" className="ccd-lg ccd-lg-soc" />
+      <img src={imgUrl(socialLogo)} alt="Social" className="ccd-lg ccd-lg-soc" />
     </span>
   );
 

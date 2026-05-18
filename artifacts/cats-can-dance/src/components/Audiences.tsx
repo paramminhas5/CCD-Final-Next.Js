@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import catStreet from "@/assets/cat-streetwear.png";
+import { imgUrl } from "@/lib/img";
 
 type Audience = {
   key: string;
@@ -139,7 +140,7 @@ const Audiences = () => {
                 </li>
               ))}
             </ul>
-            <img src={catStreet} alt="" className="absolute -bottom-8 -right-8 w-32 md:w-44 opacity-90 pointer-events-none" />
+            <img src={imgUrl(catStreet)} alt="" className="absolute -bottom-8 -right-8 w-32 md:w-44 opacity-90 pointer-events-none" />
           </motion.div>
         </AnimatePresence>
       </div>

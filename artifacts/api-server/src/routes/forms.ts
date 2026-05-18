@@ -7,6 +7,7 @@ import {
   artistSubmissionsTable,
   bookingRequestsTable,
   bookingOtpCodesTable,
+  artistsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import * as crypto from "crypto";
@@ -213,7 +214,21 @@ router.post("/booking-otp/verify", async (req, res) => {
       .set({ verified_at: new Date() })
       .where(eq(bookingRequestsTable.id, effectiveRequestId));
 
-    res.json({ ok: true, requestId: effectiveRequestId });
+    // Look up artist contact emails so the frontend can display them
+    let artist_email: string | null = null;
+    let manager_email: string | null = null;
+    if (request[0].artist_id) {
+      const artists = await db
+        .select({ booking_email: artistsTable.booking_email, manager_email: artistsTable.manager_email })
+        .from(artistsTable)
+        .where(eq(artistsTable.id, request[0].artist_id));
+      if (artists.length) {
+        artist_email = artists[0].booking_email ?? null;
+        manager_email = artists[0].manager_email ?? null;
+      }
+    }
+
+    res.json({ ok: true, requestId: effectiveRequestId, artist_email, manager_email });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

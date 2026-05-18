@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import vinyl from "@/assets/vinyl-music.png";
+import { imgUrl } from "@/lib/img";
 import { supabase } from "@/lib/supabase-shim";
 
 type Platform = "spotify" | "youtube" | "soundcloud";
@@ -88,7 +89,7 @@ const Playlist = () => {
       className="relative bg-magenta py-12 md:py-20 border-t-4 border-b-4 border-ink overflow-hidden"
     >
       <motion.img
-        src={vinyl}
+        src={imgUrl(vinyl)}
         alt=""
         loading="lazy"
         style={{ rotate, willChange: "transform" }}

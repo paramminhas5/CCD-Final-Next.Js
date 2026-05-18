@@ -7,6 +7,7 @@ import DiscoHint from "@/components/DiscoHint";
 import { CartDrawer } from "@/components/CartDrawer";
 import { useCartStore } from "@/stores/cartStore";
 import ccdLogo from "@/assets/ccd-logo.png";
+import { imgUrl } from "@/lib/img";
 
 const primaryLinks = [
   { to: "/about", label: "About" },
@@ -178,7 +179,7 @@ const Nav = () => {
       <nav className="container flex items-center justify-between py-3 md:py-4 gap-3 md:gap-4">
         <Link to="/" className={`group flex items-center gap-2 font-display text-xl md:text-2xl leading-none shrink-0 ${baseColor}`}>
           <img
-            src={ccdLogo}
+            src={imgUrl(ccdLogo)}
             alt="Cats Can Dance logo"
             style={{ filter: effectiveScrolled ? "none" : "invert(1) brightness(1.2)" }}
             className="h-9 md:h-11 w-auto transition-transform duration-700 group-hover:rotate-[360deg]"

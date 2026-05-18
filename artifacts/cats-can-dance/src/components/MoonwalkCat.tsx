@@ -1,5 +1,6 @@
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import catSprite from "@/assets/cat-headphones.png";
+import { imgUrl } from "@/lib/img";
 
 const MoonwalkCat = () => {
   const reduce = useReducedMotion();
@@ -16,7 +17,7 @@ const MoonwalkCat = () => {
       className="fixed bottom-3 left-0 z-[60] pointer-events-none"
     >
       <motion.img
-        src={catSprite}
+        src={imgUrl(catSprite)}
         alt=""
         animate={{ y: [0, -6, 0] }}
         transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut" }}

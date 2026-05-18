@@ -3,6 +3,7 @@ import catDancer from "@/assets/cat-dancer.svg";
 import catLeft from "@/assets/cat-left.svg";
 import catRight from "@/assets/cat-right.svg";
 import catHeadphones from "@/assets/cat-headphones.png";
+import { imgUrl } from "@/lib/img";
 import PartnerContactDialog from "@/components/PartnerContactDialog";
 
 const founders = [
@@ -33,7 +34,7 @@ const Team = () => (
             className={`${f.bg} ${f.text} border-4 border-ink chunk-shadow-lg hover:-translate-y-1 transition-transform`}
           >
             <div className="aspect-[4/3] bg-cream border-b-4 border-ink p-6 grid place-items-center">
-              <img src={f.img} alt="" className="max-h-48 w-auto object-contain wiggle" loading="lazy" decoding="async" />
+              <img src={imgUrl(f.img)} alt="" className="max-h-48 w-auto object-contain wiggle" loading="lazy" decoding="async" />
             </div>
             <div className="p-5">
               <p className="font-display text-2xl md:text-3xl leading-tight">{f.name.toUpperCase()}</p>

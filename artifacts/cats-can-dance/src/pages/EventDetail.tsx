@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase-shim";
 import { getAllPosts } from "@/content/posts";
 import episode1Poster from "@/assets/episode-1-poster.png";
+import { imgUrl } from "@/lib/img";
 
 type MediaItem = { type: "image" | "video"; url: string; caption?: string };
 
@@ -229,9 +230,9 @@ const EventDetail = () => {
                   const img = ev.currentTarget as HTMLImageElement;
                   const step = Number(img.dataset.fallbackStep ?? "0");
                   // Step 0 → try the static episode-1 PNG (only relevant for episode-1)
-                  if (step === 0 && slug === "episode-1" && img.src !== episode1Poster) {
+                  if (step === 0 && slug === "episode-1" && img.src !== imgUrl(episode1Poster)) {
                     img.dataset.fallbackStep = "1";
-                    img.src = episode1Poster;
+                    img.src = imgUrl(episode1Poster);
                     return;
                   }
                   // Final fallback: lime tile with title

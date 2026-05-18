@@ -2,12 +2,13 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { artistDatesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireAdminOrArtist } from "../middleware/adminAuth";
 
 const router = Router();
+const guard = requireAdminOrArtist();
 
 // GET /api/artist-dates?artist_id=X  (shim style)
-// GET /api/artist-dates/:artistId     (path style — kept for compatibility)
-router.get("/", async (req, res) => {
+router.get("/", guard, async (req, res) => {
   const artistId = (req.query.artist_id ?? req.query.artistId) as string | undefined;
   if (!artistId) return res.status(400).json({ error: "artist_id required" });
   try {
@@ -22,7 +23,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:artistId", async (req, res) => {
+// GET /api/artist-dates/:artistId  (path style)
+router.get("/:artistId", guard, async (req, res) => {
   try {
     const rows = await db
       .select()
@@ -36,8 +38,7 @@ router.get("/:artistId", async (req, res) => {
 });
 
 // POST /api/artist-dates  (shim style — artist_id in body)
-// POST /api/artist-dates/:artistId (path style)
-router.post("/", async (req, res) => {
+router.post("/", guard, async (req, res) => {
   const { artist_id, artistId, ...rest } = req.body;
   const id = artist_id ?? artistId;
   if (!id) return res.status(400).json({ error: "artist_id required" });
@@ -52,7 +53,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/:artistId", async (req, res) => {
+// POST /api/artist-dates/:artistId  (path style)
+router.post("/:artistId", guard, async (req, res) => {
   try {
     const rows = await db
       .insert(artistDatesTable)
@@ -64,9 +66,8 @@ router.post("/:artistId", async (req, res) => {
   }
 });
 
-// PATCH /api/artist-dates/:id  (shim style — direct id)
-// PATCH /api/artist-dates/entry/:id (path style — kept for compatibility)
-router.patch("/entry/:id", async (req, res) => {
+// PATCH /api/artist-dates/entry/:id  (path style)
+router.patch("/entry/:id", guard, async (req, res) => {
   try {
     const rows = await db
       .update(artistDatesTable)
@@ -80,7 +81,8 @@ router.patch("/entry/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+// PATCH /api/artist-dates/:id  (shim style)
+router.patch("/:id", guard, async (req, res) => {
   try {
     const rows = await db
       .update(artistDatesTable)
@@ -94,9 +96,8 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/artist-dates/:id  (shim style)
-// DELETE /api/artist-dates/entry/:id (path style)
-router.delete("/entry/:id", async (req, res) => {
+// DELETE /api/artist-dates/entry/:id  (path style)
+router.delete("/entry/:id", guard, async (req, res) => {
   try {
     await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id));
     res.sendStatus(204);
@@ -105,7 +106,8 @@ router.delete("/entry/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+// DELETE /api/artist-dates/:id  (shim style)
+router.delete("/:id", guard, async (req, res) => {
   try {
     await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id));
     res.sendStatus(204);

@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import note from "@/assets/music-note.png";
+import { imgUrl } from "@/lib/img";
 import Confetti from "@/components/Confetti";
 import { supabase } from "@/lib/supabase-shim";
 
@@ -60,10 +61,10 @@ const EarlyAccess = () => {
     <section ref={ref} id="early-access" className="relative bg-electric-blue py-12 md:py-20 border-b-4 border-ink overflow-hidden">
       <Confetti active={burst} />
       <motion.div style={{ rotate: orbit1 }} className="absolute top-1/2 left-1/2 -mt-40 -ml-40 w-80 h-80 pointer-events-none" aria-hidden>
-        <img src={note} alt="" className="absolute top-0 left-1/2 -translate-x-1/2 w-16" />
+        <img src={imgUrl(note)} alt="" className="absolute top-0 left-1/2 -translate-x-1/2 w-16" />
       </motion.div>
       <motion.div style={{ rotate: orbit2 }} className="absolute top-1/2 left-1/2 -mt-56 -ml-56 w-[28rem] h-[28rem] pointer-events-none" aria-hidden>
-        <img src={note} alt="" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12" />
+        <img src={imgUrl(note)} alt="" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12" />
       </motion.div>
       <div className="container relative z-10 text-center max-w-3xl">
         <p className="font-display text-acid-yellow text-lg md:text-xl mb-3">/ EARLY ACCESS</p>

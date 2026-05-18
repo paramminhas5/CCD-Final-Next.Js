@@ -5,6 +5,7 @@ import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PartnerContactDialog from "@/components/PartnerContactDialog";
 import ccdLogo from "@/assets/ccd-logo.png";
+import { imgUrl } from "@/lib/img";
 
 const SHORT_BIO_50 =
   "Cats Can Dance — Bangalore party brand & streetwear label.";
@@ -73,9 +74,9 @@ const Press = () => {
           <h2 className="font-display text-3xl mb-4 mt-12">/ LOGOS</h2>
           <div className="grid sm:grid-cols-2 gap-6">
             <div className="bg-cream border-4 border-ink chunk-shadow p-8 text-center">
-              <img src={ccdLogo} alt="Cats Can Dance logo on cream background" className="w-32 mx-auto mb-4" />
+              <img src={imgUrl(ccdLogo)} alt="Cats Can Dance logo on cream background" className="w-32 mx-auto mb-4" />
               <a
-                href={ccdLogo}
+                href={imgUrl(ccdLogo)}
                 download="cats-can-dance-logo.png"
                 className="inline-block bg-ink text-cream font-display px-4 py-2 hover:bg-magenta transition-colors"
               >
@@ -84,13 +85,13 @@ const Press = () => {
             </div>
             <div className="bg-ink border-4 border-ink chunk-shadow p-8 text-center">
               <img
-                src={ccdLogo}
+                src={imgUrl(ccdLogo)}
                 alt="Cats Can Dance logo on dark background"
                 style={{ filter: "invert(1) brightness(1.2)" }}
                 className="w-32 mx-auto mb-4"
               />
               <a
-                href={ccdLogo}
+                href={imgUrl(ccdLogo)}
                 download="cats-can-dance-logo-dark.png"
                 className="inline-block bg-acid-yellow text-ink font-display px-4 py-2 hover:bg-magenta hover:text-cream transition-colors"
               >

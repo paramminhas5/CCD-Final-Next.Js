@@ -9,6 +9,17 @@ import React from "react";
 
 type AnyProps = Record<string, unknown>;
 
+/** Coerce a react-router `to` value (string or location object) to a plain string. */
+function toHref(raw: unknown): string {
+  if (!raw) return "#";
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "object" && raw !== null) {
+    const { pathname = "/", search = "", hash = "" } = raw as Record<string, string>;
+    return `${pathname}${search}${hash}`;
+  }
+  return "#";
+}
+
 export function Link({
   to,
   href,
@@ -19,8 +30,8 @@ export function Link({
   onClick,
   style,
 }: {
-  to?: string;
-  href?: string;
+  to?: unknown;
+  href?: unknown;
   children?: ReactNode;
   className?: string;
   target?: string;
@@ -28,8 +39,7 @@ export function Link({
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   style?: React.CSSProperties;
 } & AnyProps) {
-  const rawDest = to || href || "#";
-  const dest = typeof rawDest === "string" ? rawDest : "#";
+  const dest = toHref(to ?? href);
   return (
     <NextLink href={dest} className={className} target={target} rel={rel} onClick={onClick} style={style}>
       {children}
@@ -40,10 +50,10 @@ export function Link({
 export function useNavigate() {
   const router = useRouter();
   return (path: string | object, opts?: { replace?: boolean }) => {
-    // Guard: if called with an event object (e.g. from onClick) ignore it
-    if (typeof path !== "string") return;
-    if (opts?.replace) router.replace(path);
-    else router.push(path);
+    const dest = toHref(path);
+    if (dest === "#") return;
+    if (opts?.replace) router.replace(dest);
+    else router.push(dest);
   };
 }
 
@@ -101,8 +111,8 @@ export function NavLink({
   style,
   end: _end,
 }: {
-  to?: string;
-  href?: string;
+  to?: unknown;
+  href?: unknown;
   children?: ReactNode;
   className?: string | (({ isActive }: { isActive: boolean }) => string);
   target?: string;
@@ -112,8 +122,7 @@ export function NavLink({
   end?: boolean;
 } & AnyProps) {
   const router = useRouter();
-  const rawDest = to || href || "#";
-  const dest = typeof rawDest === "string" ? rawDest : "#";
+  const dest = toHref(to ?? href);
   const isActive =
     typeof window !== "undefined"
       ? window.location.pathname === dest || window.location.pathname.startsWith(dest + "/")

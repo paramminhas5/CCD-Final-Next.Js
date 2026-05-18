@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase-shim";
 import catLeft from "@/assets/cat-left.svg";
 import catRight from "@/assets/cat-right.svg";
 import catHeadphones from "@/assets/cat-headphones.png";
+import { imgUrl } from "@/lib/img";
 import catHandstand from "@/assets/cat-handstand.png";
 import catCap from "@/assets/cat-cap.png";
 import catHpDance from "@/assets/cat-headphones-dance.png";
@@ -127,7 +128,7 @@ const CatStudio = () => {
   const downloadBuild = async () => {
     try {
       const canvas = await composeToCanvas({
-        bgHex: color.hex, baseSrc: base.src, stickerSrc: sticker.src, name,
+        bgHex: color.hex, baseSrc: imgUrl(base.src), stickerSrc: sticker.src ? imgUrl(sticker.src) : null, name,
       });
       downloadDataUrl(canvas.toDataURL("image/png"), `my-ccd-cat-${Date.now()}.png`);
     } catch (e) {
@@ -142,7 +143,7 @@ const CatStudio = () => {
       let inputImage: string | undefined;
       if (useBuildAsRef) {
         const canvas = await composeToCanvas({
-          bgHex: color.hex, baseSrc: base.src, stickerSrc: sticker.src, name,
+          bgHex: color.hex, baseSrc: imgUrl(base.src), stickerSrc: sticker.src ? imgUrl(sticker.src) : null, name,
         });
         inputImage = canvas.toDataURL("image/png");
       }
@@ -212,9 +213,9 @@ const CatStudio = () => {
                     ref={stageRef}
                     className={`relative aspect-square ${color.className} border-4 border-ink chunk-shadow-lg overflow-hidden`}
                   >
-                    <img src={base.src} alt="" className="absolute inset-0 m-auto w-[72%] h-[72%] object-contain drop-shadow-[8px_8px_0_hsl(var(--ink))]" />
+                    <img src={imgUrl(base.src)} alt="" className="absolute inset-0 m-auto w-[72%] h-[72%] object-contain drop-shadow-[8px_8px_0_hsl(var(--ink))]" />
                     {sticker.src && (
-                      <img src={sticker.src} alt="" className="absolute top-4 right-4 w-[28%] drop-shadow-[6px_6px_0_hsl(var(--ink))]" />
+                      <img src={imgUrl(sticker.src)} alt="" className="absolute top-4 right-4 w-[28%] drop-shadow-[6px_6px_0_hsl(var(--ink))]" />
                     )}
                     {name.trim() && (
                       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-cream border-4 border-ink px-4 py-2 font-display text-ink text-2xl whitespace-nowrap">
@@ -237,7 +238,7 @@ const CatStudio = () => {
                       {BASES.map((b) => (
                         <button key={b.id} onClick={() => setBase(b)}
                           className={`aspect-square bg-cream border-4 ${base.id === b.id ? "border-magenta" : "border-ink"} chunk-shadow grid place-items-center p-2`}>
-                          <img src={b.src} alt={b.label} className="max-w-full max-h-full object-contain" />
+                          <img src={imgUrl(b.src)} alt={b.label} className="max-w-full max-h-full object-contain" />
                         </button>
                       ))}
                     </div>
@@ -249,7 +250,7 @@ const CatStudio = () => {
                       {STICKERS.map((s) => (
                         <button key={s.id} onClick={() => setSticker(s)}
                           className={`aspect-square bg-cream border-4 ${sticker.id === s.id ? "border-magenta" : "border-ink"} chunk-shadow grid place-items-center p-2 font-display text-ink`}>
-                          {s.src ? <img src={s.src} alt={s.label} className="max-w-full max-h-full object-contain" /> : "✕"}
+                          {s.src ? <img src={imgUrl(s.src)} alt={s.label} className="max-w-full max-h-full object-contain" /> : "✕"}
                         </button>
                       ))}
                     </div>

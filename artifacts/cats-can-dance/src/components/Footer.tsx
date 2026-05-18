@@ -1,5 +1,6 @@
 import { Link } from "@/lib/compat-router";
 import ccdLogo from "@/assets/ccd-logo.png";
+import { imgUrl } from "@/lib/img";
 import { getAllPosts } from "@/content/posts";
 
 const groups = [
@@ -74,13 +75,13 @@ const Footer = () => {
         aria-hidden="true"
         className="absolute top-8 right-8 w-14 h-14 rounded-full bg-cream border-2 border-ink chunk-shadow grid place-items-center transition-transform duration-700 hover:rotate-[-360deg]"
       >
-        <img src={ccdLogo} alt="" loading="lazy" className="w-9" />
+        <img src={imgUrl(ccdLogo)} alt="" loading="lazy" className="w-9" />
       </div>
       <div
         aria-hidden="true"
         className="absolute bottom-16 left-8 w-12 h-12 rounded-full bg-cream border-2 border-ink chunk-shadow grid place-items-center transition-transform duration-700 hover:rotate-[-360deg]"
       >
-        <img src={ccdLogo} alt="" loading="lazy" className="w-7" />
+        <img src={imgUrl(ccdLogo)} alt="" loading="lazy" className="w-7" />
       </div>
 
       <div className="container">

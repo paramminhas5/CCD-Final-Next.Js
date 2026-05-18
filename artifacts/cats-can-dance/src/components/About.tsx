@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Link } from "@/lib/compat-router";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import catDancer from "@/assets/cat-dancer.svg";
+import { imgUrl } from "@/lib/img";
 import { useHomeContent } from "@/hooks/useHomeContent";
 
 const About = () => {
@@ -47,7 +48,7 @@ const About = () => {
         <div className="relative h-40 sm:h-48 md:h-56 w-full overflow-visible pointer-events-none">
           {/* Mobile cat (smaller range) */}
           <motion.img
-            src={catDancer}
+            src={imgUrl(catDancer)}
             alt=""
             aria-hidden
             style={{ x: xMobile, y: bob, rotate: rot }}
@@ -55,7 +56,7 @@ const About = () => {
           />
           {/* Desktop cat (wider range, larger) */}
           <motion.img
-            src={catDancer}
+            src={imgUrl(catDancer)}
             alt=""
             aria-hidden
             style={{ x: xDesktop, y: bob, rotate: rot }}

@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import headphones from "@/assets/headphones.svg";
+import { imgUrl } from "@/lib/img";
 import { supabase } from "@/lib/supabase-shim";
 
 const REASONS = [
@@ -67,7 +68,7 @@ const Contact = () => {
       className="relative bg-acid-yellow py-16 md:py-20 border-b-4 border-ink overflow-hidden"
     >
       <motion.img
-        src={headphones}
+        src={imgUrl(headphones)}
         alt=""
         style={{ y: hpY, rotate: hpRot }}
         className="hidden md:block absolute -top-10 -right-10 w-56 md:w-80 pointer-events-none opacity-90"

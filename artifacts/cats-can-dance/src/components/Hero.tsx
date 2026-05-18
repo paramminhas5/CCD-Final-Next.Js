@@ -7,13 +7,14 @@ import catHeadphones from "@/assets/cat-headphones.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catCap from "@/assets/cat-cap.png";
 import catHpDance from "@/assets/cat-headphones-dance.png";
+import { imgUrl } from "@/lib/img";
 import { useDisco } from "@/contexts/DiscoContext";
 import DiscoBall from "@/components/DiscoBall";
 import Lasers from "@/components/Lasers";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // Only preload critical paint assets (DJ + 4 flank PNGs). Tiny SVGs (catLeft/catRight) load naturally.
-const CRITICAL_CAT_SRCS = [heroCenter, catHeadphones, catHandstand, catCap, catHpDance];
+const CRITICAL_CAT_SRCS = [heroCenter, catHeadphones, catHandstand, catCap, catHpDance].map(imgUrl);
 
 const Hero = () => {
   const ref = useRef<HTMLDivElement>(null);
@@ -132,7 +133,7 @@ const Hero = () => {
         >
           {/* DJ cat — slightly overlaps the headline */}
           <motion.img
-            src={heroCenter}
+            src={imgUrl(heroCenter)}
             alt=""
             aria-hidden
             fetchPriority="high"
@@ -146,7 +147,7 @@ const Hero = () => {
           {FLANK_CATS.map((c) => (
             <motion.img
               key={c.id}
-              src={c.src}
+              src={imgUrl(c.src)}
               alt=""
               aria-hidden
               style={{ x: c.x, rotate: c.rot, opacity: flankOpacity, willChange: "transform" }}
@@ -159,13 +160,13 @@ const Hero = () => {
             style={{ x: leftX, y: leftY, rotate: leftRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 left-1 md:left-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={catLeft} alt="" decoding="async" loading="eager" className="w-full wiggle" />
+            <img src={imgUrl(catLeft)} alt="" decoding="async" loading="eager" className="w-full wiggle" />
           </motion.div>
           <motion.div
             style={{ x: rightX, y: rightY, rotate: rightRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 right-1 md:right-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={catRight} alt="" decoding="async" loading="eager" className="w-full wiggle" />
+            <img src={imgUrl(catRight)} alt="" decoding="async" loading="eager" className="w-full wiggle" />
           </motion.div>
         </motion.div>
 
