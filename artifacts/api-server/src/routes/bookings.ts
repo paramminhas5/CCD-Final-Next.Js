@@ -1,18 +1,34 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { bookingRequestsTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { bookingRequestsTable, artistsTable } from "@workspace/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { requireAdminOrArtist } from "../middleware/adminAuth";
 
 const router = Router();
 
-// GET /api/booking-requests/:artistId — requires admin or valid artist session
-router.get("/:artistId", requireAdminOrArtist("artistId"), async (req, res) => {
+router.get("/:artistId", requireAdminOrArtist("artistId"), async (req, res): Promise<void> => {
+  const artistId = req.params.artistId as string;
+  const sessionUserId = (req as any).sessionUserId as string | undefined;
   try {
+    if (sessionUserId) {
+      const owned = await db
+        .select({ id: artistsTable.id })
+        .from(artistsTable)
+        .where(
+          and(
+            eq(artistsTable.id, artistId),
+            eq(artistsTable.claimed_by, sessionUserId),
+          ),
+        );
+      if (!owned.length) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
     const rows = await db
       .select()
       .from(bookingRequestsTable)
-      .where(eq(bookingRequestsTable.artist_id, req.params.artistId))
+      .where(eq(bookingRequestsTable.artist_id, artistId))
       .orderBy(desc(bookingRequestsTable.created_at));
     res.json(rows);
   } catch (e: any) {

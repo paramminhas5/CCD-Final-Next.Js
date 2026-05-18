@@ -2,6 +2,9 @@
  * Supabase compatibility shim.
  * Provides a supabase-shaped object that routes calls to our /api server.
  * This lets the existing source files work without modification during migration.
+ *
+ * Auth: migrated to Clerk. The authShim below is a no-op stub kept only for
+ * backwards compatibility — active code should use @clerk/react hooks directly.
  */
 import { api } from "./api-client";
 
@@ -98,65 +101,14 @@ function buildQuery(table: string): QueryBuilder {
   return q;
 }
 
-// Auth shim — routes to /api/auth/* endpoints
-const SESSION_KEY = "ccd_session_token";
-const _authListeners: Array<(event: string, session: any) => void> = [];
-
-function _fireAuthChange(event: string, session: any) {
-  _authListeners.forEach((cb) => { try { cb(event, session); } catch {} });
-}
-
+// Auth shim — no-op stub. Active code uses @clerk/react hooks directly.
 const authShim = {
-  getSession: async () => {
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null;
-      const headers: Record<string, string> = {};
-      if (token) headers["x-session-token"] = token;
-      const data = await api.get<{ session: any }>("/auth/session", token ? headers : undefined);
-      return { data: { session: data.session }, error: null };
-    } catch {
-      return { data: { session: null }, error: null };
-    }
-  },
-  signInWithOtp: async ({ email, options }: { email: string; options?: any }) => {
-    try {
-      const res = await api.post<{ ok: boolean; token?: string; userId?: string }>(
-        "/auth/magic-link",
-        { email, redirectTo: options?.emailRedirectTo }
-      );
-      if (res.token && typeof window !== "undefined") {
-        localStorage.setItem(SESSION_KEY, res.token);
-        _fireAuthChange("SIGNED_IN", { user: { id: res.userId ?? `email:${email}` } });
-      }
-      return { data: {}, error: null };
-    } catch (e: any) {
-      return { data: null, error: { message: e.message } };
-    }
-  },
-  signOut: async () => {
-    try {
-      if (typeof window !== "undefined") localStorage.removeItem(SESSION_KEY);
-      api.clearCache();
-      await api.post("/auth/signout", {});
-      _fireAuthChange("SIGNED_OUT", null);
-      return { error: null };
-    } catch (e: any) {
-      return { error: { message: e.message } };
-    }
-  },
-  onAuthStateChange: (cb: (event: string, session: any) => void) => {
-    _authListeners.push(cb);
-    return {
-      data: {
-        subscription: {
-          unsubscribe: () => {
-            const idx = _authListeners.indexOf(cb);
-            if (idx !== -1) _authListeners.splice(idx, 1);
-          },
-        },
-      },
-    };
-  },
+  getSession: async () => ({ data: { session: null }, error: null }),
+  signInWithOtp: async (_opts: any) => ({ data: {}, error: { message: "Auth is handled by Clerk — use the /sign-in page." } }),
+  signOut: async () => ({ error: null }),
+  onAuthStateChange: (_cb: (event: string, session: any) => void) => ({
+    data: { subscription: { unsubscribe: () => {} } },
+  }),
 };
 
 // Storage shim — routes to /api/storage/*
@@ -187,7 +139,6 @@ const FUNCTION_ROUTE: Record<string, string> = {
   "cat-generate": "cat-generate",
   "instagram-feed": "instagram-feed",
   "youtube-videos": "youtube-videos",
-  // Admin edge functions — map to /api/functions/v1/:name (handled by admin router)
   "enrich-artists": "functions/v1/enrich-artists",
   "admin-videos": "functions/v1/admin-videos",
   "admin-content": "functions/v1/admin-content",
@@ -202,7 +153,6 @@ const FUNCTION_ROUTE: Record<string, string> = {
   "admin-promoters": "functions/v1/admin-promoters",
 };
 
-/** Functions that should use GET (no mutation, no required body) */
 const GET_FUNCTIONS = new Set([
   "instagram-feed",
   "youtube-videos",
@@ -213,7 +163,6 @@ const GET_FUNCTIONS = new Set([
   "admin-promoters",
 ]);
 
-// Functions shim — routes to /api/<route>
 const functionsShim = {
   invoke: async (name: string, opts?: { body?: any; headers?: Record<string, string> }) => {
     try {
@@ -228,7 +177,6 @@ const functionsShim = {
   },
 };
 
-// Channel/realtime shim (no-op)
 function channelShim(_name: string) {
   const ch = {
     on: (..._args: any[]) => ch,

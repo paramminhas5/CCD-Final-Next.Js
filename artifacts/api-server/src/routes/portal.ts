@@ -1,17 +1,50 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { artistDatesTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { artistDatesTable, artistsTable } from "@workspace/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { requireAdminOrArtist } from "../middleware/adminAuth";
 
 const router = Router();
 const guard = requireAdminOrArtist();
 
-// GET /api/artist-dates?artist_id=X  (shim style)
-router.get("/", guard, async (req, res) => {
-  const artistId = (req.query.artist_id ?? req.query.artistId) as string | undefined;
-  if (!artistId) return res.status(400).json({ error: "artist_id required" });
+/**
+ * Verify that the authenticated artist owns the given artist profile.
+ * Returns true if access is allowed (admin path or verified owner).
+ * Returns false and sends 403 if ownership check fails.
+ */
+async function ownerOnly(req: any, res: any, artistId: string): Promise<boolean> {
+  const sessionUserId = req.sessionUserId as string | undefined;
+  if (!sessionUserId) return true;
+  const rows = await db
+    .select({ id: artistsTable.id })
+    .from(artistsTable)
+    .where(
+      and(
+        eq(artistsTable.id, artistId),
+        eq(artistsTable.claimed_by, sessionUserId),
+      ),
+    );
+  if (!rows.length) {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+  return true;
+}
+
+function extractStringParam(v: string | string[] | object | object[] | undefined): string | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+  return undefined;
+}
+
+router.get("/", guard, async (req, res): Promise<void> => {
+  const artistId = extractStringParam(req.query.artist_id ?? req.query.artistId);
+  if (!artistId) {
+    res.status(400).json({ error: "artist_id required" });
+    return;
+  }
   try {
+    if (!(await ownerOnly(req, res, artistId))) return;
     const rows = await db
       .select()
       .from(artistDatesTable)
@@ -23,13 +56,14 @@ router.get("/", guard, async (req, res) => {
   }
 });
 
-// GET /api/artist-dates/:artistId  (path style)
-router.get("/:artistId", guard, async (req, res) => {
+router.get("/:artistId", guard, async (req, res): Promise<void> => {
+  const artistId = req.params.artistId as string;
   try {
+    if (!(await ownerOnly(req, res, artistId))) return;
     const rows = await db
       .select()
       .from(artistDatesTable)
-      .where(eq(artistDatesTable.artist_id, req.params.artistId))
+      .where(eq(artistDatesTable.artist_id, artistId))
       .orderBy(desc(artistDatesTable.event_date));
     res.json(rows);
   } catch (e: any) {
@@ -37,12 +71,15 @@ router.get("/:artistId", guard, async (req, res) => {
   }
 });
 
-// POST /api/artist-dates  (shim style — artist_id in body)
-router.post("/", guard, async (req, res) => {
+router.post("/", guard, async (req, res): Promise<void> => {
   const { artist_id, artistId, ...rest } = req.body;
-  const id = artist_id ?? artistId;
-  if (!id) return res.status(400).json({ error: "artist_id required" });
+  const id: string = artist_id ?? artistId;
+  if (!id) {
+    res.status(400).json({ error: "artist_id required" });
+    return;
+  }
   try {
+    if (!(await ownerOnly(req, res, id))) return;
     const rows = await db
       .insert(artistDatesTable)
       .values({ ...rest, artist_id: id })
@@ -53,12 +90,13 @@ router.post("/", guard, async (req, res) => {
   }
 });
 
-// POST /api/artist-dates/:artistId  (path style)
-router.post("/:artistId", guard, async (req, res) => {
+router.post("/:artistId", guard, async (req, res): Promise<void> => {
+  const artistId = req.params.artistId as string;
   try {
+    if (!(await ownerOnly(req, res, artistId))) return;
     const rows = await db
       .insert(artistDatesTable)
-      .values({ ...req.body, artist_id: req.params.artistId })
+      .values({ ...req.body, artist_id: artistId })
       .returning();
     res.status(201).json(rows[0]);
   } catch (e: any) {
@@ -66,50 +104,52 @@ router.post("/:artistId", guard, async (req, res) => {
   }
 });
 
-// PATCH /api/artist-dates/entry/:id  (path style)
-router.patch("/entry/:id", guard, async (req, res) => {
+router.patch("/entry/:id", guard, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .update(artistDatesTable)
       .set({ ...req.body, updated_at: new Date() })
-      .where(eq(artistDatesTable.id, req.params.id))
+      .where(eq(artistDatesTable.id, req.params.id as string))
       .returning();
-    if (!rows.length) return res.status(404).json({ error: "Not found" });
+    if (!rows.length) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
     res.json(rows[0]);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// PATCH /api/artist-dates/:id  (shim style)
-router.patch("/:id", guard, async (req, res) => {
+router.patch("/:id", guard, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .update(artistDatesTable)
       .set({ ...req.body, updated_at: new Date() })
-      .where(eq(artistDatesTable.id, req.params.id))
+      .where(eq(artistDatesTable.id, req.params.id as string))
       .returning();
-    if (!rows.length) return res.status(404).json({ error: "Not found" });
+    if (!rows.length) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
     res.json(rows[0]);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// DELETE /api/artist-dates/entry/:id  (path style)
-router.delete("/entry/:id", guard, async (req, res) => {
+router.delete("/entry/:id", guard, async (req, res): Promise<void> => {
   try {
-    await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id));
+    await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id as string));
     res.sendStatus(204);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// DELETE /api/artist-dates/:id  (shim style)
-router.delete("/:id", guard, async (req, res) => {
+router.delete("/:id", guard, async (req, res): Promise<void> => {
   try {
-    await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id));
+    await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id as string));
     res.sendStatus(204);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

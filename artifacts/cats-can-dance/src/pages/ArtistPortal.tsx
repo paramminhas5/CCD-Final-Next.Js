@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams, Link } from "@/lib/compat-router";
+import { useUser, useClerk } from "@clerk/react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { supabase } from "@/lib/supabase-shim";
+import { api } from "@/lib/api-client";
 import { toast } from "sonner";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -129,7 +131,7 @@ function ProfileEditor({ artist, onSaved }: { artist: Artist; onSaved: (a: Artis
       </label>
       <button onClick={save} disabled={saving}
         className="bg-magenta text-cream font-display px-6 py-3 border-4 border-ink chunk-shadow uppercase disabled:opacity-60">
-        {saving ? "Saving\u2026" : "Save profile"}
+        {saving ? "Saving…" : "Save profile"}
       </button>
     </div>
   );
@@ -224,7 +226,7 @@ function DateManager({ artistId }: { artistId: string }) {
         <div className="flex gap-3">
           <button onClick={save} disabled={busy}
             className="bg-magenta text-cream font-display px-5 py-2.5 border-4 border-ink chunk-shadow uppercase text-sm disabled:opacity-60">
-            {busy ? "\u2026" : editId ? "Update" : "Add date"}
+            {busy ? "…" : editId ? "Update" : "Add date"}
           </button>
           {editId && <button onClick={() => { setEditId(null); setForm(emptyDate()); }}
             className="font-display text-sm uppercase text-ink/60 underline">Cancel</button>}
@@ -236,7 +238,7 @@ function DateManager({ artistId }: { artistId: string }) {
           {dates.sort((a, b) => a.event_date.localeCompare(b.event_date)).map((d) => (
             <div key={d.id} className="flex items-center gap-4 border-4 border-ink bg-cream p-4">
               <div className="flex-1">
-                <p className="font-display text-lg uppercase text-ink">{d.event_date} \u2014 {d.city}</p>
+                <p className="font-display text-lg uppercase text-ink">{d.event_date} — {d.city}</p>
                 {d.venue && <p className="text-sm text-ink/70">{d.venue}</p>}
                 <div className="flex gap-2 mt-1">
                   <span className={`text-xs font-display uppercase px-2 py-0.5 border border-ink ${d.status==="confirmed"?"bg-acid-yellow":d.status==="tentative"?"bg-cream text-ink/60":"bg-ink text-cream"}`}>{d.status}</span>
@@ -273,7 +275,7 @@ function BookingInbox({ artistId }: { artistId: string }) {
     <div className="space-y-5">
       <h2 className="font-display text-2xl uppercase text-ink border-b-4 border-ink pb-2">Booking Requests</h2>
       {loading
-        ? <p className="font-display text-sm text-ink/50 animate-pulse">Loading\u2026</p>
+        ? <p className="font-display text-sm text-ink/50 animate-pulse">Loading…</p>
         : bookings.length === 0
         ? <p className="font-display text-sm text-ink/50">No booking requests yet.</p>
         : <div className="space-y-4">
@@ -292,60 +294,12 @@ function BookingInbox({ artistId }: { artistId: string }) {
               </div>
               <a href={`mailto:${b.requester_email}`}
                 className="mt-3 inline-block font-display text-xs uppercase bg-magenta text-cream px-4 py-2 border-2 border-ink">
-                Reply \u2192
+                Reply →
               </a>
             </div>
           ))}
         </div>
       }
-    </div>
-  );
-}
-
-/* ─── Magic Link Form ────────────────────────────────────────────────────── */
-function MagicLinkForm() {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  const send = async () => {
-    if (!email.trim()) { toast.error("Email required"); return; }
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/artist/dashboard`,
-          shouldCreateUser: true,
-        },
-      });
-      if (error) throw error;
-      setSent(true);
-      toast.success("Magic link sent!");
-    } catch (e: any) { toast.error(e.message ?? "Failed to send link"); }
-    finally { setBusy(false); }
-  };
-
-  if (sent) return (
-    <div className="bg-acid-yellow border-4 border-ink p-6">
-      <p className="font-display text-xl uppercase text-ink mb-2">Check your inbox</p>
-      <p className="text-ink/80">We sent a magic link to <strong>{email}</strong>. Click it to access your dashboard.</p>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <label className="block">
-        <span className="font-display text-xs uppercase text-ink block mb-2">Your email address</span>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          className="w-full border-4 border-ink px-4 py-3 bg-cream font-sans text-ink focus:outline-none text-lg" />
-      </label>
-      <button onClick={send} disabled={busy}
-        className="w-full bg-magenta text-cream font-display px-6 py-4 border-4 border-ink chunk-shadow uppercase text-lg disabled:opacity-60 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-        {busy ? "Sending\u2026" : "Send magic link"}
-      </button>
-      <p className="text-xs text-ink/50">No password needed \u2014 we\u2019ll email you a one-click sign-in link.</p>
     </div>
   );
 }
@@ -358,73 +312,92 @@ const ArtistPortal = () => {
   const [searchParams] = useSearchParams();
   const claimId = searchParams.get("claim");
 
-  const [session, setSession] = useState<any>(null);
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
+
   const [artist, setArtist] = useState<Artist | null>(null);
   const [tab, setTab] = useState<Tab>("profile");
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
 
-  // Auth state
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => subscription.unsubscribe();
-  }, []);
+  const userEmail =
+    user?.primaryEmailAddress?.emailAddress ??
+    user?.emailAddresses?.[0]?.emailAddress;
 
-  // Load artist profile when session is available
+  const signInUrl = `/sign-in?redirect_url=${encodeURIComponent(
+    typeof window !== "undefined" ? window.location.href : "/artist/dashboard",
+  )}`;
+
   useEffect(() => {
-    if (!session) { setLoading(false); return; }
+    if (!isLoaded) return;
+    if (!user) { setLoading(false); return; }
 
     (async () => {
       setLoading(true);
 
-      // If came from claim link, link the artist profile to this user
       if (claimId) {
         setClaiming(true);
-        const { error } = await supabase
-          .from("artists")
-          .update({ claimed_by: session.user.id, claim_requested_at: new Date().toISOString() })
-          .eq("id", claimId)
-          .is("claimed_by", null); // only claim if not already claimed
-        if (error) toast.error("Could not claim profile: " + error.message);
-        else toast.success("Profile claimed!");
+        try {
+          await api.post(`/artists/${claimId}/claim`, { userId: user.id });
+          toast.success("Profile claimed!");
+        } catch (e: any) {
+          toast.error("Could not claim profile: " + e.message);
+        }
         setClaiming(false);
       }
 
-      // Load artist belonging to this user
-      const { data } = await supabase
-        .from("artists")
-        .select("*")
-        .eq("claimed_by", session.user.id)
-        .maybeSingle();
-
-      setArtist(data ? {
-        ...data,
-        genres: Array.isArray(data.genres) ? data.genres : [],
-        festivals: Array.isArray(data.festivals) ? data.festivals : [],
-        gallery: Array.isArray(data.gallery) ? data.gallery : [],
-        videos: Array.isArray(data.videos) ? data.videos : [],
-        available_cities: Array.isArray(data.available_cities) ? data.available_cities : [],
-        open_to_bookings: data.open_to_bookings !== false,
-      } as Artist : null);
+      try {
+        const data = await api.get<any>("/artists/by-user");
+        setArtist(
+          data
+            ? {
+                ...data,
+                genres: Array.isArray(data.genres) ? data.genres : [],
+                festivals: Array.isArray(data.festivals) ? data.festivals : [],
+                gallery: Array.isArray(data.gallery) ? data.gallery : [],
+                videos: Array.isArray(data.videos) ? data.videos : [],
+                available_cities: Array.isArray(data.available_cities) ? data.available_cities : [],
+                open_to_bookings: data.open_to_bookings !== false,
+              } as Artist
+            : null,
+        );
+      } catch {
+        setArtist(null);
+      }
 
       setLoading(false);
     })();
-  }, [session, claimId]);
+  }, [isLoaded, user, claimId]);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = async () => {
+    await signOut();
     navigate("/artists");
   };
 
-  if (!session && !loading) return (
+  if (!isLoaded || (!user && loading)) return (
+    <div className="min-h-screen bg-cream">
+      <Nav />
+      <div className="container py-32 text-center">
+        <p className="font-display text-2xl text-ink animate-pulse">Loading…</p>
+      </div>
+    </div>
+  );
+
+  if (!user) return (
     <div className="min-h-screen bg-cream">
       <SEO title="Artist Portal | Cats Can Dance" description="Manage your artist profile, tour dates, and booking requests." path="/artist/dashboard" />
       <Nav />
       <div className="container py-24 max-w-lg">
         <h1 className="font-display text-4xl uppercase text-ink mb-2">Artist Portal</h1>
-        <p className="text-ink/70 mb-8">Sign in to manage your profile, tour dates, and booking requests. No password needed.</p>
-        <MagicLinkForm />
+        <p className="text-ink/70 mb-8">
+          Sign in to manage your profile, tour dates, and booking requests.
+        </p>
+        <Link
+          to={signInUrl}
+          className="inline-block w-full text-center bg-magenta text-cream font-display px-6 py-4 border-4 border-ink chunk-shadow uppercase text-lg hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+        >
+          Sign in
+        </Link>
       </div>
       <Footer />
     </div>
@@ -434,7 +407,9 @@ const ArtistPortal = () => {
     <div className="min-h-screen bg-cream">
       <Nav />
       <div className="container py-32 text-center">
-        <p className="font-display text-2xl text-ink animate-pulse">{claiming ? "Claiming profile\u2026" : "Loading\u2026"}</p>
+        <p className="font-display text-2xl text-ink animate-pulse">
+          {claiming ? "Claiming profile…" : "Loading…"}
+        </p>
       </div>
     </div>
   );
@@ -446,12 +421,16 @@ const ArtistPortal = () => {
       <div className="container py-24 max-w-2xl">
         <h1 className="font-display text-4xl uppercase text-ink mb-4">No Profile Linked</h1>
         <p className="text-ink/70 mb-6">
-          You\u2019re signed in as <strong>{session?.user?.email}</strong> but no artist profile is linked yet.
+          You're signed in as <strong>{userEmail}</strong> but no artist profile is linked yet.
         </p>
         <p className="text-ink/70 mb-4">
-          Go to the <Link to="/artists" className="underline text-magenta">artists directory</Link>, find your profile, and click \u201cAre you [name]?\u201d to link it to your account.
+          Go to the{" "}
+          <Link to="/artists" className="underline text-magenta">artists directory</Link>,
+          find your profile, and click "Are you [name]?" to link it to your account.
         </p>
-        <button onClick={signOut} className="font-display text-sm uppercase underline text-ink/60">Sign out</button>
+        <button onClick={handleSignOut} className="font-display text-sm uppercase underline text-ink/60">
+          Sign out
+        </button>
       </div>
       <Footer />
     </div>
@@ -472,15 +451,20 @@ const ArtistPortal = () => {
           <div>
             <p className="font-display text-xs uppercase text-ink/50 mb-1">Artist Portal</p>
             <h1 className="font-display text-4xl uppercase text-ink">{artist.name}</h1>
-            <p className="text-sm text-ink/60 mt-1">{session?.user?.email}</p>
+            <p className="text-sm text-ink/60 mt-1">{userEmail}</p>
           </div>
           <div className="flex gap-3">
-            <Link to={`/artists/${artist.slug}`} target="_blank"
-              className="font-display text-xs uppercase px-4 py-2 border-4 border-ink bg-acid-yellow text-ink chunk-shadow hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-transform">
-              View public profile \u2197
+            <Link
+              to={`/artists/${artist.slug}`}
+              target="_blank"
+              className="font-display text-xs uppercase px-4 py-2 border-4 border-ink bg-acid-yellow text-ink chunk-shadow hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-transform"
+            >
+              View public profile ↗
             </Link>
-            <button onClick={signOut}
-              className="font-display text-xs uppercase px-4 py-2 border-4 border-ink text-ink/60 hover:bg-ink hover:text-cream transition-colors">
+            <button
+              onClick={handleSignOut}
+              className="font-display text-xs uppercase px-4 py-2 border-4 border-ink text-ink/60 hover:bg-ink hover:text-cream transition-colors"
+            >
               Sign out
             </button>
           </div>
@@ -488,8 +472,13 @@ const ArtistPortal = () => {
 
         <div className="flex gap-1 mb-8 border-b-4 border-ink">
           {tabs.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`font-display text-sm uppercase px-5 py-2.5 border-4 border-b-0 border-ink transition-colors ${tab === t.key ? "bg-ink text-cream" : "bg-cream text-ink hover:bg-acid-yellow"}`}>
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`font-display text-sm uppercase px-5 py-2.5 border-4 border-b-0 border-ink transition-colors ${
+                tab === t.key ? "bg-ink text-cream" : "bg-cream text-ink hover:bg-acid-yellow"
+              }`}
+            >
               {t.label}
             </button>
           ))}
