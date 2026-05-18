@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "@/lib/compat-router";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -9,445 +9,423 @@ import { toast } from "sonner";
 type Artist = {
   id: string; slug: string; name: string; members: string | null;
   from_city: string | null; based_city: string | null;
-  genres: string[]; festivals: string[]; bio: string | null; why: string | null;
-  instagram: string | null; soundcloud: string | null; bandcamp: string | null;
-  spotify: string | null; website: string | null;
+  genres: string[]; festivals: string[];
+  bio: string | null; why: string | null;
+  instagram: string | null; soundcloud: string | null;
+  bandcamp: string | null; spotify: string | null; website: string | null;
   booking_email: string | null; manager_email: string | null;
   labels: string | null; photo_url: string | null;
   fee_min_inr: number | null; fee_max_inr: number | null; fee_currency: string;
   gallery: { url: string; caption?: string }[];
   videos: { youtube_id?: string; title?: string; source?: string }[];
-  open_to_bookings: boolean; available_cities: string[]; claimed_by: string | null;
+  open_to_bookings: boolean; available_cities: string[];
+  claimed_by: string | null;
 };
-
 type ArtistDate = {
   id: string; city: string; venue: string | null; event_date: string;
   event_time: string | null; status: string; ticket_url: string | null;
 };
 
-const ensureUrl = (s: string | null) => (s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null);
+const url = (s: string | null) =>
+  s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
+const ig = (s: string | null) =>
+  s ? url(s.startsWith("http") ? s : `https://instagram.com/${s.replace(/^@/, "")}`) : null;
 
-const formatFee = (a: Artist) => {
-  if (!a.fee_min_inr && !a.fee_max_inr) return null;
-  const fmt = (n: number) => {
-    if (n >= 100000) return `${(n / 100000).toFixed(n % 100000 === 0 ? 0 : 1)}L`;
-    if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
-    return String(n);
-  };
-  const sym = (a.fee_currency || "INR") === "USD" ? "$" : "\u20b9";
-  if (a.fee_min_inr && a.fee_max_inr && a.fee_min_inr !== a.fee_max_inr)
-    return `${sym}${fmt(a.fee_min_inr)} \u2013 ${sym}${fmt(a.fee_max_inr)}`;
-  return `${sym}${fmt(a.fee_min_inr ?? a.fee_max_inr!)}`;
+const nameBg = (name: string) => {
+  const c = ["#E91E8C","#0066FF","#0D0D0D","#FF6B00","#F5E642"];
+  let h = 0; for (let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xffffffff;
+  return c[Math.abs(h)%c.length];
 };
 
-type OtpStep = "idle" | "form" | "sending" | "verify" | "verifying" | "done";
-
-function BookingPanel({ artist }: { artist: Artist }) {
-  const [step, setStep] = useState<OtpStep>("idle");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [code, setCode] = useState("");
-  const [bookingId, setBookingId] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState<{ email: string | null; manager: string | null } | null>(null);
-  const fee = formatFee(artist);
-
-  const sendOtp = async () => {
-    if (!email.trim()) { toast.error("Email required"); return; }
-    setStep("sending");
-    try {
-      const { data, error } = await supabase.functions.invoke("booking-otp-start", {
-        body: { artist_id: artist.id, requester_email: email, requester_phone: phone, purpose },
-      });
-      if (error) throw error;
-      setBookingId((data as any)?.booking_id ?? null);
-      setStep("verify");
-      toast.success("Code sent — check your inbox.");
-    } catch (e: any) { toast.error(e?.message ?? "Failed"); setStep("form"); }
-  };
-
-  const verifyOtp = async () => {
-    if (!/^\d{6}$/.test(code)) { toast.error("Enter the 6-digit code"); return; }
-    setStep("verifying");
-    try {
-      const { data, error } = await supabase.functions.invoke("booking-otp-verify", {
-        body: { requester_email: email, code, booking_id: bookingId, forward_requested: false },
-      });
-      if (error) throw error;
-      setRevealed({ email: (data as any)?.artist_email ?? null, manager: (data as any)?.manager_email ?? null });
-      setStep("done");
-    } catch (e: any) { toast.error(e?.message ?? "Invalid code"); setStep("verify"); }
-  };
-
+function Avatar({ artist, size = 96 }: { artist: Artist; size?: number }) {
+  const initials = artist.name.split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+  const bg = nameBg(artist.name);
+  if (artist.photo_url) {
+    return (
+      <img src={artist.photo_url} alt={artist.name}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover border-4 border-ink" />
+    );
+  }
   return (
-    <div className="bg-cream border-4 border-ink chunk-shadow">
-      {fee && (
-        <div className="bg-magenta text-cream border-b-4 border-ink p-5">
-          <p className="font-display text-xs uppercase opacity-70 mb-1">Est. Fee</p>
-          {step === "done" ? (
-            <p className="font-display text-3xl">{fee}</p>
-          ) : (
-            <div className="flex items-center gap-3">
-              <p className="font-display text-3xl blur-sm select-none" aria-hidden>\u20b9XX\u2013YYL</p>
-              <span className="text-xs opacity-80">Revealed after verification</span>
-            </div>
-          )}
-          <p className="text-xs opacity-70 mt-1">Indicative \u2014 final quote per booking</p>
-        </div>
-      )}
-      <div className="p-5 space-y-4">
-        <h3 className="font-display text-lg uppercase text-ink">Book {artist.name}</h3>
-        {step === "idle" && (
-          <>
-            {!artist.open_to_bookings && (
-              <p className="text-xs text-ink/60 bg-ink/5 p-3 border-2 border-ink/20">Currently not actively taking bookings \u2014 enquiries still welcome.</p>
-            )}
-            <p className="text-sm text-ink/70">Verify your email to reveal the booking contact and fee range.</p>
-            <button onClick={() => setStep("form")} className="w-full bg-acid-yellow text-ink font-display px-4 py-3 border-4 border-ink chunk-shadow text-sm uppercase hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-              Get booking contact \u2192
-            </button>
-          </>
-        )}
-        {(step === "form" || step === "sending") && (
-          <div className="space-y-3">
-            {[["Your email *", "email", email, (v: string) => setEmail(v), "you@example.com"],
-              ["Phone (optional)", "text", phone, (v: string) => setPhone(v), "+91 98765 43210"]].map(([label, type, val, setter, ph]: any) => (
-              <label key={label} className="block">
-                <span className="font-display text-xs uppercase text-ink block mb-1">{label}</span>
-                <input type={type} value={val} onChange={(e) => setter(e.target.value)} placeholder={ph}
-                  className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-ink focus:outline-none" />
-              </label>
-            ))}
-            <label className="block">
-              <span className="font-display text-xs uppercase text-ink block mb-1">What\u2019s the booking for?</span>
-              <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} rows={3} placeholder="Date, city, event type, budget range\u2026"
-                className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-ink focus:outline-none resize-none" />
-            </label>
-            <button onClick={sendOtp} disabled={step === "sending"}
-              className="w-full bg-magenta text-cream font-display px-4 py-3 border-4 border-ink chunk-shadow text-sm uppercase disabled:opacity-60">
-              {step === "sending" ? "Sending\u2026" : "Send verification code"}
-            </button>
-          </div>
-        )}
-        {(step === "verify" || step === "verifying") && (
-          <div className="space-y-3">
-            <p className="text-sm text-ink/70">We sent a 6-digit code to <strong>{email}</strong>.</p>
-            <label className="block">
-              <span className="font-display text-xs uppercase text-ink block mb-1">Code</span>
-              <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g,"").slice(0,6))}
-                className="w-full border-4 border-ink px-3 py-2 bg-cream font-display text-2xl tracking-widest text-center focus:outline-none"
-                placeholder="\u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7" />
-            </label>
-            <button onClick={verifyOtp} disabled={step === "verifying"}
-              className="w-full bg-acid-yellow text-ink font-display px-4 py-3 border-4 border-ink chunk-shadow text-sm uppercase disabled:opacity-60">
-              {step === "verifying" ? "Verifying\u2026" : "Verify & reveal contact"}
-            </button>
-          </div>
-        )}
-        {step === "done" && revealed && (
-          <div className="space-y-3">
-            {revealed.email ? (
-              <>
-                <p className="font-display text-xs uppercase text-ink/60">Booking contact</p>
-                <a href={`mailto:${revealed.email}`}
-                  className="block font-display text-lg text-ink bg-acid-yellow border-4 border-ink p-3 break-all hover:bg-magenta hover:text-cream transition-colors">
-                  \u2709 {revealed.email}
-                </a>
-              </>
-            ) : (
-              <p className="text-sm text-ink/80 bg-ink/5 p-3 border-2 border-ink/20">No direct contact on file \u2014 CCD will forward your enquiry.</p>
-            )}
-            {revealed.manager && revealed.manager !== revealed.email && (
-              <a href={`mailto:${revealed.manager}`} className="block font-display text-sm text-ink/70 underline break-all">
-                Manager: {revealed.manager}
-              </a>
-            )}
-          </div>
-        )}
-      </div>
+    <div style={{ width: size, height: size, background: bg }}
+      className="rounded-full border-4 border-ink flex items-center justify-center shrink-0">
+      <span className="font-display text-cream leading-none"
+        style={{ fontSize: size * 0.35 }}>{initials}</span>
     </div>
   );
 }
 
-function ClaimBanner({ artist }: { artist: Artist }) {
+function StatPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="text-center">
+      <p className="font-display text-ink text-lg leading-none">{value}</p>
+      <p className="text-ink/50 text-xs mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+function SCEmbed({ url: scUrl, name }: { url: string; name: string }) {
+  const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(scUrl)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`;
+  return (
+    <iframe className="w-full rounded-none" height="200" scrolling="no" frameBorder="no"
+      allow="autoplay" src={src} title={`${name} on SoundCloud`} />
+  );
+}
+
+function YTEmbed({ id, title }: { id: string; title?: string }) {
+  return (
+    <div className="border-4 border-ink bg-ink overflow-hidden">
+      <div className="aspect-video">
+        <iframe className="w-full h-full"
+          src={`https://www.youtube.com/embed/${id}`}
+          title={title ?? "Video"} allowFullScreen />
+      </div>
+      {title && <p className="font-display text-xs text-cream p-2 truncate">{title}</p>}
+    </div>
+  );
+}
+
+function BookingModal({ artist, onClose }: { artist: Artist; onClose: () => void }) {
+  const [step, setStep] = useState<"form"|"sent">("form");
   const [email, setEmail] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-  if (artist.claimed_by) return null;
-  const claim = async () => {
+
+  const submit = async () => {
     if (!email.trim()) { toast.error("Email required"); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/artist/dashboard?claim=${artist.id}`,
-          shouldCreateUser: true,
-        },
+      const res = await fetch("/api/event-rsvp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_slug: `booking-${artist.slug}`,
+          name: email.split("@")[0],
+          email, plus_ones: 0,
+        }),
       });
-      if (error) throw error;
-      setSent(true);
-      toast.success("Check your inbox for a magic link.");
-    } catch (e: any) { toast.error(e?.message ?? "Failed to send link"); }
+      if (!res.ok) throw new Error();
+      setStep("sent");
+    } catch { toast.error("Something went wrong"); }
     finally { setBusy(false); }
   };
+
   return (
-    <div className="border-4 border-ink bg-ink text-cream p-4 mt-2">
-      <p className="font-display text-sm uppercase mb-2">Are you {artist.name}?</p>
-      {sent ? (
-        <p className="text-sm opacity-80">Magic link sent to {email} \u2014 click it to claim your profile.</p>
-      ) : (
-        <div className="flex gap-2">
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com"
-            className="flex-1 px-3 py-2 bg-cream text-ink border-2 border-cream font-sans text-sm focus:outline-none" />
-          <button onClick={claim} disabled={busy}
-            className="font-display text-xs uppercase px-4 py-2 bg-acid-yellow text-ink border-2 border-cream disabled:opacity-60">
-            {busy ? "\u2026" : "Claim"}
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/80 backdrop-blur-sm">
+      <div className="bg-cream border-4 border-ink w-full max-w-md">
+        <div className="bg-ink text-cream p-4 flex items-center justify-between">
+          <p className="font-display text-lg uppercase">Book {artist.name}</p>
+          <button onClick={onClose} className="font-display text-xl">✕</button>
         </div>
-      )}
-    </div>
-  );
-}
-
-function SoundCloudEmbed({ url, name }: { url: string; name: string }) {
-  const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`;
-  return (
-    <div className="border-4 border-ink chunk-shadow">
-      <iframe className="w-full" height="166" scrolling="no" frameBorder="no" allow="autoplay" src={src} title={`${name} on SoundCloud`} />
-    </div>
-  );
-}
-
-function TourDates({ dates }: { dates: ArtistDate[] }) {
-  const upcoming = dates
-    .filter((d) => new Date(d.event_date + "T00:00:00") >= new Date(new Date().toDateString()))
-    .sort((a, b) => a.event_date.localeCompare(b.event_date));
-  if (!upcoming.length) return null;
-  return (
-    <section className="container pb-10">
-      <h2 className="font-display text-3xl uppercase text-ink mb-4 border-b-4 border-ink pb-2">Upcoming Dates</h2>
-      <div className="space-y-3">
-        {upcoming.map((d) => {
-          const dt = new Date(d.event_date + "T00:00:00");
-          return (
-            <div key={d.id} className="flex items-center gap-4 border-4 border-ink bg-cream p-4 chunk-shadow">
-              <div className="text-center min-w-[64px]">
-                <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
-                <p className="font-display text-xs text-ink/60 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
-                <p className="font-display text-xs text-ink/40">{dt.getFullYear()}</p>
-              </div>
-              <div className="flex-1">
-                <p className="font-display text-lg text-ink uppercase">{d.city}</p>
-                {d.venue && <p className="text-sm text-ink/70">{d.venue}</p>}
-                {d.event_time && <p className="text-xs text-ink/50">{d.event_time}</p>}
-                <span className={`text-xs font-display uppercase px-2 py-0.5 border-2 border-ink mt-1 inline-block ${
-                  d.status==="confirmed"?"bg-acid-yellow text-ink":d.status==="tentative"?"bg-cream text-ink/60":"bg-ink text-cream"
-                }`}>{d.status}</span>
-              </div>
-              {d.ticket_url && (
-                <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer"
-                  className="font-display text-xs uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0">
-                  Tickets \u2192
+        {step === "sent" ? (
+          <div className="p-8 text-center">
+            <p className="font-display text-3xl text-ink mb-2">✓ Sent</p>
+            <p className="text-ink/60">We'll forward your inquiry to the booking contact.</p>
+            <button onClick={onClose} className="mt-6 font-display text-sm uppercase bg-acid-yellow text-ink px-6 py-3 border-4 border-ink">Close</button>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4">
+            {artist.booking_email && (
+              <div className="bg-acid-yellow border-4 border-ink p-3">
+                <p className="font-display text-xs uppercase text-ink/60 mb-1">Direct booking</p>
+                <a href={`mailto:${artist.booking_email}`} className="font-display text-ink hover:text-magenta">
+                  ✉ {artist.booking_email}
                 </a>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            )}
+            <label className="block">
+              <span className="font-display text-xs uppercase text-ink block mb-1">Your email *</span>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans focus:outline-none" />
+            </label>
+            <label className="block">
+              <span className="font-display text-xs uppercase text-ink block mb-1">Tell us about the booking</span>
+              <textarea value={purpose} onChange={e=>setPurpose(e.target.value)} rows={3}
+                placeholder="Date, city, event type, estimated budget…"
+                className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans focus:outline-none resize-none" />
+            </label>
+            <button onClick={submit} disabled={busy}
+              className="w-full bg-magenta text-cream font-display px-4 py-3 border-4 border-ink text-sm uppercase disabled:opacity-60">
+              {busy ? "Sending…" : "Send Booking Enquiry"}
+            </button>
+          </div>
+        )}
       </div>
-    </section>
-  );
-}
-
-function Placeholder({ name }: { name: string }) {
-  const i = name.split(/\s+/).slice(0,2).map((w)=>w[0]).join("").toUpperCase();
-  return (
-    <div className="w-full aspect-[16/9] bg-ink text-cream flex items-center justify-center border-b-4 border-ink">
-      <span className="font-display text-[20vw] md:text-[14rem] leading-none tracking-tighter opacity-10">{i}</span>
     </div>
   );
 }
 
 const ArtistDetail = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
+  const slug = router.query.slug as string | undefined;
   const [a, setA] = useState<Artist | null>(null);
   const [dates, setDates] = useState<ArtistDate[]>([]);
-  const [related, setRelated] = useState<Pick<Artist,"id"|"slug"|"name"|"based_city"|"from_city"|"genres"|"photo_url">[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"about"|"music"|"shows"|"gallery">("about");
 
   useEffect(() => {
     if (!slug) return;
+    setLoading(true); setNotFound(false);
     (async () => {
-      setLoading(true);
-      const { data, error } = await supabase.from("artists").select("*").eq("slug",slug).eq("status","approved").maybeSingle();
-      if (error || !data) { setNotFound(true); setLoading(false); return; }
-      const norm = (r: any): Artist => ({
-        ...r,
-        gallery: Array.isArray(r.gallery)?r.gallery:[],
-        videos: Array.isArray(r.videos)?r.videos:[],
-        genres: Array.isArray(r.genres)?r.genres:[],
-        festivals: Array.isArray(r.festivals)?r.festivals:[],
-        available_cities: Array.isArray(r.available_cities)?r.available_cities:[],
-        open_to_bookings: r.open_to_bookings!==false,
-      });
-      setA(norm(data));
-      const { data: dd } = await supabase.from("artist_dates").select("*").eq("artist_id",data.id).eq("is_public",true).order("event_date");
-      setDates((dd??[]) as ArtistDate[]);
-      const { data: rel } = await supabase.from("artists").select("id,slug,name,based_city,from_city,genres,photo_url").eq("status","approved").neq("slug",slug).limit(3);
-      setRelated(rel??[]);
+      // Use direct API call — avoids shim slug filter bug
+      const res = await fetch(`/api/artists/${encodeURIComponent(slug)}`);
+      if (!res.ok) { setNotFound(true); setLoading(false); return; }
+      const raw = await res.json();
+      const norm: Artist = {
+        ...raw,
+        gallery: Array.isArray(raw.gallery) ? raw.gallery : [],
+        videos: Array.isArray(raw.videos) ? raw.videos : [],
+        genres: Array.isArray(raw.genres) ? raw.genres : [],
+        festivals: Array.isArray(raw.festivals) ? raw.festivals : [],
+        available_cities: Array.isArray(raw.available_cities) ? raw.available_cities : [],
+        open_to_bookings: raw.open_to_bookings !== false,
+      };
+      setA(norm);
+      // load dates
+      const dr = await fetch(`/api/artist-dates?artist_id=${raw.id}`);
+      if (dr.ok) setDates(await dr.json());
       setLoading(false);
     })();
   }, [slug]);
 
-  if (loading) return <div className="min-h-screen bg-cream"><Nav /><div className="container py-32 text-center font-display text-2xl text-ink animate-pulse">Loading\u2026</div></div>;
-  if (notFound||!a) return (
-    <div className="min-h-screen bg-cream"><Nav />
-      <div className="container py-32 text-center">
-        <p className="font-display text-4xl text-ink mb-4 uppercase">Artist not found.</p>
-        <Link to="/artists" className="font-display underline text-magenta">\u2190 Back to artists</Link>
+  if (loading) return (
+    <div className="min-h-screen bg-cream">
+      <Nav />
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 rounded-full bg-ink/10 animate-pulse mx-auto" />
+          <div className="h-4 w-32 bg-ink/10 animate-pulse mx-auto" />
+          <div className="h-3 w-24 bg-ink/5 animate-pulse mx-auto" />
+        </div>
       </div>
     </div>
   );
 
-  const city = a.based_city||a.from_city||"";
-  const igUrl = a.instagram ? (a.instagram.startsWith("http")?a.instagram:`https://instagram.com/${a.instagram.replace(/^@/,"")}`) : null;
-  const scUrl = ensureUrl(a.soundcloud);
-  const bandcampUrl = ensureUrl(a.bandcamp);
-  const spotifyUrl = ensureUrl(a.spotify);
-  const webUrl = ensureUrl(a.website);
-  const youtubeVideos = a.videos.filter((v)=>v.youtube_id);
-  const hasUpcoming = dates.some((d)=>new Date(d.event_date+"T00:00:00")>=new Date(new Date().toDateString()));
+  if (notFound || !a) return (
+    <div className="min-h-screen bg-cream"><Nav />
+      <div className="container py-32 text-center">
+        <p className="font-display text-4xl text-ink mb-4 uppercase">Artist not found.</p>
+        <a href="/artists" className="font-display underline text-magenta">← Back to artists</a>
+      </div>
+    </div>
+  );
+
+  const city = a.based_city || a.from_city || "";
+  const scUrl = url(a.soundcloud);
+  const igUrl = ig(a.instagram);
+  const ytVideos = a.videos.filter(v => v.youtube_id);
+  const upcoming = dates
+    .filter(d => new Date(d.event_date + "T00:00:00") >= new Date(new Date().toDateString()))
+    .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+  const tabs = [
+    { id: "about", label: "About" },
+    { id: "music", label: "Music", show: !!(scUrl || ytVideos.length) },
+    { id: "shows", label: `Shows${upcoming.length ? ` (${upcoming.length})` : ""}`, show: upcoming.length > 0 },
+    { id: "gallery", label: "Gallery", show: a.gallery.length > 0 },
+  ].filter(t => t.show !== false);
 
   return (
     <div className="min-h-screen bg-cream">
       <SEO
-        title={`${a.name} \u2014 ${a.genres[0]??"Electronic"} \u00b7 ${city||"India"} | Cats Can Dance`}
-        description={a.why||a.bio?.slice(0,155)||`Book ${a.name} via Cats Can Dance.`}
+        title={`${a.name} — ${a.genres[0] ?? "Electronic"} · ${city || "India"} | Cats Can Dance`}
+        description={a.bio?.slice(0, 155) ?? `${a.name} — Book via Cats Can Dance.`}
         path={`/artists/${a.slug}`}
-        jsonLd={{ "@context":"https://schema.org","@type":"MusicGroup",name:a.name,genre:a.genres.join(", "),image:a.photo_url??undefined,description:a.why||a.bio?.slice(0,155),url:`https://catscan.dance/artists/${a.slug}` }}
+        jsonLd={{ "@context":"https://schema.org","@type":"MusicGroup",name:a.name,genre:a.genres.join(", "),description:a.bio?.slice(0,155) }}
       />
       <Nav />
 
-      <header className="pt-20">
-        {a.photo_url?<img src={a.photo_url} alt={a.name} className="w-full aspect-[16/9] object-cover border-b-4 border-ink"/>:<Placeholder name={a.name}/>}
-        <div className="container py-6 border-b-4 border-ink">
-          <Link to="/artists" className="font-display text-xs uppercase text-ink/50 hover:text-magenta transition-colors">\u2190 All artists</Link>
-          <h1 className="font-display text-5xl md:text-7xl uppercase text-ink leading-none mt-2">{a.name}</h1>
-          {a.members&&<p className="text-base text-ink/60 mt-2">{a.members}</p>}
-          <div className="flex flex-wrap items-center gap-2 mt-4">
-            {city&&<span className="text-xs font-display uppercase bg-ink text-cream px-2 py-1 border-2 border-ink">{city}</span>}
-            {a.genres.map((g)=><span key={g} className="text-xs font-display uppercase bg-acid-yellow text-ink px-2 py-1 border-2 border-ink">{g}</span>)}
-            {!a.open_to_bookings&&<span className="text-xs font-display uppercase text-ink/40 border-2 border-ink/20 px-2 py-1">Not actively booking</span>}
-            {hasUpcoming&&<span className="text-xs font-display uppercase bg-magenta text-cream px-2 py-1 border-2 border-ink">Upcoming shows</span>}
-          </div>
-          {a.available_cities.length>0&&<p className="text-xs text-ink/50 mt-2 font-display">Available in: {a.available_cities.join(" \u00b7 ")}</p>}
+      {/* ── Cover / banner ─────────────────────────────────────────────── */}
+      <div className="pt-[60px] md:pt-[72px]">
+        {/* Banner — YouTube thumbnail, gallery, or solid colour */}
+        <div className="w-full h-48 md:h-64 overflow-hidden bg-ink relative border-b-4 border-ink">
+          {ytVideos[0] ? (
+            <img
+              src={`https://img.youtube.com/vi/${ytVideos[0].youtube_id}/maxresdefault.jpg`}
+              alt={a.name}
+              className="w-full h-full object-cover opacity-60"
+            />
+          ) : a.gallery[0] ? (
+            <img src={a.gallery[0].url} alt={a.name} className="w-full h-full object-cover opacity-60" />
+          ) : (
+            <div className="w-full h-full" style={{ background: `${nameBg(a.name)}33` }} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink/60 to-transparent" />
         </div>
-      </header>
 
-      <section className="container py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2 space-y-8">
-          {a.why&&(
-            <div className="bg-acid-yellow border-4 border-ink p-5">
-              <p className="font-display text-xs uppercase text-ink/60 mb-2">Why book them</p>
-              <p className="text-ink font-medium text-lg leading-snug">{a.why}</p>
+        {/* ── Profile row ────────────────────────────────────────────────── */}
+        <div className="border-b-4 border-ink bg-cream">
+          <div className="container">
+            {/* Avatar + actions */}
+            <div className="flex items-end justify-between -mt-12 pb-4">
+              <Avatar artist={a} size={88} />
+              <div className="flex gap-2 pb-1">
+                {igUrl && (
+                  <a href={igUrl} target="_blank" rel="noreferrer"
+                    className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-cream text-ink hover:bg-ink hover:text-cream transition-colors">
+                    Instagram ↗
+                  </a>
+                )}
+                {scUrl && (
+                  <a href={scUrl} target="_blank" rel="noreferrer"
+                    className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-[#ff5500] text-cream hover:opacity-80 transition-opacity">
+                    SoundCloud ↗
+                  </a>
+                )}
+                <button onClick={() => setBookingOpen(true)}
+                  className="font-display text-xs uppercase px-4 py-2 border-4 border-ink bg-magenta text-cream hover:bg-ink transition-colors">
+                  Book
+                </button>
+              </div>
             </div>
-          )}
-          {a.bio&&(
-            <div>
-              <h2 className="font-display text-2xl uppercase text-ink mb-3 border-b-2 border-ink/20 pb-2">Bio</h2>
-              <p className="text-ink/90 leading-relaxed whitespace-pre-line">{a.bio}</p>
+
+            {/* Name + meta */}
+            <div className="pb-4">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h1 className="font-display text-2xl md:text-3xl text-ink uppercase leading-none">{a.name}</h1>
+                {a.members && <span className="text-ink/50 text-sm">{a.members}</span>}
+              </div>
+              {city && <p className="text-ink/60 text-sm mt-1">📍 {city}</p>}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {a.genres.map(g => (
+                  <span key={g} className="text-xs font-display uppercase bg-acid-yellow text-ink px-2 py-0.5 border-2 border-ink">{g}</span>
+                ))}
+                {a.labels && <span className="text-xs font-display text-ink/50 px-2 py-0.5 border-2 border-ink/20">{a.labels}</span>}
+              </div>
+
+              {/* Stats row */}
+              {(a.festivals.length > 0 || ytVideos.length > 0 || upcoming.length > 0) && (
+                <div className="flex gap-6 mt-4 pt-4 border-t-2 border-ink/10">
+                  {a.festivals.length > 0 && <StatPill label="Festivals" value={a.festivals.length} />}
+                  {ytVideos.length > 0 && <StatPill label="Videos" value={ytVideos.length} />}
+                  {upcoming.length > 0 && <StatPill label="Shows" value={upcoming.length} />}
+                  {a.genres.length > 0 && <StatPill label="Genres" value={a.genres.length} />}
+                </div>
+              )}
             </div>
-          )}
-          {scUrl&&(
-            <div>
-              <h2 className="font-display text-2xl uppercase text-ink mb-3 border-b-2 border-ink/20 pb-2">Listen</h2>
-              <SoundCloudEmbed url={scUrl} name={a.name}/>
+
+            {/* Tabs */}
+            <div className="flex gap-0 border-t-4 border-ink -mx-4 px-4 md:-mx-8 md:px-8 overflow-x-auto">
+              {tabs.map(t => (
+                <button key={t.id} onClick={() => setActiveTab(t.id as any)}
+                  className={`font-display text-sm uppercase px-4 py-3 border-r-4 border-ink whitespace-nowrap transition-colors ${
+                    activeTab === t.id ? "bg-ink text-cream" : "bg-cream text-ink/60 hover:text-ink"
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
             </div>
-          )}
-          {a.festivals.length>0&&(
-            <div>
-              <h2 className="font-display text-2xl uppercase text-ink mb-3 border-b-2 border-ink/20 pb-2">Stage Credits</h2>
-              <div className="flex flex-wrap gap-2">
-                {a.festivals.map((f)=><span key={f} className="text-sm font-display bg-cream border-4 border-ink px-3 py-1.5 chunk-shadow">{f}</span>)}
+          </div>
+        </div>
+
+        {/* ── Tab content ─────────────────────────────────────────────────── */}
+        <div className="container py-8">
+          {activeTab === "about" && (
+            <div className="max-w-2xl space-y-6">
+              {a.why && (
+                <div className="bg-acid-yellow border-4 border-ink p-5">
+                  <p className="font-display text-xs uppercase text-ink/60 mb-2">Why book them</p>
+                  <p className="text-ink text-lg font-medium leading-snug">{a.why}</p>
+                </div>
+              )}
+              {a.bio && (
+                <div>
+                  <h2 className="font-display text-sm uppercase text-ink/60 mb-3">Bio</h2>
+                  <p className="text-ink/90 leading-relaxed whitespace-pre-line">{a.bio}</p>
+                </div>
+              )}
+              {a.festivals.length > 0 && (
+                <div>
+                  <h2 className="font-display text-sm uppercase text-ink/60 mb-3">Stage credits</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {a.festivals.map(f => (
+                      <span key={f} className="text-sm font-display bg-cream border-4 border-ink px-3 py-1.5">{f}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Links */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {url(a.website) && <a href={url(a.website)!} target="_blank" rel="noreferrer" className="text-xs font-display border-2 border-ink px-3 py-1.5 hover:bg-ink hover:text-cream transition-colors">Website ↗</a>}
+                {url(a.bandcamp) && <a href={url(a.bandcamp)!} target="_blank" rel="noreferrer" className="text-xs font-display border-2 border-ink px-3 py-1.5 hover:bg-ink hover:text-cream transition-colors">Bandcamp ↗</a>}
+                {url(a.spotify) && <a href={url(a.spotify)!} target="_blank" rel="noreferrer" className="text-xs font-display border-2 border-ink px-3 py-1.5 hover:bg-ink hover:text-cream transition-colors">Spotify ↗</a>}
               </div>
             </div>
           )}
-          {a.labels&&<p className="text-sm text-ink/70"><span className="font-display">Label:</span> {a.labels}</p>}
-        </div>
 
-        <aside className="space-y-5">
-          <BookingPanel artist={a}/>
-          <div className="bg-cream border-4 border-ink chunk-shadow p-4 space-y-2">
-            <h3 className="font-display text-sm uppercase text-ink/70">Links</h3>
-            <div className="flex flex-wrap gap-2">
-              {igUrl&&<a href={igUrl} target="_blank" rel="noreferrer" className="text-xs font-display bg-ink text-cream px-3 py-2 border-2 border-ink hover:bg-magenta transition-colors">Instagram</a>}
-              {scUrl&&<a href={scUrl} target="_blank" rel="noreferrer" className="text-xs font-display bg-[#ff5500] text-cream px-3 py-2 border-2 border-ink">SoundCloud</a>}
-              {bandcampUrl&&<a href={bandcampUrl} target="_blank" rel="noreferrer" className="text-xs font-display bg-[#1da0c3] text-cream px-3 py-2 border-2 border-ink">Bandcamp</a>}
-              {spotifyUrl&&<a href={spotifyUrl} target="_blank" rel="noreferrer" className="text-xs font-display bg-[#1db954] text-cream px-3 py-2 border-2 border-ink">Spotify</a>}
-              {webUrl&&<a href={webUrl} target="_blank" rel="noreferrer" className="text-xs font-display bg-cream text-ink px-3 py-2 border-2 border-ink">Website \u2197</a>}
+          {activeTab === "music" && (
+            <div className="space-y-6 max-w-2xl">
+              {scUrl && (
+                <div>
+                  <h2 className="font-display text-sm uppercase text-ink/60 mb-3">SoundCloud</h2>
+                  <div className="border-4 border-ink">
+                    <SCEmbed url={scUrl} name={a.name} />
+                  </div>
+                </div>
+              )}
+              {ytVideos.length > 0 && (
+                <div>
+                  <h2 className="font-display text-sm uppercase text-ink/60 mb-3">Videos</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {ytVideos.map(v => (
+                      <YTEmbed key={v.youtube_id} id={v.youtube_id!} title={v.title} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-          <ClaimBanner artist={a}/>
-        </aside>
-      </section>
+          )}
 
-      <TourDates dates={dates}/>
+          {activeTab === "shows" && (
+            <div className="space-y-3 max-w-xl">
+              {upcoming.map(d => {
+                const dt = new Date(d.event_date + "T00:00:00");
+                return (
+                  <div key={d.id} className="flex items-center gap-4 border-4 border-ink bg-cream p-4">
+                    <div className="text-center min-w-[52px]">
+                      <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
+                      <p className="font-display text-xs text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
+                      <p className="font-display text-xs text-ink/30">{dt.getFullYear()}</p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-display text-lg text-ink uppercase">{d.city}</p>
+                      {d.venue && <p className="text-sm text-ink/60">{d.venue}</p>}
+                      <span className={`text-xs font-display uppercase px-2 py-0.5 border-2 border-ink mt-1 inline-block ${
+                        d.status==="confirmed"?"bg-acid-yellow text-ink":d.status==="tentative"?"bg-cream text-ink/50":"bg-ink text-cream"
+                      }`}>{d.status}</span>
+                    </div>
+                    {d.ticket_url && (
+                      <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`}
+                        target="_blank" rel="noreferrer"
+                        className="font-display text-xs uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0">
+                        Tickets →
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-      {youtubeVideos.length>0&&(
-        <section className="container pb-10">
-          <h2 className="font-display text-3xl uppercase text-ink mb-4 border-b-4 border-ink pb-2">Watch</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {youtubeVideos.map((v)=>(
-              <div key={v.youtube_id} className="border-4 border-ink chunk-shadow bg-ink">
-                <div className="aspect-video">
-                  <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${v.youtube_id}`} title={v.title??a.name} allowFullScreen/>
-                </div>
-                {v.title&&<p className="p-3 font-display text-sm text-cream line-clamp-1">{v.title}</p>}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {a.gallery.length>0&&(
-        <section className="container pb-10">
-          <h2 className="font-display text-3xl uppercase text-ink mb-4 border-b-4 border-ink pb-2">Gallery</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {a.gallery.map((g,i)=>(
-              <figure key={i} className="border-4 border-ink chunk-shadow overflow-hidden cursor-zoom-in" onClick={()=>setLightbox(g.url)}>
-                <img src={g.url} alt={g.caption??a.name} className="w-full h-48 object-cover hover:scale-105 transition-transform"/>
-              </figure>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {lightbox&&(
-        <div className="fixed inset-0 bg-ink/90 z-50 flex items-center justify-center p-4 cursor-zoom-out" onClick={()=>setLightbox(null)}>
-          <img src={lightbox} alt="Gallery" className="max-w-full max-h-full object-contain border-4 border-cream"/>
+          {activeTab === "gallery" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {a.gallery.map((g, i) => (
+                <figure key={i} className="border-4 border-ink overflow-hidden">
+                  <img src={g.url} alt={g.caption ?? a.name} className="w-full h-48 object-cover" />
+                  {g.caption && <figcaption className="p-2 font-display text-xs text-ink/60">{g.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {related.length>0&&(
-        <section className="container pb-16">
-          <h2 className="font-display text-3xl uppercase text-ink mb-4 border-b-4 border-ink pb-2">More Artists</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {related.map((r)=>(
-              <Link key={r.id} to={`/artists/${r.slug}`} className="block bg-cream border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform overflow-hidden">
-                {r.photo_url?<img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover border-b-2 border-ink"/>:<div className="w-full h-32 bg-ink/5 border-b-2 border-ink flex items-center justify-center font-display text-4xl text-ink/20">{r.name[0]}</div>}
-                <div className="p-4">
-                  <p className="font-display text-xl text-ink uppercase">{r.name}</p>
-                  <p className="text-xs text-ink/60 mt-1">{r.based_city||r.from_city||""}</p>
-                  <p className="text-xs text-ink/50 mt-1">{r.genres?.slice(0,3).join(" \u00b7 ")}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-      <Footer/>
+      {bookingOpen && <BookingModal artist={a} onClose={() => setBookingOpen(false)} />}
+      <Footer />
     </div>
   );
 };

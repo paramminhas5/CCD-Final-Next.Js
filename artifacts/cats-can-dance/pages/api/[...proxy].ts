@@ -1,351 +1,402 @@
+/**
+ * CCD API proxy — Next.js serverless function
+ * Routes all /api/* calls to Supabase REST with service-role key.
+ * Admin routes require x-admin-password header matching ADMIN_PASSWORD env var.
+ * NO hardcoded password fallback — set ADMIN_PASSWORD in Vercel env vars.
+ */
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const SB_URL = "https://nrzgyippztzenoyrtszr.supabase.co";
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yemd5aXBwenR6ZW5veXJ0c3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTExNjAzOCwiZXhwIjoyMDk0NjkyMDM4fQ.79dS5Y1Ov1P51veAR62fKEX4m-okHqSAg6huzTTL2C4";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "84838281";
+const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
+const ADMIN_PW = process.env.ADMIN_PASSWORD ?? ""; // set in Vercel — no fallback
 
-const SB = { Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY, "Content-Type": "application/json" };
-const isAdmin = (req: NextApiRequest) => req.headers["x-admin-password"] === ADMIN_PASSWORD;
+if (!SK) console.error("[proxy] SUPABASE_SERVICE_KEY not set");
 
-// ── Supabase helpers ──────────────────────────────────────────────────────────
-async function sbFetch(table: string, qs = "", method = "GET", body?: unknown, extra?: Record<string,string>) {
-  const res = await fetch(`${SB_URL}/rest/v1/${table}${qs}`, {
+const H = () => ({
+  Authorization: `Bearer ${SK}`,
+  apikey: SK,
+  "Content-Type": "application/json",
+  Prefer: "return=representation",
+});
+
+const isAdmin = (req: NextApiRequest) =>
+  !!ADMIN_PW && req.headers["x-admin-password"] === ADMIN_PW;
+
+// ── Supabase helpers ─────────────────────────────────────────────────────────
+async function sb(table: string, qs = "", method = "GET", body?: unknown, preferOverride?: string) {
+  const r = await fetch(`${SB}/rest/v1/${table}${qs}`, {
     method,
-    headers: { ...SB, Prefer: "return=representation", ...extra },
+    headers: preferOverride ? { ...H(), Prefer: preferOverride } : H(),
     ...(body != null ? { body: JSON.stringify(body) } : {}),
   });
-  const text = await res.text();
-  return { ok: res.ok, status: res.status, data: text ? safeJson(text) : null };
+  const t = await r.text();
+  return { ok: r.ok, status: r.status, data: t ? tryJson(t) : null };
 }
-function safeJson(t: string) { try { return JSON.parse(t); } catch { return t; } }
+const tryJson = (t: string) => { try { return JSON.parse(t); } catch { return t; } };
+const get  = async (t: string, q = "") => { const r = await sb(t, q); return r.ok ? r.data : []; };
+const ins  = (t: string, b: unknown) => sb(t, "", "POST", b);
+const upsert = (t: string, b: unknown) => sb(t, "", "POST", b, "return=representation,resolution=merge-duplicates");
+const patch  = (t: string, q: string, b: unknown) => sb(t, q, "PATCH", b);
+const del    = (t: string, q: string) => sb(t, q, "DELETE", undefined, "return=minimal");
 
-async function sbGet(table: string, qs = "") { const r = await sbFetch(table, qs); return r.ok ? r.data : []; }
-async function sbPost(table: string, body: unknown, upsert = false) {
-  return sbFetch(table, "", "POST", body, upsert ? { Prefer: "return=representation,resolution=merge-duplicates" } : { Prefer: "return=representation" });
+// ── PostgREST query builder ──────────────────────────────────────────────────
+// Builds ?col=eq.val&col2=order.asc style strings
+const pq = (filters: Record<string,string> = {}) => {
+  const p = new URLSearchParams(filters);
+  return p.size ? `?${p}` : "";
+};
+const eqf  = (col: string, val: unknown) => ({ [col]: `eq.${val}` });
+const neqf = (col: string, val: unknown) => ({ [col]: `neq.${val}` });
+const ord  = (col: string, asc = true) => ({ order: `${col}.${asc ? "asc" : "desc"}` });
+
+// Extract youtube_id from various URL formats
+function ytId(urlOrId: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/,
+  ];
+  for (const p of patterns) {
+    const m = urlOrId.match(p);
+    if (m) return m[1];
+  }
+  return null;
 }
-async function sbPatch(table: string, qs: string, body: unknown) { return sbFetch(table, qs, "PATCH", body); }
-async function sbDelete(table: string, qs: string) { return sbFetch(table, qs, "DELETE", undefined, { Prefer: "return=minimal" }); }
 
-// ── Postgrest filter builder ──────────────────────────────────────────────────
-function qs(filter: Record<string, string> = {}, extras: Record<string, string> = {}): string {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(filter)) p.set(k, v);
-  for (const [k, v] of Object.entries(extras)) p.set(k, v);
-  return p.toString() ? `?${p}` : "";
-}
-function eq(col: string, val: unknown) { return { [col]: `eq.${val}` }; }
-function orderStr(col: string, asc = true) { return `${col}.${asc ? "asc" : "desc"}`; }
-
-export const config = { api: { bodyParser: true } };
+export const config = { api: { bodyParser: { sizeLimit: "4mb" } } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  if (req.method === "OPTIONS") { res.status(200).end(); return; }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-  const segments: string[] = Array.isArray(req.query.proxy) ? req.query.proxy : [req.query.proxy as string];
-  const path = segments.join("/");
-  const { proxy: _p, ...rawQ } = req.query as Record<string, string>;
-  const body = req.body ?? {};
-  const method = req.method ?? "GET";
+  const segs: string[] = Array.isArray(req.query.proxy)
+    ? req.query.proxy
+    : [req.query.proxy as string];
+  const path = segs.join("/");
+  const { proxy: _p, ...rq } = req.query as Record<string, string>;
+  const body: any = req.body ?? {};
+  const m = req.method ?? "GET";
 
   // ── Health ──────────────────────────────────────────────────────────────────
-  if (path === "health") return res.json({ ok: true });
+  if (path === "health") return res.json({ ok: true, ts: Date.now() });
 
   // ════════════════════════════════════════════════════════════════════════════
-  // ADMIN ROUTES  /api/functions/v1/*
+  // ADMIN  /api/functions/v1/*
   // ════════════════════════════════════════════════════════════════════════════
-  if (segments[0] === "functions" && segments[1] === "v1") {
+  if (segs[0] === "functions" && segs[1] === "v1") {
     if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
-    const fn = segments[2];
+    const fn = segs[2];
 
-    // ── Admin: verify + signups ───────────────────────────────────────────────
+    // ── signups ────────────────────────────────────────────────────────────────
     if (fn === "admin-signups") {
-      if (rawQ.format === "csv") {
-        const rows = await sbGet("early_access_signups", `?${qs({}, { order: orderStr("created_at", false) })}`);
-        const csv = ["id,email,source,created_at", ...(rows as any[]).map((r: any) =>
-          [r.id, r.email, r.source ?? "", r.created_at].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
-        )].join("\n");
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename="signups.csv"`);
+      const rows = (await get("early_access_signups", pq(ord("created_at", false)))) as any[];
+      if (rq.format === "csv") {
+        const csv = ["id,email,source,created_at",
+          ...rows.map((r: any) => [r.id,r.email,r.source??"",r.created_at].map((v)=>`"${String(v).replace(/"/g,'""')}"`).join(","))
+        ].join("\n");
+        res.setHeader("Content-Type","text/csv");
+        res.setHeader("Content-Disposition","attachment; filename=signups.csv");
         return res.send(csv);
       }
-      const signups = await sbGet("early_access_signups", qs({}, { order: orderStr("created_at", false) }));
-      return res.json({ signups: signups ?? [] });
+      return res.json({ signups: rows });
     }
 
-    // ── Admin: content (settings / events / messages) ─────────────────────────
+    // ── content: settings / events / messages ─────────────────────────────────
     if (fn === "admin-content") {
-      if (method === "GET") {
-        const type = rawQ.type;
+      if (m === "GET") {
+        const type = rq.type;
         if (type === "events") {
-          const events = await sbGet("events", qs({}, { order: orderStr("sort_order") }));
-          return res.json({ events: events ?? [] });
+          return res.json({ events: await get("events", pq(ord("sort_order"))) });
         }
         if (type === "messages") {
-          const messages = await sbGet("contact_messages", qs({}, { order: orderStr("created_at", false) }));
-          return res.json({ messages: messages ?? [] });
+          return res.json({ messages: await get("contact_messages", pq(ord("created_at", false))) });
         }
         // settings
-        const rows = await sbGet("site_settings", qs(eq("id", "main")));
-        return res.json({ settings: Array.isArray(rows) ? rows[0] ?? null : rows });
+        const rows = await get("site_settings", pq(eqf("id","main"))) as any[];
+        return res.json({ settings: rows[0] ?? null });
       }
-      if (method === "POST" || method === "PATCH") {
-        const { type, action, payload } = body as { type?: string; action?: string; payload?: any };
-
-        // Events CRUD
-        if (type === "events") {
-          if (action === "upsert") {
-            const ev = payload;
-            const existing = ev?.id ? await sbGet("events", qs(eq("id", ev.id))) : [];
-            const now = new Date().toISOString();
-            if (Array.isArray(existing) && existing.length > 0) {
-              await sbPatch("events", qs(eq("id", ev.id)), { ...ev, updated_at: now });
-            } else {
-              await sbPost("events", { ...ev, created_at: now, updated_at: now });
-            }
-            const updated = await sbGet("events", qs({}, { order: orderStr("sort_order") }));
-            return res.json({ events: updated });
+      // POST — events CRUD or settings upsert
+      const { type, action, payload } = body;
+      if (type === "events") {
+        if (action === "upsert" || action === "save") {
+          const ev = payload ?? body;
+          const now = new Date().toISOString();
+          const existing = ev?.id
+            ? await get("events", pq(eqf("id", ev.id))) as any[]
+            : [];
+          if (existing.length) {
+            await patch("events", pq(eqf("id", ev.id)), { ...ev, updated_at: now });
+          } else {
+            // ensure slug
+            if (!ev.slug) ev.slug = `event-${Date.now()}`;
+            await ins("events", { ...ev, created_at: now, updated_at: now });
           }
-          if (action === "delete" && payload?.id) {
-            await sbDelete("events", qs(eq("id", payload.id)));
-            return res.json({ ok: true });
-          }
+          return res.json({ events: await get("events", pq(ord("sort_order"))) });
         }
-
-        // Settings save (any other type)
-        const rows = await sbGet("site_settings", qs(eq("id", "main")));
-        const existing = Array.isArray(rows) ? rows[0] : null;
-        const settingsPayload = payload ?? body;
-        if (existing) {
-          await sbPatch("site_settings", qs(eq("id", "main")), { ...settingsPayload, updated_at: new Date().toISOString() });
-        } else {
-          await sbPost("site_settings", { id: "main", ...settingsPayload, created_at: new Date().toISOString() });
+        if (action === "delete" && payload?.id) {
+          await del("events", pq(eqf("id", payload.id)));
+          return res.json({ ok: true });
         }
-        return res.json({ ok: true });
       }
+      // settings save — payload IS the settings object
+      const settings = payload ?? body;
+      const now = new Date().toISOString();
+      const existing = await get("site_settings", pq(eqf("id","main"))) as any[];
+      if (existing.length) {
+        await patch("site_settings", pq(eqf("id","main")), { ...settings, updated_at: now });
+      } else {
+        await ins("site_settings", { id: "main", ...settings, created_at: now, updated_at: now });
+      }
+      return res.json({ ok: true });
     }
 
-    // ── Admin: curated events ─────────────────────────────────────────────────
+    // ── curated events ────────────────────────────────────────────────────────
     if (fn === "admin-curated-events") {
-      if (method === "GET") {
-        const rows = await sbGet("curated_events", qs({}, { order: orderStr("created_at", false) }));
-        return res.json({ events: rows ?? [] });
+      if (m === "GET") {
+        return res.json({ events: await get("curated_events", pq(ord("created_at", false))) });
       }
-      if (method === "POST") {
-        const now = new Date().toISOString();
-        const { ok, data } = await sbPost("curated_events", { ...body, created_at: now, updated_at: now });
-        return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Insert failed" });
+      // Admin page sends POST with {action, payload} OR direct object
+      const action = body.action;
+      const row = body.payload ?? body;
+      const now = new Date().toISOString();
+
+      if (m === "POST") {
+        if (action === "delete") {
+          await del("curated_events", pq(eqf("id", row.id)));
+          return res.json({ ok: true });
+        }
+        // upsert or plain add
+        const clean = { ...row, updated_at: now };
+        delete clean.action; delete clean.payload;
+        if (clean.id) {
+          await patch("curated_events", pq(eqf("id", clean.id)), clean);
+        } else {
+          clean.created_at = now;
+          await ins("curated_events", clean);
+        }
+        return res.json({ ok: true });
       }
-      if (method === "PATCH") {
-        const id = rawQ.id ?? body?.id;
-        const { ok, data } = await sbPatch("curated_events", qs(eq("id", id)), { ...body, updated_at: new Date().toISOString() });
-        return ok ? res.json(data) : res.status(400).json({ error: "Update failed" });
-      }
-      if (method === "DELETE") {
-        const id = rawQ.id ?? body?.id;
-        await sbDelete("curated_events", qs(eq("id", id)));
+      if (m === "DELETE") {
+        const id = rq.id ?? row.id;
+        await del("curated_events", pq(eqf("id", id)));
         return res.json({ ok: true });
       }
     }
 
-    // ── Admin: curate-events (auto-fetch / scheduled) ─────────────────────────
+    // ── curate / scheduled (stubs — no auto-scraping yet) ────────────────────
     if (fn === "curate-events" || fn === "scheduled-curate") {
-      return res.json({ ok: true, message: "Auto-curation not yet wired — add events manually." });
+      return res.json({ ok: true, upserted: 0, message: "Auto-curation not configured. Add events manually above." });
     }
 
-    // ── Admin: videos ─────────────────────────────────────────────────────────
+    // ── videos ────────────────────────────────────────────────────────────────
     if (fn === "admin-videos") {
-      if (method === "GET") {
-        const rows = await sbGet("site_videos", qs({}, { order: orderStr("sort_order") }));
-        return res.json({ videos: rows ?? [] });
+      if (m === "GET") {
+        return res.json({ videos: await get("site_videos", pq(ord("sort_order"))) });
       }
-      if (method === "POST") {
+      if (m === "POST") {
+        // Extract youtube_id from url field
+        const url: string = body.url ?? body.youtube_id ?? "";
+        const id = ytId(url) ?? url;
+        if (!id) return res.status(400).json({ error: "Could not parse YouTube ID from URL" });
+        const thumb = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
         const now = new Date().toISOString();
-        const { ok, data } = await sbPost("site_videos", { ...body, created_at: now, updated_at: now });
-        return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
+        const existing = await get("site_videos", pq(ord("sort_order"))) as any[];
+        const nextOrder = existing.length ? Math.max(...existing.map((v: any) => v.sort_order ?? 0)) + 1 : 0;
+        const { ok, data } = await ins("site_videos", {
+          youtube_id: id,
+          title: body.title || id,
+          thumbnail_url: thumb,
+          is_featured: body.is_featured ?? false,
+          sort_order: nextOrder,
+          created_at: now, updated_at: now,
+        });
+        return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to add video" });
       }
-      if (method === "DELETE") {
-        const id = rawQ.id ?? body?.id;
-        await sbDelete("site_videos", qs(eq("id", id)));
+      if (m === "PUT") {
+        // toggle featured
+        const { id, ...rest } = body;
+        const { ok } = await patch("site_videos", pq(eqf("id", id)), { ...rest, updated_at: new Date().toISOString() });
+        return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+      }
+      if (m === "DELETE") {
+        const id = rq.id ?? body.id;
+        await del("site_videos", pq(eqf("id", id)));
         return res.json({ ok: true });
       }
     }
 
-    // ── Admin: rsvps ──────────────────────────────────────────────────────────
+    // ── rsvps ─────────────────────────────────────────────────────────────────
     if (fn === "admin-rsvps") {
-      const filter: Record<string, string> = { order: orderStr("created_at", false) };
-      if (rawQ.event_slug) filter["event_slug"] = `eq.${rawQ.event_slug}`;
-      const rsvps = await sbGet("event_rsvps", qs({}, filter));
-      return res.json({ rsvps: rsvps ?? [] });
+      const f: Record<string,string> = { ...ord("created_at", false) };
+      if (rq.event_slug) f["event_slug"] = `eq.${rq.event_slug}`;
+      return res.json({ rsvps: await get("event_rsvps", pq(f)) });
     }
 
-    // ── Admin: promoters ──────────────────────────────────────────────────────
+    // ── promoters ─────────────────────────────────────────────────────────────
     if (fn === "admin-promoters") {
-      if (method === "GET") {
-        const rows = await sbGet("promoters", qs({}, { order: orderStr("name") }));
-        return res.json({ promoters: rows ?? [] });
-      }
-      if (method === "POST") {
-        const { ok, data } = await sbPost("promoters", { ...body, created_at: new Date().toISOString() });
+      if (m === "GET") return res.json({ promoters: await get("promoters", pq(ord("name"))) });
+      if (m === "POST") {
+        const { ok, data } = await ins("promoters", { ...body, created_at: new Date().toISOString() });
         return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
       }
     }
 
-    // ── Admin: artists ────────────────────────────────────────────────────────
+    // ── artists (admin) ───────────────────────────────────────────────────────
     if (fn === "admin-artists") {
-      if (method === "GET") {
-        const rows = await sbGet("artists", qs({}, { order: orderStr("name") }));
-        return res.json({ artists: rows ?? [] });
-      }
-      if (method === "PATCH") {
-        const id = rawQ.id ?? body?.id;
-        const { ok, data } = await sbPatch("artists", qs(eq("id", id)), { ...body, updated_at: new Date().toISOString() });
+      if (m === "GET") return res.json({ artists: await get("artists", pq(ord("name"))) });
+      if (m === "PATCH") {
+        const id = rq.id ?? body.id;
+        const { ok, data } = await patch("artists", pq(eqf("id", id)), { ...body, updated_at: new Date().toISOString() });
         return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
       }
     }
 
-    // ── Admin: upload poster (stub — needs R2/Cloudflare storage) ─────────────
-    if (fn === "admin-upload-poster") {
-      return res.status(501).json({ error: "File upload not yet configured. Host images externally and paste the URL." });
-    }
-
-    // ── Admin: blog ───────────────────────────────────────────────────────────
+    // ── blog ──────────────────────────────────────────────────────────────────
     if (fn === "admin-publish-blog" || fn === "admin-generate-blog") {
-      const rows = await sbGet("site_settings", qs(eq("id", "main")));
-      const existing = Array.isArray(rows) ? rows[0] : null;
-      const posts = existing?.blog_posts ?? [];
-      if (method === "POST" && body?.post) {
-        posts.unshift(body.post);
-        if (existing) await sbPatch("site_settings", qs(eq("id", "main")), { blog_posts: posts, updated_at: new Date().toISOString() });
-        else await sbPost("site_settings", { id: "main", blog_posts: posts });
-      }
+      const rows = await get("site_settings", pq(eqf("id","main"))) as any[];
+      const existing = rows[0];
+      const posts = [...(existing?.blog_posts ?? [])];
+      if (body?.post) posts.unshift(body.post);
+      if (existing) await patch("site_settings", pq(eqf("id","main")), { blog_posts: posts, updated_at: new Date().toISOString() });
+      else await ins("site_settings", { id: "main", blog_posts: posts, created_at: new Date().toISOString() });
       return res.json({ ok: true, posts });
     }
 
-    // ── Admin: enrich artists (stub) ──────────────────────────────────────────
-    if (fn === "enrich-artists") {
-      return res.json({ ok: true, message: "Enrichment queued — check back shortly." });
+    if (fn === "admin-upload-poster") {
+      return res.status(501).json({ error: "File upload not configured — paste an image URL instead." });
     }
+    if (fn === "enrich-artists") return res.json({ ok: true, message: "Enrichment queued." });
 
-    return res.status(404).json({ error: `Unknown admin fn: ${fn}` });
+    return res.status(404).json({ error: `Unknown admin function: ${fn}` });
   }
 
   // ════════════════════════════════════════════════════════════════════════════
   // PUBLIC ROUTES
   // ════════════════════════════════════════════════════════════════════════════
 
-  // ── Artists ──────────────────────────────────────────────────────────────
-  if (path === "artists") {
-    if (method === "GET") {
-      const filter: Record<string, string> = { "status": "eq.approved", order: orderStr("name") };
-      const rows = await sbGet("artists", qs(filter));
-      return res.json(rows ?? []);
-    }
-    if (method === "POST") {
-      const { ok, data } = await sbPost("artists", body);
-      return ok ? res.json(data) : res.status(400).json({ error: "Insert failed" });
-    }
+  // ── Artists: list ───────────────────────────────────────────────────────────
+  if (path === "artists" && m === "GET") {
+    const rows = await get("artists", pq({ ...eqf("status","approved"), ...ord("name") }));
+    return res.json(rows ?? []);
   }
 
-  // GET /api/artists/:slug
-  if (segments[0] === "artists" && segments[1] && segments.length === 2 && method === "GET") {
-    const slug = segments[1];
-    const rows = await sbGet("artists", qs({ slug: `eq.${slug}`, status: "eq.approved" }));
-    const artist = Array.isArray(rows) ? rows[0] : null;
-    if (!artist) return res.status(404).json({ error: "Not found" });
-    return res.json(artist);
+  // ── Artists: single by slug ─────────────────────────────────────────────────
+  // Handles both /api/artists/kohra (path style) and /api/artists?slug=kohra (query style)
+  if (segs[0] === "artists" && segs[1] && segs.length === 2 && m === "GET") {
+    const rows = await get("artists", pq({ ...eqf("slug", segs[1]), ...eqf("status","approved") })) as any[];
+    return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
   }
 
-  // PATCH /api/artists/:id
-  if (segments[0] === "artists" && segments[1] && method === "PATCH") {
+  // Also handle query-param slug: /api/artists?slug=kohra
+  if (path === "artists" && rq.slug && m === "GET") {
+    const rows = await get("artists", pq({ ...eqf("slug", rq.slug), ...eqf("status","approved") })) as any[];
+    return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
+  }
+
+  // ── Artists: insert (public submission) ─────────────────────────────────────
+  if (path === "artists" && m === "POST") {
+    // Public submissions go to artist_submissions, not artists (requires admin approval)
+    const now = new Date().toISOString();
+    const { ok } = await ins("artist_submissions", { ...body, status: "pending", created_at: now });
+    return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Artists: patch (admin only) ─────────────────────────────────────────────
+  if (segs[0] === "artists" && segs[1] && m === "PATCH") {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
-    const { ok, data } = await sbPatch("artists", qs(eq("id", segments[1])), { ...body, updated_at: new Date().toISOString() });
+    const { ok, data } = await patch("artists", pq(eqf("id", segs[1])), { ...body, updated_at: new Date().toISOString() });
     return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
   }
 
-  // POST /api/artists/:id/claim
-  if (segments[0] === "artists" && segments[2] === "claim") {
-    const rows = await sbGet("artists", qs(eq("id", segments[1])));
-    if (!Array.isArray(rows) || !rows.length) return res.status(404).json({ error: "Not found" });
+  // ── Artists: claim ──────────────────────────────────────────────────────────
+  if (segs[0] === "artists" && segs[2] === "claim" && m === "POST") {
+    const rows = await get("artists", pq(eqf("id", segs[1]))) as any[];
+    if (!rows?.length) return res.status(404).json({ error: "Not found" });
     if (rows[0].claimed_by) return res.status(409).json({ error: "Already claimed" });
-    const { ok } = await sbPatch("artists", qs(eq("id", segments[1])), { claimed_by: body?.user_id ?? "pending" });
+    const { ok } = await patch("artists", pq(eqf("id", segs[1])), { claimed_by: body?.user_id ?? "pending" });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
 
-  // ── Artist dates ──────────────────────────────────────────────────────────
+  // ── Artist dates ────────────────────────────────────────────────────────────
   if (path === "artist-dates") {
-    if (method === "GET") {
-      const filter: Record<string, string> = { is_public: "eq.true", order: orderStr("event_date") };
-      if (rawQ.artist_id) filter.artist_id = `eq.${rawQ.artist_id}`;
-      return res.json(await sbGet("artist_dates", qs(filter)) ?? []);
+    if (m === "GET") {
+      const f: Record<string,string> = { ...eqf("is_public","true"), ...ord("event_date") };
+      if (rq.artist_id) f["artist_id"] = `eq.${rq.artist_id}`;
+      return res.json(await get("artist_dates", pq(f)));
     }
-    if (method === "POST") {
-      const { ok, data } = await sbPost("artist_dates", body);
+    if (m === "POST") {
+      const { ok, data } = await ins("artist_dates", { ...body, created_at: new Date().toISOString() });
       return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
     }
-  }
-
-  // ── Events ────────────────────────────────────────────────────────────────
-  if (path === "events") {
-    const rows = await sbGet("events", qs({}, { order: orderStr("sort_order") }));
-    return res.json(rows ?? []);
-  }
-  if (segments[0] === "events" && segments[1] && method === "GET") {
-    const rows = await sbGet("events", qs(eq("slug", segments[1])));
-    const ev = Array.isArray(rows) ? rows[0] : null;
-    return ev ? res.json(ev) : res.status(404).json({ error: "Not found" });
-  }
-
-  // ── Curated events ────────────────────────────────────────────────────────
-  if (path === "curated-events") {
-    const rows = await sbGet("curated_events", qs({}, { order: orderStr("event_date") }));
-    return res.json(rows ?? []);
-  }
-
-  // ── Videos ────────────────────────────────────────────────────────────────
-  if (path === "videos") {
-    const rows = await sbGet("site_videos", qs({}, { order: orderStr("sort_order") }));
-    return res.json(rows ?? []);
-  }
-
-  // ── Site settings ─────────────────────────────────────────────────────────
-  if (path === "site-settings") {
-    if (method === "GET") {
-      const rows = await sbGet("site_settings", qs(eq("id", "main")));
-      return res.json(Array.isArray(rows) ? rows[0] ?? null : rows);
-    }
-    if (method === "PATCH" && isAdmin(req)) {
-      const rows = await sbGet("site_settings", qs(eq("id", "main")));
-      const existing = Array.isArray(rows) ? rows[0] : null;
-      if (existing) await sbPatch("site_settings", qs(eq("id", "main")), { ...body, updated_at: new Date().toISOString() });
-      else await sbPost("site_settings", { id: "main", ...body });
+    if (m === "DELETE") {
+      const id = rq.id ?? body.id;
+      if (!id) return res.status(400).json({ error: "id required" });
+      await del("artist_dates", pq(eqf("id", id)));
       return res.json({ ok: true });
     }
   }
 
-  // ── Forms ─────────────────────────────────────────────────────────────────
-  if (path === "contact" && method === "POST") {
-    const { ok } = await sbPost("contact_messages", { ...body, created_at: new Date().toISOString() });
+  // ── Events (public) ─────────────────────────────────────────────────────────
+  if (path === "events" && m === "GET") {
+    return res.json(await get("events", pq(ord("sort_order"))));
+  }
+  if (segs[0] === "events" && segs[1] && m === "GET") {
+    const rows = await get("events", pq(eqf("slug", segs[1]))) as any[];
+    return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
+  }
+
+  // ── Curated events (public) ─────────────────────────────────────────────────
+  if (path === "curated-events" && m === "GET") {
+    return res.json(await get("curated_events", pq(ord("event_date"))));
+  }
+
+  // ── Videos (public) ─────────────────────────────────────────────────────────
+  if (path === "videos" && m === "GET") {
+    return res.json(await get("site_videos", pq(ord("sort_order"))));
+  }
+
+  // ── Site settings ───────────────────────────────────────────────────────────
+  if (path === "site-settings") {
+    if (m === "GET") {
+      const rows = await get("site_settings", pq(eqf("id","main"))) as any[];
+      return res.json(rows[0] ?? null);
+    }
+    if (m === "PATCH" && isAdmin(req)) {
+      const existing = await get("site_settings", pq(eqf("id","main"))) as any[];
+      const now = new Date().toISOString();
+      if (existing.length) await patch("site_settings", pq(eqf("id","main")), { ...body, updated_at: now });
+      else await ins("site_settings", { id: "main", ...body, created_at: now, updated_at: now });
+      return res.json({ ok: true });
+    }
+  }
+
+  // ── Public forms ────────────────────────────────────────────────────────────
+  if (path === "contact" && m === "POST") {
+    const { ok } = await ins("contact_messages", { ...body, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
-  if (path === "early-access" && method === "POST") {
-    const { ok } = await sbPost("early_access_signups", { ...body, created_at: new Date().toISOString() });
+  if (path === "early-access" && m === "POST") {
+    // check for existing
+    const email = body.email?.toLowerCase()?.trim();
+    if (!email) return res.status(400).json({ error: "Email required" });
+    const existing = await get("early_access_signups", pq(eqf("email", email))) as any[];
+    if (existing?.length) return res.json({ ok: true, duplicate: true });
+    const { ok } = await ins("early_access_signups", { ...body, email, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
-  if (path === "event-rsvp" && method === "POST") {
-    const { ok } = await sbPost("event_rsvps", { ...body, created_at: new Date().toISOString() });
-    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
-  }
-  if (path === "artist-submissions" && method === "POST") {
-    const { ok } = await sbPost("artist_submissions", { ...body, created_at: new Date().toISOString() });
+  if (path === "event-rsvp" && m === "POST") {
+    const { ok } = await ins("event_rsvps", { ...body, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
 
-  // ── Stubs ─────────────────────────────────────────────────────────────────
+  // ── Artist submissions (public) ─────────────────────────────────────────────
+  if (path === "artist-submissions" && m === "POST") {
+    const { ok } = await ins("artist_submissions", { ...body, status: "pending", created_at: new Date().toISOString() });
+    return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Stubs ───────────────────────────────────────────────────────────────────
   if (path === "instagram-feed") return res.json({ posts: [] });
   if (path === "youtube-videos") return res.json({ videos: [] });
-  if (path === "storage") return res.status(501).json({ error: "Storage not configured" });
 
-  return res.status(404).json({ error: `No handler for ${method} /${path}` });
+  return res.status(404).json({ error: `No handler for ${m} /${path}` });
 }
