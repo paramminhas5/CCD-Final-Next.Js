@@ -45,8 +45,7 @@ function ClerkWrapper({ children }: { children: React.ReactNode }) {
       proxyUrl={clerkProxyUrl}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/dashboard"
+      afterSignOutUrl="/"
       routerPush={(to) => router.push(to)}
       routerReplace={(to) => router.replace(to)}
     >

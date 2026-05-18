@@ -229,7 +229,7 @@ export default function UserDashboard() {
       <div className="container py-32 max-w-md text-center">
         <p className="font-display text-5xl text-ink uppercase mb-4">Join the Pack</p>
         <p className="text-ink/60 mb-8">Sign in to save artists, submit events, and manage your profile.</p>
-        <button onClick={() => openSignIn({ afterSignInUrl: "/dashboard" })}
+        <button onClick={() => openSignIn()}
           className="w-full bg-magenta text-cream font-display text-lg uppercase px-6 py-4 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
           Sign In / Sign Up →
         </button>

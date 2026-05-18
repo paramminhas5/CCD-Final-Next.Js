@@ -226,7 +226,7 @@ const Nav = () => {
                 </button>
               </div>
             ) : (
-              <button onClick={() => openSignIn({ afterSignInUrl: "/dashboard" })}
+              <button onClick={() => openSignIn()}
                 className="font-display text-xs uppercase px-3 py-2 xl:px-4 border-4 border-ink bg-cream text-ink hover:bg-magenta hover:text-cream transition-colors chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none">
                 Sign In
               </button>
@@ -283,7 +283,7 @@ const Nav = () => {
                   <li><button onClick={() => signOut()} className="block font-display text-2xl text-ink/50 py-2 w-full text-left">Sign Out</button></li>
                 </>
               ) : (
-                <li><button onClick={() => openSignIn({ afterSignInUrl: "/dashboard" })} className="block font-display text-2xl text-magenta py-2 w-full text-left">Sign In →</button></li>
+                <li><button onClick={() => openSignIn()} className="block font-display text-2xl text-magenta py-2 w-full text-left">Sign In →</button></li>
               )
             )}
             <li>
