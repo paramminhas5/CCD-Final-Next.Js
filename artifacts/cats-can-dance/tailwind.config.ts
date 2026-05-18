@@ -24,7 +24,6 @@ export default {
         magenta: "hsl(var(--magenta))",
         // Semantic theme tokens (CMS-driven)
         brand: "hsl(var(--brand))",
-        accent: "hsl(var(--accent))",
         surface: "hsl(var(--surface))",
         "surface-alt": "hsl(var(--surface-alt))",
         "on-brand": "hsl(var(--on-brand))",

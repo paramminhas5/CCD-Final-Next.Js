@@ -27,6 +27,7 @@ type QueryBuilder = {
   _limit?: number;
   _orderCol?: string;
   _orderAsc?: boolean;
+  _execute: () => Promise<{ data: any; error: any }>;
 };
 
 /** Map Supabase table names (underscores) → our API route slugs (hyphens) */
@@ -229,10 +230,12 @@ const functionsShim = {
 
 // Channel/realtime shim (no-op)
 function channelShim(_name: string) {
-  return {
-    on: () => channelShim(_name),
-    subscribe: () => channelShim(_name),
+  const ch = {
+    on: (..._args: any[]) => ch,
+    subscribe: (..._args: any[]) => ch,
+    unsubscribe: () => ch,
   };
+  return ch;
 }
 
 export const supabase = {
@@ -241,5 +244,5 @@ export const supabase = {
   storage: storageShim,
   functions: functionsShim,
   channel: channelShim,
-  removeChannel: () => {},
+  removeChannel: (_channel?: any) => {},
 };

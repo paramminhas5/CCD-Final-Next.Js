@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import "./ccd.css";
 import ccdLogo from "@/assets/ccd-logo.png";
 import socialLogo from "@/assets/social-logo.png";
 import { imgUrl } from "@/lib/img";

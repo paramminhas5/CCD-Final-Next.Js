@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { useCartSync } from "@/hooks/useCartSync";
 import "@/index.css";
+import "@/pages/ccd.css";
 import React from "react";
 
 const queryClient = new QueryClient({
