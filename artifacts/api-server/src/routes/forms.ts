@@ -10,6 +10,7 @@ import {
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import * as crypto from "crypto";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -78,13 +79,16 @@ router.get("/admin/signups", async (_req, res) => {
 // POST /api/event-rsvp
 router.post("/event-rsvp", async (req, res) => {
   try {
-    const { eventSlug, name, email, plusOnes } = req.body;
+    const eventSlug = req.body.eventSlug ?? req.body.event_slug;
+    const name = req.body.name;
+    const email = req.body.email;
+    const plusOnes = req.body.plusOnes ?? req.body.plus_ones ?? 0;
     if (!eventSlug || !name || !email) return res.status(400).json({ error: "Missing required fields" });
     await db.insert(eventRsvpsTable).values({
       event_slug: eventSlug,
       name,
       email,
-      plus_ones: plusOnes ?? 0,
+      plus_ones: plusOnes,
       user_agent: req.headers["user-agent"] ?? null,
     });
     res.status(201).json({ ok: true });
@@ -94,7 +98,7 @@ router.post("/event-rsvp", async (req, res) => {
 });
 
 // GET /api/admin/rsvps
-router.get("/admin/rsvps", async (_req, res) => {
+router.get("/admin/rsvps", requireAdmin, async (_req, res) => {
   try {
     const rows = await db.select().from(eventRsvpsTable);
     res.json(rows);
@@ -207,9 +211,9 @@ router.post("/booking-otp/verify", async (req, res) => {
     await db
       .update(bookingRequestsTable)
       .set({ verified_at: new Date() })
-      .where(eq(bookingRequestsTable.id, requestId));
+      .where(eq(bookingRequestsTable.id, effectiveRequestId));
 
-    res.json({ ok: true, requestId });
+    res.json({ ok: true, requestId: effectiveRequestId });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

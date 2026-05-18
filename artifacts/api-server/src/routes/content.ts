@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { siteSettingsTable, siteVideosTable, promotersTable, curatedEventsTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.get("/site-settings", async (_req, res) => {
 });
 
 // PATCH /api/admin/site-settings
-router.patch("/admin/site-settings", async (req, res) => {
+router.patch("/admin/site-settings", requireAdmin, async (req, res) => {
   try {
     const existing = await db.select().from(siteSettingsTable);
     if (!existing.length) {
@@ -68,7 +69,7 @@ router.get("/curated-events", async (_req, res) => {
 });
 
 // POST /api/admin/curated-events
-router.post("/admin/curated-events", async (req, res) => {
+router.post("/admin/curated-events", requireAdmin, async (req, res) => {
   try {
     const rows = await db.insert(curatedEventsTable).values(req.body).returning();
     res.status(201).json(rows[0]);
@@ -78,7 +79,7 @@ router.post("/admin/curated-events", async (req, res) => {
 });
 
 // PATCH /api/admin/curated-events/:id
-router.patch("/admin/curated-events/:id", async (req, res) => {
+router.patch("/admin/curated-events/:id", requireAdmin, async (req, res) => {
   try {
     const rows = await db
       .update(curatedEventsTable)
@@ -93,7 +94,7 @@ router.patch("/admin/curated-events/:id", async (req, res) => {
 });
 
 // DELETE /api/admin/curated-events/:id
-router.delete("/admin/curated-events/:id", async (req, res) => {
+router.delete("/admin/curated-events/:id", requireAdmin, async (req, res) => {
   try {
     await db.delete(curatedEventsTable).where(eq(curatedEventsTable.id, req.params.id));
     res.sendStatus(204);

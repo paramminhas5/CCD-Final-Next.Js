@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { eventsTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.get("/:slug", async (req, res) => {
 });
 
 // POST /api/admin/events
-router.post("/admin", async (req, res) => {
+router.post("/admin", requireAdmin, async (req, res) => {
   try {
     const rows = await db.insert(eventsTable).values(req.body).returning();
     res.status(201).json(rows[0]);
@@ -43,7 +44,7 @@ router.post("/admin", async (req, res) => {
 });
 
 // PATCH /api/admin/events/:id
-router.patch("/admin/:id", async (req, res) => {
+router.patch("/admin/:id", requireAdmin, async (req, res) => {
   try {
     const rows = await db
       .update(eventsTable)
@@ -58,7 +59,7 @@ router.patch("/admin/:id", async (req, res) => {
 });
 
 // DELETE /api/admin/events/:id
-router.delete("/admin/:id", async (req, res) => {
+router.delete("/admin/:id", requireAdmin, async (req, res) => {
   try {
     await db.delete(eventsTable).where(eq(eventsTable.id, req.params.id));
     res.sendStatus(204);

@@ -7,7 +7,7 @@
  *
  * Routes are mounted under /api/functions/v1/:name via the index router.
  */
-import { Router, Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   siteSettingsTable,
@@ -19,20 +19,9 @@ import {
   contactMessagesTable,
 } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
-
-// ─── Auth middleware ─────────────────────────────────────────────────────────
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "ccd_admin";
-
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const supplied = req.headers["x-admin-password"] as string | undefined;
-  if (!supplied || supplied !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
 
 router.use(requireAdmin);
 

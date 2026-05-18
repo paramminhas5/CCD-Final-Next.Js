@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { artistsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -93,7 +94,7 @@ router.post("/:id/claim", async (req, res) => {
 });
 
 // PATCH /api/admin/artists/:id (admin only)
-router.patch("/admin/:id", async (req, res) => {
+router.patch("/admin/:id", requireAdmin, async (req, res) => {
   try {
     const rows = await db
       .update(artistsTable)
