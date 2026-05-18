@@ -24,8 +24,7 @@ router.get("/by-user", async (req, res): Promise<void> => {
   const auth = getAuth(req);
   const rawId =
     auth?.userId ??
-    verifySessionToken(req.headers["x-session-token"] as string | undefined) ??
-    (req.headers["x-user-id"] as string | undefined);
+    verifySessionToken(req.headers["x-session-token"] as string | undefined);
   const userId = rawId ?? undefined;
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
@@ -72,8 +71,7 @@ async function handleProfileUpdate(req: any, res: any): Promise<void> {
   const auth = getAuth(req);
   const rawId =
     auth?.userId ??
-    verifySessionToken(req.headers["x-session-token"] as string | undefined) ??
-    (req.headers["x-user-id"] as string | undefined);
+    verifySessionToken(req.headers["x-session-token"] as string | undefined);
   const userId = rawId ?? undefined;
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
