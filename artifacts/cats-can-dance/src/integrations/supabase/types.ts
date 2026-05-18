@@ -718,18 +718,12 @@ export type Database = {
         Relationships: []
       }
     }
-    Views: {
-      [_ in never]: never
-    }
+    Views: Record<never, never>
     Functions: {
       verify_cron_secret: { Args: { _input: string }; Returns: boolean }
     }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    Enums: Record<never, never>
+    CompositeTypes: Record<never, never>
   }
 }
 

@@ -96,6 +96,20 @@ export const Routes = ({ children }: { children: ReactNode }) => <>{children}</>
 export const Route = () => null;
 export const Outlet = () => null;
 
+export type NavLinkRenderProps = { isActive: boolean; isPending?: boolean };
+
+export type NavLinkProps = {
+  to?: unknown;
+  href?: unknown;
+  children?: ReactNode;
+  className?: string | ((props: NavLinkRenderProps) => string);
+  target?: string;
+  rel?: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  style?: React.CSSProperties | ((props: NavLinkRenderProps) => React.CSSProperties);
+  end?: boolean;
+} & AnyProps;
+
 /**
  * NavLink — supports react-router-dom's function-as-className API:
  * `className={({ isActive }) => isActive ? "active" : ""}`
@@ -110,17 +124,7 @@ export function NavLink({
   onClick,
   style,
   end: _end,
-}: {
-  to?: unknown;
-  href?: unknown;
-  children?: ReactNode;
-  className?: string | (({ isActive }: { isActive: boolean }) => string);
-  target?: string;
-  rel?: string;
-  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
-  style?: React.CSSProperties | (({ isActive }: { isActive: boolean }) => React.CSSProperties);
-  end?: boolean;
-} & AnyProps) {
+}: NavLinkProps) {
   const router = useRouter();
   const dest = toHref(to ?? href);
   const isActive =
