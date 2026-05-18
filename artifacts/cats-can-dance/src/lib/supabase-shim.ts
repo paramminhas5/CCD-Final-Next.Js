@@ -158,12 +158,24 @@ const FUNCTION_ROUTE: Record<string, string> = {
   "contact-submit": "contact",
   "early-access-signup": "early-access",
   "event-rsvp": "event-rsvp",
-  "booking-otp-start": "bookings/otp-start",
-  "booking-otp-verify": "bookings/otp-verify",
-  "admin-signups": "admin/contact-messages",
+  "booking-otp-start": "booking-otp/start",
+  "booking-otp-verify": "booking-otp/verify",
   "cat-generate": "cat-generate",
   "instagram-feed": "instagram-feed",
   "youtube-videos": "youtube-videos",
+  // Admin edge functions — map to /api/functions/v1/:name (handled by admin router)
+  "enrich-artists": "functions/v1/enrich-artists",
+  "admin-videos": "functions/v1/admin-videos",
+  "admin-content": "functions/v1/admin-content",
+  "admin-rsvps": "functions/v1/admin-rsvps",
+  "admin-signups": "functions/v1/admin-signups",
+  "admin-upload-poster": "functions/v1/admin-upload-poster",
+  "admin-curated-events": "functions/v1/admin-curated-events",
+  "curate-events": "functions/v1/curate-events",
+  "scheduled-curate": "functions/v1/scheduled-curate",
+  "admin-publish-blog": "functions/v1/admin-publish-blog",
+  "admin-generate-blog": "functions/v1/admin-generate-blog",
+  "admin-promoters": "functions/v1/admin-promoters",
 };
 
 /** Functions that should use GET (no mutation, no required body) */

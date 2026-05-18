@@ -28,7 +28,8 @@ export function Link({
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   style?: React.CSSProperties;
 } & AnyProps) {
-  const dest = (to || href || "#") as string;
+  const rawDest = to || href || "#";
+  const dest = typeof rawDest === "string" ? rawDest : "#";
   return (
     <NextLink href={dest} className={className} target={target} rel={rel} onClick={onClick} style={style}>
       {children}
@@ -111,7 +112,8 @@ export function NavLink({
   end?: boolean;
 } & AnyProps) {
   const router = useRouter();
-  const dest = (to || href || "#") as string;
+  const rawDest = to || href || "#";
+  const dest = typeof rawDest === "string" ? rawDest : "#";
   const isActive =
     typeof window !== "undefined"
       ? window.location.pathname === dest || window.location.pathname.startsWith(dest + "/")

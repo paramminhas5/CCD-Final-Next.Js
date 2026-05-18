@@ -119,17 +119,28 @@ router.post("/artist-submissions", async (req, res) => {
 });
 
 // POST /api/booking-otp/start
+// Accepts both camelCase and snake_case field names for compatibility
 router.post("/booking-otp/start", async (req, res) => {
   try {
-    const { artistId, artistName, requesterEmail, requesterPhone, purpose } = req.body;
-    if (!artistId || !artistName || !requesterEmail) return res.status(400).json({ error: "Missing required fields" });
+    const {
+      artistId, artist_id,
+      artistName, artist_name,
+      requesterEmail, requester_email,
+      requesterPhone, requester_phone,
+      purpose,
+    } = req.body;
+    const effectiveArtistId = artistId ?? artist_id;
+    const effectiveArtistName = artistName ?? artist_name;
+    const effectiveRequesterEmail = requesterEmail ?? requester_email;
+    const effectiveRequesterPhone = requesterPhone ?? requester_phone;
+    if (!effectiveArtistId || !effectiveRequesterEmail) return res.status(400).json({ error: "Missing required fields" });
 
     // Create the booking request
     const requests = await db.insert(bookingRequestsTable).values({
-      artist_id: artistId,
-      artist_name: artistName,
-      requester_email: requesterEmail,
-      requester_phone: requesterPhone ?? null,
+      artist_id: effectiveArtistId,
+      artist_name: effectiveArtistName ?? "",
+      requester_email: effectiveRequesterEmail,
+      requester_phone: effectiveRequesterPhone ?? null,
       purpose: purpose ?? null,
       user_agent: req.headers["user-agent"] ?? null,
     }).returning();
@@ -139,7 +150,7 @@ router.post("/booking-otp/start", async (req, res) => {
     const code = generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await db.insert(bookingOtpCodesTable).values({
-      email: requesterEmail,
+      email: effectiveRequesterEmail,
       code_hash: hashCode(code),
       expires_at: expiresAt,
     });
@@ -149,6 +160,7 @@ router.post("/booking-otp/start", async (req, res) => {
     const isDev = process.env.NODE_ENV !== "production";
     res.json({
       requestId: request.id,
+      booking_id: request.id,  // alias for frontend compatibility
       ...(isDev ? { code } : {}),
     });
   } catch (e: any) {
@@ -157,15 +169,17 @@ router.post("/booking-otp/start", async (req, res) => {
 });
 
 // POST /api/booking-otp/verify
+// Accepts both requestId and booking_id for frontend compatibility
 router.post("/booking-otp/verify", async (req, res) => {
   try {
-    const { requestId, code } = req.body;
-    if (!requestId || !code) return res.status(400).json({ error: "Missing required fields" });
+    const { requestId, booking_id, code } = req.body;
+    const effectiveRequestId = requestId ?? booking_id;
+    if (!effectiveRequestId || !code) return res.status(400).json({ error: "Missing required fields" });
 
     const request = await db
       .select()
       .from(bookingRequestsTable)
-      .where(eq(bookingRequestsTable.id, requestId));
+      .where(eq(bookingRequestsTable.id, effectiveRequestId));
     if (!request.length) return res.status(404).json({ error: "Request not found" });
 
     const otps = await db
