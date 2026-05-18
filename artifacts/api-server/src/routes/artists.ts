@@ -101,9 +101,10 @@ router.patch("/:id/profile", handleProfileUpdate);
 router.patch("/:id", handleProfileUpdate);
 
 router.post("/:id/claim", async (req, res): Promise<void> => {
-  const { userId } = req.body;
+  const auth = getAuth(req);
+  const userId = auth?.userId ?? undefined;
   if (!userId) {
-    res.status(400).json({ error: "userId required" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
   try {

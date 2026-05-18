@@ -61,6 +61,40 @@ router.patch("/admin-content", async (req, res) => {
   }
 });
 
+// POST /functions/v1/admin-content — action-based contract used by Admin.tsx
+// Body: { type: "settings" | "events" | "messages", action: "upsert" | "delete", payload: object }
+router.post("/admin-content", async (req, res) => {
+  const { type, action, payload } = req.body ?? {};
+  try {
+    if (type === "settings" && action === "upsert") {
+      const existing = await db.select().from(siteSettingsTable).limit(1);
+      if (!existing.length) {
+        await db.insert(siteSettingsTable).values({ id: "main", ...payload });
+      } else {
+        await db.update(siteSettingsTable).set({ ...payload, updated_at: new Date() }).where(eq(siteSettingsTable.id, existing[0].id));
+      }
+      return res.json({ ok: true });
+    }
+    if (type === "events" && action === "upsert") {
+      if (payload?.id) {
+        const { id, ...rest } = payload;
+        await db.update(curatedEventsTable).set({ ...rest, updated_at: new Date() }).where(eq(curatedEventsTable.id, id));
+        return res.json({ ok: true });
+      }
+      const row = await db.insert(curatedEventsTable).values(payload).returning();
+      return res.json(row[0]);
+    }
+    if (type === "events" && action === "delete") {
+      if (!payload?.id) return res.status(400).json({ error: "payload.id required" });
+      await db.delete(curatedEventsTable).where(eq(curatedEventsTable.id, payload.id));
+      return res.json({ ok: true });
+    }
+    res.status(400).json({ error: `Unknown type/action: ${type}/${action}` });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Videos ──────────────────────────────────────────────────────────────────
 
 router.get("/admin-videos", async (_req, res) => {

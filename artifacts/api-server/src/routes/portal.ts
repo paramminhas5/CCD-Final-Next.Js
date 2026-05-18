@@ -104,8 +104,37 @@ router.post("/:artistId", guard, async (req, res): Promise<void> => {
   }
 });
 
+/**
+ * Verify that the authenticated artist owns the artist_date identified by dateId.
+ * Admins (no sessionUserId set by guard) bypass this check.
+ * Returns true if allowed, false and sends 403/404 if not.
+ */
+async function ownerOfDate(req: any, res: any, dateId: string): Promise<boolean> {
+  const sessionUserId = req.sessionUserId as string | undefined;
+  if (!sessionUserId) return true;
+  const dateRows = await db
+    .select({ artist_id: artistDatesTable.artist_id })
+    .from(artistDatesTable)
+    .where(eq(artistDatesTable.id, dateId));
+  if (!dateRows.length) {
+    res.status(404).json({ error: "Not found" });
+    return false;
+  }
+  const artistId = dateRows[0].artist_id;
+  const owned = await db
+    .select({ id: artistsTable.id })
+    .from(artistsTable)
+    .where(and(eq(artistsTable.id, artistId), eq(artistsTable.claimed_by, sessionUserId)));
+  if (!owned.length) {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+  return true;
+}
+
 router.patch("/entry/:id", guard, async (req, res): Promise<void> => {
   try {
+    if (!(await ownerOfDate(req, res, req.params.id as string))) return;
     const rows = await db
       .update(artistDatesTable)
       .set({ ...req.body, updated_at: new Date() })
@@ -123,6 +152,7 @@ router.patch("/entry/:id", guard, async (req, res): Promise<void> => {
 
 router.patch("/:id", guard, async (req, res): Promise<void> => {
   try {
+    if (!(await ownerOfDate(req, res, req.params.id as string))) return;
     const rows = await db
       .update(artistDatesTable)
       .set({ ...req.body, updated_at: new Date() })
@@ -140,6 +170,7 @@ router.patch("/:id", guard, async (req, res): Promise<void> => {
 
 router.delete("/entry/:id", guard, async (req, res): Promise<void> => {
   try {
+    if (!(await ownerOfDate(req, res, req.params.id as string))) return;
     await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id as string));
     res.sendStatus(204);
   } catch (e: any) {
@@ -149,6 +180,7 @@ router.delete("/entry/:id", guard, async (req, res): Promise<void> => {
 
 router.delete("/:id", guard, async (req, res): Promise<void> => {
   try {
+    if (!(await ownerOfDate(req, res, req.params.id as string))) return;
     await db.delete(artistDatesTable).where(eq(artistDatesTable.id, req.params.id as string));
     res.sendStatus(204);
   } catch (e: any) {
