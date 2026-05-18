@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { artistsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAdmin } from "../middleware/adminAuth";
 import { verifySessionToken } from "./auth";
 import { getAuth } from "@clerk/express";
@@ -147,3 +147,50 @@ router.patch("/admin/:id", requireAdmin, async (req, res): Promise<void> => {
 });
 
 export default router;
+
+// ─── Bulk seed (admin-only) ──────────────────────────────────────────────────
+// POST /api/artists/seed — upserts by slug, protected by x-admin-password header
+router.post("/seed", requireAdmin, async (req, res): Promise<void> => {
+  const artists: any[] = req.body;
+  if (!Array.isArray(artists) || artists.length === 0) {
+    res.status(400).json({ error: "Body must be a non-empty array of artists" });
+    return;
+  }
+  try {
+    const results = { inserted: 0, updated: 0, errors: [] as string[] };
+    for (const a of artists) {
+      if (!a.slug || !a.name) {
+        results.errors.push(`Missing slug/name: ${JSON.stringify(a).slice(0, 60)}`);
+        continue;
+      }
+      const existing = await db.select({ id: artistsTable.id }).from(artistsTable).where(eq(artistsTable.slug, a.slug));
+      const now = new Date();
+      const row = {
+        slug: a.slug, name: a.name,
+        members: a.members ?? null, from_city: a.from_city ?? null, based_city: a.based_city ?? null,
+        bio: a.bio ?? null, why: a.why ?? null,
+        genres: Array.isArray(a.genres) ? a.genres : [],
+        festivals: Array.isArray(a.festivals) ? a.festivals : [],
+        instagram: a.instagram ?? null, soundcloud: a.soundcloud ?? null,
+        bandcamp: a.bandcamp ?? null, spotify: a.spotify ?? null, website: a.website ?? null,
+        booking_email: a.booking_email ?? null, manager_email: a.manager_email ?? null,
+        labels: a.labels ?? null,
+        fee_min_inr: a.fee_min_inr ?? null, fee_max_inr: a.fee_max_inr ?? null,
+        fee_currency: a.fee_currency ?? "INR",
+        featured: a.featured ?? false, status: a.status ?? "approved", source: a.source ?? "enriched",
+        enrichment_log: a.enrichment_log ?? {}, enrichment_status: a.enrichment_status ?? "done",
+        updated_at: now,
+      };
+      if (existing.length > 0) {
+        await db.update(artistsTable).set(row).where(eq(artistsTable.slug, a.slug));
+        results.updated++;
+      } else {
+        await db.insert(artistsTable).values({ ...row, created_at: now });
+        results.inserted++;
+      }
+    }
+    res.json({ ok: true, ...results, total: artists.length });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
