@@ -8,6 +8,7 @@ import { CartDrawer } from "@/components/CartDrawer";
 import { useCartStore } from "@/stores/cartStore";
 import ccdLogo from "@/assets/ccd-logo.png";
 import { imgUrl } from "@/lib/img";
+import { useUser, useClerk } from "@clerk/react";
 
 const primaryLinks = [
   { to: "/about", label: "About" },
@@ -136,6 +137,8 @@ const Dropdown = ({
 };
 
 const Nav = () => {
+  const { user, isLoaded } = useUser();
+  const { openSignIn, signOut } = useClerk();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
@@ -210,6 +213,25 @@ const Nav = () => {
           <span className="hidden xl:block"><DiscoMute /></span>
           <DiscoButton compact />
           {hasCart && <CartDrawer />}
+          {isLoaded && (
+            user ? (
+              <div className="flex items-center gap-2">
+                <a href="/artist-portal"
+                  className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-acid-yellow text-ink hover:bg-magenta hover:text-cream transition-colors">
+                  Dashboard
+                </a>
+                <button onClick={() => signOut()}
+                  className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-cream text-ink hover:bg-ink hover:text-cream transition-colors">
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => openSignIn()}
+                className="font-display text-xs uppercase px-3 py-2 xl:px-4 border-4 border-ink bg-cream text-ink hover:bg-magenta hover:text-cream transition-colors chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none">
+                Sign In
+              </button>
+            )
+          )}
           <a
             href="/#early-access"
             onClick={goToEarlyAccess}
@@ -254,6 +276,16 @@ const Nav = () => {
                 )}
               </li>
             ))}
+            {isLoaded && (
+              user ? (
+                <>
+                  <li><a href="/artist-portal" className="block font-display text-2xl text-ink py-2">Dashboard</a></li>
+                  <li><button onClick={() => signOut()} className="block font-display text-2xl text-ink/50 py-2 w-full text-left">Sign Out</button></li>
+                </>
+              ) : (
+                <li><button onClick={() => openSignIn()} className="block font-display text-2xl text-magenta py-2 w-full text-left">Sign In →</button></li>
+              )
+            )}
             <li>
               <a href="/#early-access" onClick={goToEarlyAccess} className="block font-display text-2xl text-magenta py-2">
                 Early Access →
