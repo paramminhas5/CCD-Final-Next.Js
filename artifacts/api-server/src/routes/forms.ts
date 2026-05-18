@@ -40,7 +40,7 @@ router.post("/contact", async (req, res) => {
 });
 
 // GET /api/admin/contact-messages
-router.get("/admin/contact-messages", async (_req, res) => {
+router.get("/admin/contact-messages", requireAdmin, async (_req, res) => {
   try {
     const rows = await db.select().from(contactMessagesTable);
     res.json(rows);
@@ -67,7 +67,7 @@ router.post("/early-access", async (req, res) => {
 });
 
 // GET /api/admin/signups
-router.get("/admin/signups", async (_req, res) => {
+router.get("/admin/signups", requireAdmin, async (_req, res) => {
   try {
     const rows = await db.select().from(earlyAccessSignupsTable);
     res.json(rows);
