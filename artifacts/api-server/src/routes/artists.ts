@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { artistsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAdmin } from "../middleware/adminAuth";
+import { verifySessionToken } from "./auth";
 
 const router = Router();
 
@@ -49,19 +50,18 @@ router.get("/:slug", async (req, res) => {
   }
 });
 
-// PATCH /api/artists/:id/profile
-router.patch("/:id/profile", async (req, res) => {
-  const userId = req.headers["x-user-id"] as string;
+const profileFields = ["bio","why","instagram","soundcloud","bandcamp","spotify","website","booking_email","manager_email","labels","open_to_bookings","available_cities"] as const;
+
+async function handleProfileUpdate(req: any, res: any) {
+  const userId = verifySessionToken(req.headers["x-session-token"] as string | undefined)
+    ?? (req.headers["x-user-id"] as string | undefined);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const { bio, why, instagram, soundcloud, bandcamp, spotify, website, booking_email, manager_email, labels, open_to_bookings, available_cities } = req.body;
+    const patch: Record<string, any> = { updated_at: new Date() };
+    for (const f of profileFields) if (req.body[f] !== undefined) patch[f] = req.body[f];
     const rows = await db
       .update(artistsTable)
-      .set({
-        bio, why, instagram, soundcloud, bandcamp, spotify, website,
-        booking_email, manager_email, labels, open_to_bookings, available_cities,
-        updated_at: new Date(),
-      })
+      .set(patch)
       .where(and(eq(artistsTable.id, req.params.id), eq(artistsTable.claimed_by, userId)))
       .returning();
     if (!rows.length) return res.status(404).json({ error: "Not found or not authorized" });
@@ -69,7 +69,13 @@ router.patch("/:id/profile", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
-});
+}
+
+// PATCH /api/artists/:id/profile  (legacy path)
+router.patch("/:id/profile", handleProfileUpdate);
+
+// PATCH /api/artists/:id  (shim path — supabase.from("artists").update().eq("id", id))
+router.patch("/:id", handleProfileUpdate);
 
 // POST /api/artists/:id/claim
 router.post("/:id/claim", async (req, res) => {

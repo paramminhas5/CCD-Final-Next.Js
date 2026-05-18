@@ -27,11 +27,21 @@ router.use(requireAdmin);
 
 // ─── Site content ────────────────────────────────────────────────────────────
 
-// GET|PATCH /functions/v1/admin-content  →  site_settings row
-router.get("/admin-content", async (_req, res) => {
+// GET /functions/v1/admin-content?type=settings|events|messages
+router.get("/admin-content", async (req, res) => {
   try {
+    const type = req.query.type as string | undefined;
+    if (type === "events") {
+      const rows = await db.select().from(curatedEventsTable).orderBy(desc(curatedEventsTable.created_at));
+      return res.json({ events: rows });
+    }
+    if (type === "messages") {
+      const rows = await db.select().from(contactMessagesTable).orderBy(desc(contactMessagesTable.created_at));
+      return res.json({ messages: rows });
+    }
+    // Default: settings
     const rows = await db.select().from(siteSettingsTable);
-    res.json(rows[0] ?? null);
+    res.json({ settings: rows[0] ?? null });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -56,7 +66,7 @@ router.patch("/admin-content", async (req, res) => {
 router.get("/admin-videos", async (_req, res) => {
   try {
     const rows = await db.select().from(siteVideosTable).orderBy(desc(siteVideosTable.sort_order));
-    res.json(rows);
+    res.json({ videos: rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -71,7 +81,7 @@ router.post("/admin-videos", async (req, res) => {
   }
 });
 
-router.patch("/admin-videos", async (req, res) => {
+const updateAdminVideo = async (req: any, res: any) => {
   try {
     const { id, ...rest } = req.body;
     if (!id) return res.status(400).json({ error: "id required" });
@@ -80,7 +90,9 @@ router.patch("/admin-videos", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
-});
+};
+router.patch("/admin-videos", updateAdminVideo);
+router.put("/admin-videos", updateAdminVideo);
 
 router.delete("/admin-videos", async (req, res) => {
   try {
@@ -104,7 +116,7 @@ router.get("/admin-signups", async (req, res) => {
       res.setHeader("Content-Disposition", 'attachment; filename="signups.csv"');
       return res.send(csv);
     }
-    res.json(rows);
+    res.json({ signups: rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -125,7 +137,7 @@ router.get("/admin-rsvps", async (req, res) => {
       res.setHeader("Content-Disposition", 'attachment; filename="rsvps.csv"');
       return res.send(csv);
     }
-    res.json(rows);
+    res.json({ rsvps: rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -147,7 +159,7 @@ router.delete("/admin-rsvps", async (req, res) => {
 router.get("/admin-curated-events", async (_req, res) => {
   try {
     const rows = await db.select().from(curatedEventsTable).orderBy(desc(curatedEventsTable.created_at));
-    res.json(rows);
+    res.json({ events: rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -189,7 +201,7 @@ router.delete("/admin-curated-events", async (req, res) => {
 router.get("/admin-promoters", async (_req, res) => {
   try {
     const rows = await db.select().from(promotersTable).orderBy(desc(promotersTable.created_at));
-    res.json(rows);
+    res.json({ promoters: rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

@@ -179,7 +179,15 @@ const FUNCTION_ROUTE: Record<string, string> = {
 };
 
 /** Functions that should use GET (no mutation, no required body) */
-const GET_FUNCTIONS = new Set(["instagram-feed", "youtube-videos"]);
+const GET_FUNCTIONS = new Set([
+  "instagram-feed",
+  "youtube-videos",
+  "admin-videos",
+  "admin-content",
+  "admin-rsvps",
+  "admin-signups",
+  "admin-promoters",
+]);
 
 // Functions shim — routes to /api/<route>
 const functionsShim = {
