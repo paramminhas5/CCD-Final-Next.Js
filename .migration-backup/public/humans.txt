@@ -1,0 +1,11 @@
+/* TEAM */
+Brand: Cats Can Dance
+Site: https://catscandance.com
+Contact: hello [at] catscandance.com
+Location: Worldwide
+
+/* SITE */
+Last update: 2026/04/21
+Standards: HTML5, CSS3, JSON-LD
+Components: React, Vite, Tailwind, Framer Motion
+Backend: Lovable Cloud

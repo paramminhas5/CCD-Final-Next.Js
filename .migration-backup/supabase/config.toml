@@ -1,0 +1,19 @@
+project_id = "zyilevwfuhymzhezexep"
+
+[functions.admin-generate-blog]
+verify_jwt = false
+
+[functions.admin-publish-blog]
+verify_jwt = false
+
+[functions.enrich-artists]
+verify_jwt = false
+
+[functions.booking-otp-start]
+verify_jwt = false
+
+[functions.booking-otp-verify]
+verify_jwt = false
+
+[functions.artist-magic-link]
+verify_jwt = false

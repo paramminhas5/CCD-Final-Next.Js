@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS artists_slug_key ON public.artists (slug);
