@@ -36,11 +36,14 @@ const EarlyAccess = () => {
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("early-access-signup", {
-        body: { email: parsed.data, source: "home", website },
+      const res = await fetch("/api/early-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: parsed.data, source: "home", website }),
       });
-      if (error) throw error;
-      if ((data as any)?.duplicate) {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 409) throw new Error(data?.error ?? "Failed");
+      if (data?.duplicate || res.status === 409) {
         toast("You're already on the list. See you soon. 🐾");
       } else {
         toast.success("You're in! Welcome to the litter.");

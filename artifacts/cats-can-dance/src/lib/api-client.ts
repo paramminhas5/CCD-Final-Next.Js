@@ -1,24 +1,23 @@
 /**
- * Simple fetch wrapper for the api-server at /api.
- * - Clerk session cookies are sent automatically (same-origin via credentials: include).
- * - Caches GET responses for 30 s to prevent per-component polling storms.
+ * Simple fetch wrapper for /api proxy.
+ * - GET responses cached 30s to prevent polling storms.
+ * - Cache is invalidated after any POST/PATCH/DELETE on the same path.
  */
 
 const BASE = "/api";
-
-const _getCache = new Map<string, { data: unknown; expiresAt: number }>();
+const _cache = new Map<string, { data: unknown; expiresAt: number }>();
 const _inflight = new Map<string, Promise<unknown>>();
-const CACHE_TTL_MS = 30_000;
+const TTL = 30_000;
 
-function buildHeaders(extra?: Record<string, string>): Record<string, string> {
+function hdrs(extra?: Record<string, string>): Record<string, string> {
   return { "Content-Type": "application/json", ...extra };
 }
 
-async function request<T>(path: string, init?: RequestInit, extraHeaders?: Record<string, string>): Promise<T> {
+async function req<T>(path: string, init?: RequestInit, extraHdrs?: Record<string, string>): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: "include",
     ...init,
-    headers: buildHeaders({ ...(init?.headers as Record<string, string> | undefined), ...extraHeaders }),
+    headers: hdrs({ ...(init?.headers as Record<string, string> | undefined), ...extraHdrs }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -27,17 +26,27 @@ async function request<T>(path: string, init?: RequestInit, extraHeaders?: Recor
   return res.json() as Promise<T>;
 }
 
+// Invalidate cache for a path and all related paths (e.g. /functions/v1/admin-content invalidates /functions/v1/admin-content*)
+function invalidateRelated(path: string) {
+  const base = path.split("?")[0];
+  for (const key of _cache.keys()) {
+    if (key.startsWith(base) || base.startsWith(key.split("?")[0])) {
+      _cache.delete(key);
+    }
+  }
+}
+
 export const api = {
-  get: <T>(path: string, extraHeaders?: Record<string, string>): Promise<T> => {
-    if (!extraHeaders) {
-      const cached = _getCache.get(path);
+  get: <T>(path: string, extraHdrs?: Record<string, string>): Promise<T> => {
+    if (!extraHdrs) {
+      const cached = _cache.get(path);
       if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.data as T);
       const existing = _inflight.get(path);
       if (existing) return existing as Promise<T>;
     }
-    const promise = request<T>(path, undefined, extraHeaders).then((data) => {
-      if (!extraHeaders) {
-        _getCache.set(path, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+    const promise = req<T>(path, undefined, extraHdrs).then((data) => {
+      if (!extraHdrs) {
+        _cache.set(path, { data, expiresAt: Date.now() + TTL });
         _inflight.delete(path);
       }
       return data;
@@ -45,14 +54,28 @@ export const api = {
       _inflight.delete(path);
       throw err;
     });
-    if (!extraHeaders) _inflight.set(path, promise);
+    if (!extraHdrs) _inflight.set(path, promise);
     return promise;
   },
-  post: <T>(path: string, body: unknown, extraHeaders?: Record<string, string>) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }, extraHeaders),
-  patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  invalidateCache: (path: string) => _getCache.delete(path),
-  clearCache: () => _getCache.clear(),
+
+  post: <T>(path: string, body: unknown, extraHdrs?: Record<string, string>) => {
+    invalidateRelated(path);
+    return req<T>(path, { method: "POST", body: JSON.stringify(body) }, extraHdrs);
+  },
+
+  patch: <T>(path: string, body: unknown, extraHdrs?: Record<string, string>) => {
+    invalidateRelated(path);
+    return req<T>(path, { method: "PATCH", body: JSON.stringify(body) }, extraHdrs);
+  },
+
+  delete: <T>(path: string, extraHdrs?: Record<string, string>) => {
+    invalidateRelated(path);
+    return req<T>(path, { method: "DELETE" }, extraHdrs);
+  },
+
+  invalidateCache: (path?: string) => {
+    if (path) invalidateRelated(path);
+    else _cache.clear();
+  },
+  clearCache: () => _cache.clear(),
 };

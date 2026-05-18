@@ -292,6 +292,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
   }
 
+  // ── Artists: by logged-in user (claimed_by) ────────────────────────────────
+  if (path === "artists/by-user" && m === "GET") {
+    const userId = rq.user_id;
+    if (!userId) return res.json(null);
+    const rows = await get("artists", pq({ ...eqf("claimed_by", userId) })) as any[];
+    return res.json(rows?.[0] ?? null);
+  }
+
+  // ── User favorites (stored in site_settings keyed by user) ──────────────────
+  // Simple implementation: favorites stored as Supabase rows in a user_favorites table
+  // For now, use localStorage on client — proxy just saves/loads by user_id
+  if (path === "user-favorites" && m === "GET") {
+    const userId = rq.user_id;
+    if (!userId) return res.json({ artists: [], events: [] });
+    // We store user prefs in a simple jsonb column in site_settings keyed by user id
+    // Use a separate lightweight approach: return empty for now, client handles localStorage
+    return res.json({ artists: [], events: [] });
+  }
+
   // ── Artists: insert (public submission) ─────────────────────────────────────
   if (path === "artists" && m === "POST") {
     // Public submissions go to artist_submissions, not artists (requires admin approval)
