@@ -160,14 +160,8 @@ const Admin = () => {
   const [rsvpEventFilter, setRsvpEventFilter] = useState<string>("");
   const [rsvpsLoaded, setRsvpsLoaded] = useState(false);
 
-  // Artists
-  type AdminArtist = {
-    id: string; slug: string; name: string; instagram: string | null;
-    photo_url: string | null; booking_email: string | null; manager_email: string | null;
-    bio: string | null; based_city: string | null;
-    enrichment_status: string; enriched_at: string | null;
-  };
-  const [artists, setArtists] = useState<AdminArtist[]>([]);
+  // Artists — use the full type defined by ArtistsTab
+  const [artists, setArtists] = useState<AdminArtistFull[]>([]);
   const [artistsLoaded, setArtistsLoaded] = useState(false);
   const [artistsBusy, setArtistsBusy] = useState(false);
 
