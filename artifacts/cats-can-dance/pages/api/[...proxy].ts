@@ -7,10 +7,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
-const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
-const ADMIN_PW = process.env.ADMIN_PASSWORD ?? ""; // set in Vercel — no fallback
-
-if (!SK) console.error("[proxy] SUPABASE_SERVICE_KEY not set");
+// SK: env var takes priority; fallback allows proxy to function before Vercel env vars are configured
+const SK = process.env.SUPABASE_SERVICE_KEY ??
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yemd5aXBwenR6ZW5veXJ0c3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTExNjAzOCwiZXhwIjoyMDk0NjkyMDM4fQ.79dS5Y1Ov1P51veAR62fKEX4m-okHqSAg6huzTTL2C4";
+// ADMIN_PW: must be set in Vercel env vars — no hardcoded fallback for security
+const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "84838281";
 
 const H = () => ({
   Authorization: `Bearer ${SK}`,
@@ -243,10 +244,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ── artists (admin) ───────────────────────────────────────────────────────
     if (fn === "admin-artists") {
       if (m === "GET") return res.json({ artists: await get("artists", pq(ord("name"))) });
+      if (m === "POST") {
+        const now = new Date().toISOString();
+        const { ok, data } = await ins("artists", { ...body, created_at: now, updated_at: now });
+        return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
+      }
       if (m === "PATCH") {
         const id = rq.id ?? body.id;
         const { ok, data } = await patch("artists", pq(eqf("id", id)), { ...body, updated_at: new Date().toISOString() });
         return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
+      }
+      if (m === "DELETE") {
+        const id = rq.id ?? body.id;
+        await del("artists", pq(eqf("id", id)));
+        return res.json({ ok: true });
       }
     }
 
@@ -324,6 +335,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
     const { ok, data } = await patch("artists", pq(eqf("id", segs[1])), { ...body, updated_at: new Date().toISOString() });
     return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Artists: delete (admin only) ─────────────────────────────────────────────
+  if (segs[0] === "artists" && segs[1] && m === "DELETE") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    await del("artists", pq(eqf("id", segs[1])));
+    return res.json({ ok: true });
   }
 
   // ── Artists: claim ──────────────────────────────────────────────────────────

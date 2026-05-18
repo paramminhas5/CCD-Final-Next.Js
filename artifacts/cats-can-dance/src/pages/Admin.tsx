@@ -172,13 +172,18 @@ const Admin = () => {
   const [artistsBusy, setArtistsBusy] = useState(false);
 
   const loadArtists = async () => {
-    const { data, error } = await supabase
-      .from("artists")
-      .select("id,slug,name,instagram,photo_url,booking_email,manager_email,bio,based_city,enrichment_status,enriched_at")
-      .order("name");
-    if (error) { toast.error("Failed to load artists"); return; }
-    setArtists((data ?? []) as AdminArtist[]);
-    setArtistsLoaded(true);
+    try {
+      const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+      const res = await fetch("/api/functions/v1/admin-artists", {
+        headers: { "x-admin-password": pwd }
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Failed");
+      setArtists(j.artists ?? []);
+      setArtistsLoaded(true);
+    } catch (e: any) {
+      toast.error("Failed to load artists: " + e.message);
+    }
   };
 
   const callEnrich = async (body: Record<string, unknown>) => {
@@ -2697,81 +2702,281 @@ function PromoterApplicationsTab() {
   );
 }
 
+type AdminArtistFull = {
+  id: string; slug: string; name: string; members: string | null;
+  instagram: string | null; soundcloud: string | null; spotify: string | null;
+  bandcamp: string | null; website: string | null;
+  photo_url: string | null; booking_email: string | null; manager_email: string | null;
+  bio: string | null; why: string | null; labels: string | null;
+  based_city: string | null; from_city: string | null;
+  genres: string[]; festivals: string[];
+  fee_min_inr: number | null; fee_max_inr: number | null;
+  status: string; featured: boolean;
+  enrichment_status: string; enriched_at: string | null;
+};
+
 type ArtistsTabProps = {
-  artists: Array<{
-    id: string; slug: string; name: string; instagram: string | null;
-    photo_url: string | null; booking_email: string | null; manager_email: string | null;
-    bio: string | null; based_city: string | null;
-    enrichment_status: string; enriched_at: string | null;
-  }>;
+  artists: Array<AdminArtistFull>;
   reload: () => Promise<void>;
   enrichAll: (force: boolean) => Promise<void>;
   enrichOne: (id: string) => Promise<void>;
   busy: boolean;
 };
 
-function ArtistsTab({ artists, reload, enrichAll, enrichOne, busy }: ArtistsTabProps) {
-  const counts = artists.reduce((m, a) => { m[a.enrichment_status] = (m[a.enrichment_status] || 0) + 1; return m; }, {} as Record<string, number>);
-  const statusColor = (s: string) =>
-    s === "enriched" ? "bg-acid-yellow" : s === "enriching" ? "bg-cream" : s === "failed" ? "bg-red-200" : "bg-cream";
+function ArtistEditRow({ a, onSaved, onDeleted }: { a: AdminArtistFull; onSaved: (updated: AdminArtistFull) => void; onDeleted: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ ...a, genres: (a.genres ?? []).join(", "), festivals: (a.festivals ?? []).join(", ") });
+  const pwd = () => sessionStorage.getItem("ccd_admin_pass") ?? "";
+
+  const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        genres: String(form.genres).split(",").map((s: string) => s.trim()).filter(Boolean),
+        festivals: String(form.festivals).split(",").map((s: string) => s.trim()).filter(Boolean),
+        fee_min_inr: form.fee_min_inr ? Number(form.fee_min_inr) : null,
+        fee_max_inr: form.fee_max_inr ? Number(form.fee_max_inr) : null,
+      };
+      const res = await fetch(`/api/artists/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd() },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      toast.success("Saved");
+      onSaved({ ...payload, id: a.id, slug: a.slug, enrichment_status: a.enrichment_status, enriched_at: a.enriched_at } as AdminArtistFull);
+      setOpen(false);
+    } catch (e: any) { toast.error(e.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  const del = async () => {
+    if (!confirm(`Delete ${a.name}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/artists/${a.id}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": pwd() },
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Deleted");
+      onDeleted(a.id);
+    } catch { toast.error("Delete failed"); }
+  };
+
+  const inp = (label: string, key: string, type = "text") => (
+    <label className="block">
+      <span className="font-mono text-xs text-ink/60 block mb-0.5">{label}</span>
+      <input type={type} value={(form as any)[key] ?? ""}
+        onChange={e => set(key, e.target.value)}
+        className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+    </label>
+  );
+
+  return (
+    <div className="bg-cream border-4 border-ink">
+      {/* Collapsed row */}
+      <div className="flex items-center gap-3 p-3">
+        {a.photo_url
+          ? <img src={a.photo_url} alt={a.name} className="w-12 h-12 object-cover border-2 border-ink shrink-0" />
+          : <div className="w-12 h-12 border-2 border-ink bg-ink/10 flex items-center justify-center font-display text-ink/40 text-lg shrink-0">{a.name[0]}</div>
+        }
+        <div className="flex-1 min-w-0">
+          <div className="font-display text-ink">{a.name}</div>
+          <div className="text-xs text-ink/50">{a.based_city || a.from_city || "—"} · {(a.genres ?? []).slice(0,2).join(", ") || "—"}</div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-[10px] font-display uppercase px-2 py-0.5 border border-ink ${a.status === "approved" ? "bg-acid-yellow text-ink" : "bg-ink/10 text-ink/60"}`}>
+            {a.status}
+          </span>
+          {a.featured && <span className="text-[10px] font-display uppercase px-2 py-0.5 border border-ink bg-magenta text-cream">⭐</span>}
+          <a href={`/artists/${a.slug}`} target="_blank" rel="noreferrer"
+            className="font-display text-xs px-2 py-1 border-2 border-ink bg-cream hover:bg-acid-yellow">↗</a>
+          <button onClick={() => setOpen(v => !v)}
+            className="font-display text-xs px-3 py-1 border-2 border-ink bg-cream hover:bg-acid-yellow">
+            {open ? "▲ CLOSE" : "✏ EDIT"}
+          </button>
+          <button onClick={del} className="font-display text-xs px-2 py-1 border-2 border-ink bg-red-100 hover:bg-red-300 text-ink">✕</button>
+        </div>
+      </div>
+
+      {/* Expanded edit form */}
+      {open && (
+        <div className="border-t-4 border-ink p-4 space-y-3 bg-cream/80">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {inp("Name", "name")}
+            {inp("Members / Duo", "members")}
+            {inp("Slug (URL)", "slug")}
+            {inp("Based City", "based_city")}
+            {inp("From City", "from_city")}
+            {inp("Genres (comma-sep)", "genres")}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {inp("Instagram URL", "instagram")}
+            {inp("SoundCloud URL", "soundcloud")}
+            {inp("Spotify URL", "spotify")}
+            {inp("Bandcamp URL", "bandcamp")}
+            {inp("Website", "website")}
+            {inp("Booking Email", "booking_email")}
+            {inp("Manager Email", "manager_email")}
+            {inp("Labels", "labels")}
+            {inp("Photo URL", "photo_url")}
+          </div>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Festivals (comma-sep)</span>
+            <input value={form.festivals} onChange={e => set("festivals", e.target.value)}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+          </label>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Bio</span>
+            <textarea value={form.bio ?? ""} onChange={e => set("bio", e.target.value)} rows={3}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none resize-none" />
+          </label>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Why Book Them</span>
+            <input value={form.why ?? ""} onChange={e => set("why", e.target.value)}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {inp("Fee Min (INR)", "fee_min_inr", "number")}
+            {inp("Fee Max (INR)", "fee_max_inr", "number")}
+            <label className="block">
+              <span className="font-mono text-xs text-ink/60 block mb-0.5">Status</span>
+              <select value={form.status} onChange={e => set("status", e.target.value)}
+                className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+                <option value="pending">pending</option>
+                <option value="approved">approved</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 mt-4">
+              <input type="checkbox" checked={!!form.featured} onChange={e => set("featured", e.target.checked)}
+                className="w-4 h-4 border-2 border-ink" />
+              <span className="font-mono text-sm text-ink">Featured</span>
+            </label>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={save} disabled={saving}
+              className="bg-ink text-cream font-display px-6 py-2 border-2 border-ink disabled:opacity-50">
+              {saving ? "SAVING…" : "💾 SAVE"}
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="bg-cream text-ink font-display px-4 py-2 border-2 border-ink">
+              CANCEL
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArtistsTab({ artists: initialArtists, reload, enrichAll, enrichOne, busy }: ArtistsTabProps) {
+  const [artists, setArtists] = useState(initialArtists);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [adding, setAdding] = useState(false);
+  const [newArtist, setNewArtist] = useState({ name: "", slug: "", based_city: "", genres: "", bio: "", instagram: "", soundcloud: "", booking_email: "", status: "pending" });
+  const pwd = () => sessionStorage.getItem("ccd_admin_pass") ?? "";
+
+  // Sync when parent reloads
+  useState(() => { setArtists(initialArtists); });
+
+  const addArtist = async () => {
+    if (!newArtist.name.trim()) { toast.error("Name required"); return; }
+    const slug = newArtist.slug || newArtist.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    try {
+      const res = await fetch("/api/functions/v1/admin-artists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd() },
+        body: JSON.stringify({
+          ...newArtist, slug,
+          genres: newArtist.genres.split(",").map(s => s.trim()).filter(Boolean),
+          festivals: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Artist added");
+      setAdding(false);
+      setNewArtist({ name: "", slug: "", based_city: "", genres: "", bio: "", instagram: "", soundcloud: "", booking_email: "", status: "pending" });
+      await reload();
+    } catch (e: any) { toast.error(e.message || "Failed"); }
+  };
+
+  const filtered = artists.filter(a => {
+    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    if (!search) return true;
+    return a.name.toLowerCase().includes(search.toLowerCase()) || (a.based_city ?? "").toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="space-y-4">
-      <div className="bg-cream border-4 border-ink chunk-shadow p-5 flex flex-wrap items-center gap-3">
-        <div className="font-display text-2xl text-ink mr-4">ROSTER ({artists.length})</div>
-        <div className="font-mono text-xs text-ink/70">
-          enriched {counts.enriched ?? 0} · pending {counts.pending ?? 0} · failed {counts.failed ?? 0}
-        </div>
+      <div className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center gap-3">
+        <div className="font-display text-xl text-ink">ARTISTS ({artists.length})</div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+          className="border-2 border-ink px-3 py-1 text-sm font-mono bg-cream w-40 focus:outline-none" />
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+          <option value="all">All statuses</option>
+          <option value="approved">Approved</option>
+          <option value="pending">Pending</option>
+          <option value="rejected">Rejected</option>
+        </select>
         <div className="flex-1" />
-        <button disabled={busy} onClick={reload}
-          className="bg-cream text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow disabled:opacity-50">
-          REFRESH
-        </button>
-        <button disabled={busy} onClick={() => enrichAll(false)}
-          className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow disabled:opacity-50">
-          ENRICH ALL PENDING
-        </button>
-        <button disabled={busy} onClick={() => enrichAll(true)}
-          className="bg-ink text-cream font-display px-4 py-2 border-4 border-ink chunk-shadow disabled:opacity-50">
-          FORCE RE-ENRICH ALL
+        <button onClick={reload} disabled={busy}
+          className="bg-cream text-ink font-display text-xs px-3 py-2 border-2 border-ink disabled:opacity-50">REFRESH</button>
+        <button onClick={() => setAdding(v => !v)}
+          className="bg-acid-yellow text-ink font-display text-xs px-4 py-2 border-2 border-ink">
+          {adding ? "CANCEL" : "+ ADD ARTIST"}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {artists.map((a) => (
-          <div key={a.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex gap-4">
-            {a.photo_url ? (
-              <img src={a.photo_url} alt={a.name} className="w-20 h-20 object-cover border-2 border-ink" />
-            ) : (
-              <div className="w-20 h-20 border-2 border-ink bg-ink/10 flex items-center justify-center text-xs font-mono text-ink/50">no photo</div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-display text-xl text-ink">{a.name}</div>
-                  <div className="font-mono text-xs text-ink/60">{a.based_city ?? "—"} · @{a.instagram ?? "?"}</div>
-                </div>
-                <span className={`font-mono text-[10px] uppercase px-2 py-1 border-2 border-ink ${statusColor(a.enrichment_status)}`}>
-                  {a.enrichment_status}
-                </span>
-              </div>
-              <div className="font-mono text-xs text-ink/70 mt-2 line-clamp-2">{a.bio ?? "—"}</div>
-              <div className="font-mono text-xs text-ink/60 mt-1">
-                booking: {a.booking_email ?? "—"}{a.manager_email ? ` · mgr: ${a.manager_email}` : ""}
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button disabled={busy} onClick={() => enrichOne(a.id)}
-                  className="bg-acid-yellow text-ink font-display text-xs px-3 py-1 border-2 border-ink disabled:opacity-50">
-                  ✨ ENRICH
-                </button>
-                <a href={`/artists/${a.slug}`} target="_blank" rel="noreferrer"
-                  className="bg-cream text-ink font-display text-xs px-3 py-1 border-2 border-ink">
-                  VIEW
-                </a>
-              </div>
-            </div>
+      {adding && (
+        <div className="bg-cream border-4 border-ink p-4 space-y-3">
+          <div className="font-display text-lg text-ink mb-2">NEW ARTIST</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[["Name *", "name"], ["Slug (auto if blank)", "slug"], ["City", "based_city"], ["Genres (comma-sep)", "genres"], ["Instagram URL", "instagram"], ["SoundCloud URL", "soundcloud"], ["Booking Email", "booking_email"]].map(([label, key]) => (
+              <label key={key} className="block">
+                <span className="font-mono text-xs text-ink/60 block mb-0.5">{label}</span>
+                <input value={(newArtist as any)[key]} onChange={e => setNewArtist(p => ({ ...p, [key]: e.target.value }))}
+                  className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none" />
+              </label>
+            ))}
+            <label className="block">
+              <span className="font-mono text-xs text-ink/60 block mb-0.5">Status</span>
+              <select value={newArtist.status} onChange={e => setNewArtist(p => ({ ...p, status: e.target.value }))}
+                className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none">
+                <option value="pending">pending</option>
+                <option value="approved">approved</option>
+              </select>
+            </label>
           </div>
+          <label className="block">
+            <span className="font-mono text-xs text-ink/60 block mb-0.5">Bio</span>
+            <textarea value={newArtist.bio} onChange={e => setNewArtist(p => ({ ...p, bio: e.target.value }))} rows={2}
+              className="w-full border-2 border-ink px-2 py-1 text-sm font-mono bg-cream focus:outline-none resize-none" />
+          </label>
+          <button onClick={addArtist}
+            className="bg-ink text-cream font-display px-6 py-2 border-2 border-ink">
+            CREATE ARTIST
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map(a => (
+          <ArtistEditRow key={a.id} a={a}
+            onSaved={updated => setArtists(prev => prev.map(x => x.id === updated.id ? updated : x))}
+            onDeleted={id => setArtists(prev => prev.filter(x => x.id !== id))}
+          />
         ))}
+        {filtered.length === 0 && <p className="font-mono text-ink/40 text-sm p-4">No artists match.</p>}
       </div>
     </div>
   );

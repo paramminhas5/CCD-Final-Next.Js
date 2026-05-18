@@ -270,7 +270,7 @@ export default function UserDashboard() {
           <div className="max-w-screen-lg mx-auto flex">
             {tabs.map(t => (
               <button key={t.id} onClick={() => { setTab(t.id); setSubmitDone(null); }}
-                className={`font-display text-sm uppercase px-4 py-3 whitespace-nowrap border-r border-cream/10 transition-colors ${
+                className={`font-display text-sm uppercase px-4 py-3 whitespace-nowrap border-r border-cream/10 transition-colors select-none ${
                   tab === t.id ? "bg-cream text-ink" : "text-cream/50 hover:text-cream"
                 }`}>
                 {t.emoji} {t.label}
@@ -280,7 +280,7 @@ export default function UserDashboard() {
         </div>
 
         {/* Content */}
-        <div className="max-w-screen-lg mx-auto px-4 md:px-8 py-8">
+        <div className="max-w-screen-lg mx-auto px-4 md:px-8 py-8 text-ink bg-cream">
 
           {tab === "home" && (
             <div className="space-y-8">
