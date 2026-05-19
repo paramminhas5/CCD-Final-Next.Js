@@ -140,13 +140,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
       // settings save — payload IS the settings object
+      // NOTE: site_settings has NO created_at column — only updated_at
       const settings = payload ?? body;
       const now = new Date().toISOString();
       const existing = await get("site_settings", pq(eqf("id","main"))) as any[];
       if (existing.length) {
         await patch("site_settings", pq(eqf("id","main")), { ...settings, updated_at: now });
       } else {
-        await ins("site_settings", { id: "main", ...settings, created_at: now, updated_at: now });
+        // Drop created_at — site_settings table has no such column
+        const { created_at: _drop, ...safeSettings } = settings as any;
+        await ins("site_settings", { id: "main", ...safeSettings, updated_at: now });
       }
       return res.json({ ok: true });
     }
@@ -237,7 +240,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (fn === "admin-promoters") {
       if (m === "GET") return res.json({ promoters: await get("promoters", pq(ord("name"))) });
       if (m === "POST") {
-        const { ok, data } = await ins("promoters", { ...body, created_at: new Date().toISOString() });
+        const { action, payload } = body;
+        const now = new Date().toISOString();
+
+        if (action === "toggle_trust" && payload?.id) {
+          const { ok } = await patch("promoters", pq(eqf("id", payload.id)), { trusted: payload.trusted, updated_at: now });
+          return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+        }
+
+        if (action === "delete" && payload?.id) {
+          await del("promoters", pq(eqf("id", payload.id)));
+          return res.json({ ok: true });
+        }
+
+        // upsert (action === "upsert" or no action = plain insert)
+        const row = payload ?? body;
+        const { action: _a, payload: _p, created_at: _c, ...cleanRow } = row as any;
+        if (cleanRow.id) {
+          const { ok } = await patch("promoters", pq(eqf("id", cleanRow.id)), { ...cleanRow, updated_at: now });
+          return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+        }
+        const { ok, data } = await ins("promoters", { ...cleanRow, created_at: now, updated_at: now });
         return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
       }
     }
@@ -530,8 +553,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ── Stubs ───────────────────────────────────────────────────────────────────
-  if (path === "instagram-feed") return res.json({ posts: [] });
-  if (path === "youtube-videos") return res.json({ videos: [] });
+  // ── Instagram feed — proxy Behold to avoid client-side CSP/ad-blocker blocks ──
+  if (path === "instagram-feed") {
+    try {
+      const r = await fetch("https://feeds.behold.so/6bt7nDISwk0mUzAQMd9s", {
+        headers: { "User-Agent": "CCDBot/1.0" },
+      });
+      if (!r.ok) return res.json({ posts: [] });
+      const data = await r.json();
+      const posts = (data?.posts ?? []).slice(0, 9).map((p: any) => ({
+        id: String(p.id),
+        mediaUrl: p.sizes?.medium?.mediaUrl ?? p.sizes?.large?.mediaUrl ?? p.sizes?.full?.mediaUrl ?? p.mediaUrl,
+        permalink: p.permalink,
+        caption: p.prunedCaption ?? p.caption ?? "",
+        mediaType: p.mediaType ?? "IMAGE",
+      }));
+      return res.json({ posts });
+    } catch {
+      return res.json({ posts: [] });
+    }
+  }
+
+  // ── YouTube / site videos — serve from site_videos table ──────────────────
+  if (path === "youtube-videos") {
+    const rows = await get("site_videos", pq(ord("sort_order"))) as any[];
+    const videos = rows.map((v: any) => ({
+      id: v.youtube_id,
+      title: v.title,
+      thumbnail: v.thumbnail_url ?? `https://img.youtube.com/vi/${v.youtube_id}/mqdefault.jpg`,
+      publishedAt: v.published_at ?? v.created_at,
+    }));
+    return res.json({ videos });
+  }
 
   return res.status(404).json({ error: `No handler for ${m} /${path}` });
   } catch (err: any) {

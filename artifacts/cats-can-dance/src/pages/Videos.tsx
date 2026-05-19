@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase-shim";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import PageHero from "@/components/PageHero";
@@ -22,26 +21,11 @@ const VideosPage = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("youtube-videos", {
-          body: null,
-          // edge function reads ?max= from URL; fall back to default if not supported
-        });
-        // Re-call with max via direct fetch for the "all videos" page
-        const projectUrl = "/api";
-        const res = await fetch(`${projectUrl}/functions/v1/youtube-videos?max=50`, {
-          headers: {
-            apikey: "",
-            Authorization: `Bearer ${""}`,
-          },
-        });
+        // youtube-videos route now serves from site_videos table
+        const res = await fetch("/api/youtube-videos");
         const j = await res.json();
         if (cancelled) return;
-        if (!j?.videos?.length) {
-          // fall back to first invoke result
-          if (data?.videos?.length) setVideos(data.videos as Video[]);
-          else setError(true);
-          return;
-        }
+        if (!j?.videos?.length) { setError(true); return; }
         setVideos(j.videos as Video[]);
       } catch {
         if (!cancelled) setError(true);

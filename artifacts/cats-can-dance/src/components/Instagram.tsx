@@ -36,13 +36,14 @@ const Instagram = () => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(BEHOLD_URL);
+        // Fetch via our own API proxy — avoids CSP/ad-blocker issues with external domains
+        const r = await fetch("/api/instagram-feed");
         if (!r.ok) throw new Error("fetch failed");
         const data = await r.json();
         if (cancelled) return;
-        const raw: any[] = data?.posts ?? [];
+        const raw: IgPost[] = data?.posts ?? [];
         if (!raw.length) { setError(true); return; }
-        setPosts(raw.slice(0, 9).map(mapBeholdPost));
+        setPosts(raw);
       } catch {
         if (!cancelled) setError(true);
       }
