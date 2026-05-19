@@ -1,22 +1,25 @@
 /**
- * ArtistDetail v3 — The Full Picture
+ * ArtistDetail v4 — Social Magazine Layout
  *
- * Tabs: Overview · Journey · Network · Venues · EPK
+ * No tabs. One continuous scroll like a proper artist page.
+ * Sections: Hero → Bio strip → Stats ribbon → Music → Live →
+ *           Network graph → Stage credits marquee → Videos → Gallery → EPK
  *
- * New in v3:
- * - Connection graph: SVG radial web (B2B · label · crew · collab)
- * - Appearance timeline: every gig, venue, city, year
- * - Venue affinity: bar chart of most-played rooms
- * - Scene rank: tier system (International → National → City → Local)
- * - Reads from event_appearances + artist_connections tables
+ * Privilege-aware:
+ *   - Anyone: view full profile
+ *   - Logged-in artist (their profile): edit bio/links inline, download EPK
+ *   - Admin: see claimed_by, role info
+ *
+ * Emerging highlight: replaces tier system with a single "Emerging" badge
  */
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/router";
 import { useUser, useClerk } from "@clerk/react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { toast } from "sonner";
+import { useUserRole } from "@/hooks/useUserRole";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type Artist = {
@@ -32,8 +35,7 @@ type Artist = {
   gallery: { url: string; caption?: string }[];
   videos: { youtube_id?: string; title?: string }[];
   open_to_bookings: boolean; available_cities: string[];
-  claimed_by: string | null; featured: boolean;
-  created_at?: string;
+  claimed_by: string | null; featured: boolean; created_at?: string;
 };
 type ArtistDate = {
   id: string; city: string; venue: string | null; event_date: string;
@@ -41,56 +43,16 @@ type ArtistDate = {
 };
 type Appearance = {
   id: string; artist_slug: string; event_name: string; venue: string | null;
-  city: string | null; event_date: string | null; year: number | null;
-  role: string; source: string;
+  city: string | null; event_date: string | null; year: number | null; role: string;
 };
 type Connection = {
-  id: string;
-  artist_a_id: string; artist_a_slug: string;
-  artist_b_id: string; artist_b_slug: string;
-  connection_type: string; strength: number;
-  shared_events: string[]; shared_venues: string[];
-  notes: string | null;
+  id: string; artist_a_slug: string; artist_b_slug: string;
+  connection_type: string; strength: number; shared_events: string[]; notes: string | null;
 };
-type OtherArtist = { id: string; slug: string; name: string; based_city: string | null; genres: string[]; photo_url: string | null; festivals: string[] };
-
-/* ── Scene rank ────────────────────────────────────────────────────────────── */
-const INTERNATIONAL_FESTS = ["sunburn","dgtl","boiler room","lollapalooza","vh1 supersonic","echoes of earth","resonance"];
-const NATIONAL_FESTS       = ["magnetic fields","nh7","nh7 weekender","antiheroes","enchanted valley","bacardi nh7","one stage","high on clouds"];
-const BIG_CLUBS            = ["kitty su","district","counterculture","bonobo","blue frog","bhavani island","echoes"];
-
-function getSceneRank(a: Artist, appearances: Appearance[]): { tier: string; label: string; color: string; reason: string } {
-  const allStages = [...a.festivals, ...appearances.map(ap => ap.event_name)].map(s => s.toLowerCase());
-  const cities = [...new Set(appearances.map(ap => ap.city).filter(Boolean))];
-
-  if (INTERNATIONAL_FESTS.some(f => allStages.some(s => s.includes(f)))) {
-    return { tier: "1", label: "International", color: "bg-acid-yellow text-ink", reason: `Played ${INTERNATIONAL_FESTS.find(f => allStages.some(s => s.includes(f)))}` };
-  }
-  if (NATIONAL_FESTS.some(f => allStages.some(s => s.includes(f)))) {
-    return { tier: "2", label: "National", color: "bg-magenta text-cream", reason: `National festival circuit` };
-  }
-  if (cities.length >= 3 || BIG_CLUBS.some(c => allStages.some(s => s.includes(c)))) {
-    return { tier: "3", label: "City Circuit", color: "bg-electric-blue text-cream", reason: `Active across ${cities.length}+ cities` };
-  }
-  if (a.festivals.length > 0 || appearances.length > 0) {
-    return { tier: "4", label: "Scene Regular", color: "bg-ink text-cream", reason: "Established local presence" };
-  }
-  return { tier: "5", label: "Emerging", color: "bg-ink/40 text-cream", reason: "Building their name" };
-}
-
-/* ── Venue affinity ────────────────────────────────────────────────────────── */
-function getVenueAffinity(appearances: Appearance[]): { venue: string; city: string | null; count: number }[] {
-  const counts: Record<string, { city: string | null; count: number }> = {};
-  for (const ap of appearances) {
-    if (!ap.venue) continue;
-    if (!counts[ap.venue]) counts[ap.venue] = { city: ap.city, count: 0 };
-    counts[ap.venue].count++;
-  }
-  return Object.entries(counts)
-    .map(([venue, { city, count }]) => ({ venue, city, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-}
+type OtherArtist = {
+  id: string; slug: string; name: string; based_city: string | null;
+  genres: string[]; photo_url: string | null; festivals: string[];
+};
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
 const ensUrl = (s: string | null) => s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
@@ -105,166 +67,106 @@ const fmtFee = (a: Artist) => {
   return `${sym}${f(a.fee_min_inr??a.fee_max_inr!)}`;
 };
 
-const CONNECTION_COLORS: Record<string, string> = {
-  b2b:    "#E91E8C",
-  label:  "#0066FF",
-  crew:   "#FF6B00",
-  booker: "#22c55e",
-  collab: "#a855f7",
+const isEmerging = (a: Artist, appearances: Appearance[]) => a.festivals.length <= 1 && appearances.length <= 2;
+
+const CONN_COLORS: Record<string, string> = {
+  b2b:"#E91E8C", label:"#0066FF", crew:"#FF6B00", booker:"#22c55e", collab:"#a855f7"
 };
-const CONNECTION_LABELS: Record<string, string> = {
-  b2b: "B2B", label: "Same Label", crew: "Crew", booker: "Booked By", collab: "Collab",
+const CONN_LABELS: Record<string, string> = {
+  b2b:"B2B", label:"Same Label", crew:"Crew", booker:"Booked By", collab:"Collab"
 };
 
-/* ── Connection Graph (SVG radial) ─────────────────────────────────────────── */
+/* ── Connection Graph SVG ────────────────────────────────────────────────────── */
 function ConnectionGraph({ artist, connections, allArtists }: {
   artist: Artist; connections: Connection[]; allArtists: OtherArtist[];
 }) {
-  const [hovered, setHovered] = useState<string | null>(null);
-  if (connections.length === 0) {
-    return (
-      <div className="border-4 border-dashed border-ink/20 p-12 text-center">
-        <p className="font-display text-2xl text-ink/30 mb-2">No connections mapped yet</p>
-        <p className="text-ink/40 text-sm">B2B pairs, label mates, and crew links will appear here once admin adds them.</p>
-      </div>
-    );
-  }
+  const [hovered, setHovered] = useState<string|null>(null);
+  if (!connections.length) return null;
 
-  // Build node list: center + connected artists
   const connectedSlugs = connections.map(c => c.artist_a_slug === artist.slug ? c.artist_b_slug : c.artist_a_slug);
-  const nodes = connectedSlugs
-    .map(slug => allArtists.find(a => a.slug === slug))
-    .filter(Boolean) as OtherArtist[];
+  const nodes = connectedSlugs.map(s => allArtists.find(a => a.slug === s)).filter(Boolean) as OtherArtist[];
 
-  const W = 600; const H = 480;
-  const CX = W / 2; const CY = H / 2;
-  const RADIUS = 180;
+  const W=560; const H=420; const CX=W/2; const CY=H/2; const R=155;
 
   return (
-    <div>
-      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Connection Graph</h2>
-
+    <div className="bg-ink border-4 border-ink overflow-hidden">
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        {Object.entries(CONNECTION_LABELS).map(([type, label]) => (
+      <div className="flex flex-wrap gap-4 px-5 pt-4 pb-2">
+        {Object.entries(CONN_LABELS).map(([type, label]) => (
           <div key={type} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-none" style={{ background: CONNECTION_COLORS[type] ?? "#666" }} />
-            <span className="font-display text-[10px] uppercase text-ink/50">{label}</span>
+            <div className="w-2.5 h-2.5" style={{background:CONN_COLORS[type]}} />
+            <span className="font-display text-[9px] uppercase text-cream/40">{label}</span>
           </div>
         ))}
       </div>
-
-      <div className="border-4 border-ink bg-cream overflow-hidden">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 480 }}>
-          {/* Edges */}
-          {connections.map((conn, i) => {
-            const otherSlug = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
-            const nodeIdx   = nodes.findIndex(n => n.slug === otherSlug);
-            if (nodeIdx < 0) return null;
-            const angle = (2 * Math.PI * nodeIdx) / nodes.length - Math.PI / 2;
-            const nx = CX + RADIUS * Math.cos(angle);
-            const ny = CY + RADIUS * Math.sin(angle);
-            const isHover = hovered === otherSlug;
-            const col = CONNECTION_COLORS[conn.connection_type] ?? "#666";
-            return (
-              <g key={conn.id}>
-                <line x1={CX} y1={CY} x2={nx} y2={ny}
-                  stroke={col} strokeWidth={isHover ? conn.strength * 2 + 2 : conn.strength + 1}
-                  strokeOpacity={isHover ? 1 : 0.5} strokeDasharray={conn.connection_type === "booker" ? "6 3" : undefined} />
-                {/* Shared events count */}
-                {conn.shared_events.length > 1 && (
-                  <text x={(CX+nx)/2} y={(CY+ny)/2 - 6}
-                    textAnchor="middle" fontSize="9" fill={col} opacity={0.8} className="font-display">
-                    {conn.shared_events.length}×
-                  </text>
-                )}
-              </g>
-            );
-          })}
-
-          {/* Center node (the artist) */}
-          <circle cx={CX} cy={CY} r={36} fill="#0D0D0D" stroke="#0D0D0D" strokeWidth={4} />
-          {artist.photo_url ? (
-            <image href={artist.photo_url} x={CX-32} y={CY-32} width={64} height={64}
-              style={{ clipPath: "circle(50%)", objectFit: "cover" }} />
-          ) : (
-            <text x={CX} y={CY+5} textAnchor="middle" fontSize="18" fill="#F5E6D0" fontWeight="bold">
-              {artist.name[0]}
-            </text>
-          )}
-          <text x={CX} y={CY+54} textAnchor="middle" fontSize="9" fill="#0D0D0D" fontWeight="bold" className="font-display uppercase">
-            {artist.name.slice(0, 14)}
-          </text>
-
-          {/* Connected nodes */}
-          {nodes.map((node, i) => {
-            const conn = connections.find(c =>
-              (c.artist_a_slug === artist.slug && c.artist_b_slug === node.slug) ||
-              (c.artist_b_slug === artist.slug && c.artist_a_slug === node.slug)
-            );
-            const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-            const nx = CX + RADIUS * Math.cos(angle);
-            const ny = CY + RADIUS * Math.sin(angle);
-            const isHover = hovered === node.slug;
-            const col = conn ? CONNECTION_COLORS[conn.connection_type] ?? "#666" : "#666";
-            const label = CONNECTION_LABELS[conn?.connection_type ?? ""] ?? "";
-
-            return (
-              <a key={node.slug} href={`/artists/${node.slug}`}
-                onMouseEnter={() => setHovered(node.slug)} onMouseLeave={() => setHovered(null)}>
-                <circle cx={nx} cy={ny} r={isHover ? 28 : 24} fill={col} stroke="#0D0D0D" strokeWidth={3}
-                  style={{ transition: "r 0.15s" }} />
-                {node.photo_url ? (
-                  <image href={node.photo_url} x={nx-20} y={ny-20} width={40} height={40}
-                    style={{ clipPath: "circle(50%)", opacity: 0.9 }} />
-                ) : (
-                  <text x={nx} y={ny+5} textAnchor="middle" fontSize="14" fill="white" fontWeight="bold">
-                    {node.name[0]}
-                  </text>
-                )}
-                <text x={nx} y={ny + (isHover ? 42 : 38)} textAnchor="middle" fontSize="8" fill="#0D0D0D" fontWeight="bold">
-                  {node.name.slice(0, 12)}
-                </text>
-                {label && (
-                  <text x={nx} y={ny + (isHover ? 52 : 48)} textAnchor="middle" fontSize="7" fill={col}>
-                    {label}
-                  </text>
-                )}
-                {isHover && conn?.shared_events.length ? (
-                  <text x={nx} y={ny + 62} textAnchor="middle" fontSize="7" fill="#666">
-                    {conn.shared_events.slice(0, 2).join(", ")}
-                  </text>
-                ) : null}
-              </a>
-            );
-          })}
-        </svg>
-      </div>
-
-      {/* Connection list */}
-      <div className="mt-4 space-y-2">
-        {connections.map(conn => {
-          const otherSlug = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
-          const other = allArtists.find(a => a.slug === otherSlug);
-          const col = CONNECTION_COLORS[conn.connection_type] ?? "#666";
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{maxHeight:420}}>
+        {connections.map((conn) => {
+          const otherSlug = conn.artist_a_slug===artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
+          const ni = nodes.findIndex(n=>n.slug===otherSlug);
+          if(ni<0) return null;
+          const angle=(2*Math.PI*ni)/nodes.length - Math.PI/2;
+          const nx=CX+R*Math.cos(angle); const ny=CY+R*Math.sin(angle);
+          const col=CONN_COLORS[conn.connection_type]??"#666";
+          const isH=hovered===otherSlug;
           return (
-            <div key={conn.id} className="flex items-center gap-3 border-2 border-ink/10 p-3 hover:border-ink/30 transition-colors">
-              <div className="w-2 h-8 shrink-0" style={{ background: col }} />
-              <div className="flex-1">
-                <a href={`/artists/${otherSlug}`} className="font-display text-sm text-ink uppercase hover:text-magenta">{other?.name ?? otherSlug}</a>
-                <p className="text-xs text-ink/40 mt-0.5">
-                  {CONNECTION_LABELS[conn.connection_type] ?? conn.connection_type}
-                  {conn.shared_events.length > 0 && ` · ${conn.shared_events.length} shared events`}
-                  {conn.notes && ` · ${conn.notes}`}
+            <g key={conn.id}>
+              <line x1={CX} y1={CY} x2={nx} y2={ny} stroke={col}
+                strokeWidth={isH?conn.strength*1.8+1:conn.strength*0.9+0.5}
+                strokeOpacity={isH?1:0.45}
+                strokeDasharray={conn.connection_type==="booker"?"5 3":undefined} />
+              {conn.shared_events.length>1&&<text x={(CX+nx)/2} y={(CY+ny)/2-5} textAnchor="middle" fontSize="8" fill={col} opacity={0.7}>{conn.shared_events.length}×</text>}
+            </g>
+          );
+        })}
+        {/* Center */}
+        <circle cx={CX} cy={CY} r={32} fill={nameBg(artist.name)} stroke="#F5E6D0" strokeWidth={3}/>
+        {artist.photo_url
+          ? <image href={artist.photo_url} x={CX-28} y={CY-28} width={56} height={56} clipPathUnits="userSpaceOnUse" style={{clipPath:"circle(50%)"}}/>
+          : <text x={CX} y={CY+6} textAnchor="middle" fontSize="18" fill="#F5E6D0" fontWeight="bold">{artist.name[0]}</text>}
+        <text x={CX} y={CY+48} textAnchor="middle" fontSize="8" fill="#F5E6D0" fontWeight="bold">{artist.name.slice(0,12).toUpperCase()}</text>
+
+        {/* Nodes */}
+        {nodes.map((node,i)=>{
+          const conn=connections.find(c=>(c.artist_a_slug===artist.slug&&c.artist_b_slug===node.slug)||(c.artist_b_slug===artist.slug&&c.artist_a_slug===node.slug));
+          const angle=(2*Math.PI*i)/nodes.length-Math.PI/2;
+          const nx=CX+R*Math.cos(angle); const ny=CY+R*Math.sin(angle);
+          const col=conn?CONN_COLORS[conn.connection_type]??"#666":"#666";
+          const isH=hovered===node.slug;
+          return (
+            <a key={node.slug} href={`/artists/${node.slug}`}
+              onMouseEnter={()=>setHovered(node.slug)} onMouseLeave={()=>setHovered(null)}>
+              <circle cx={nx} cy={ny} r={isH?24:20} fill={col} stroke="#F5E6D0" strokeWidth={isH?3:2}
+                style={{transition:"r 0.12s"}}/>
+              {node.photo_url
+                ? <image href={node.photo_url} x={nx-16} y={ny-16} width={32} height={32} style={{clipPath:"circle(50%)"}}/>
+                : <text x={nx} y={ny+5} textAnchor="middle" fontSize="11" fill="white" fontWeight="bold">{node.name[0]}</text>}
+              <text x={nx} y={ny+(isH?38:34)} textAnchor="middle" fontSize="7" fill="#F5E6D0">{node.name.slice(0,11)}</text>
+              {isH&&conn&&<text x={nx} y={ny+46} textAnchor="middle" fontSize="6.5" fill={col}>{CONN_LABELS[conn.connection_type]}</text>}
+            </a>
+          );
+        })}
+      </svg>
+      {/* List view below graph */}
+      <div className="border-t-2 border-cream/10 p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {connections.map(conn=>{
+          const otherSlug=conn.artist_a_slug===artist.slug?conn.artist_b_slug:conn.artist_a_slug;
+          const other=allArtists.find(a=>a.slug===otherSlug);
+          const col=CONN_COLORS[conn.connection_type]??"#666";
+          return (
+            <a key={conn.id} href={`/artists/${otherSlug}`}
+              className="flex items-center gap-3 p-2 hover:bg-cream/5 transition-colors">
+              <div className="w-1 h-8 shrink-0" style={{background:col}}/>
+              <div className="flex-1 min-w-0">
+                <p className="font-display text-xs text-cream uppercase truncate">{other?.name??otherSlug}</p>
+                <p className="text-[10px] text-cream/40">
+                  {CONN_LABELS[conn.connection_type]}
+                  {conn.shared_events.length>0&&` · ${conn.shared_events.slice(0,2).join(", ")}`}
                 </p>
               </div>
-              <div className="text-right shrink-0">
-                <div className="flex gap-0.5">
-                  {[...Array(Math.min(conn.strength, 5))].map((_,i) => <div key={i} className="w-2 h-2" style={{ background: col }} />)}
-                </div>
-                <p className="text-[9px] text-ink/30 mt-1">strength {conn.strength}/10</p>
+              <div className="flex gap-0.5 shrink-0">
+                {[...Array(Math.min(conn.strength,5))].map((_,i)=><div key={i} className="w-1.5 h-1.5" style={{background:col}}/>)}
               </div>
-            </div>
+            </a>
           );
         })}
       </div>
@@ -272,32 +174,32 @@ function ConnectionGraph({ artist, connections, allArtists }: {
   );
 }
 
-/* ── Venue Affinity ──────────────────────────────────────────────────────────── */
-function VenueAffinity({ appearances, artist }: { appearances: Appearance[]; artist: Artist }) {
-  const venueData = getVenueAffinity([
-    ...appearances,
-    ...artist.festivals.map(f => ({ id:"", artist_slug:artist.slug, event_name:f, venue:f, city:null, event_date:null, year:null, role:"performer", source:"manual" }))
-  ]);
-  const max = venueData[0]?.count ?? 1;
-
-  if (venueData.length === 0) {
-    return <p className="text-ink/40 text-sm">No venue data yet.</p>;
+/* ── Venue affinity bar ──────────────────────────────────────────────────────── */
+function VenueAffinity({ appearances, festivals }: { appearances: Appearance[]; festivals: string[] }) {
+  const counts: Record<string, { city: string|null; n: number }> = {};
+  for (const ap of appearances) {
+    if (!ap.venue) continue;
+    if (!counts[ap.venue]) counts[ap.venue] = { city: ap.city, n: 0 };
+    counts[ap.venue].n++;
   }
+  for (const f of festivals) { if (!counts[f]) counts[f] = { city: null, n: 1 }; else counts[f].n++; }
+  const sorted = Object.entries(counts).sort(([,a],[,b]) => b.n - a.n).slice(0,7);
+  if (!sorted.length) return null;
+  const max = sorted[0][1].n;
   return (
     <div>
-      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Venue Affinity</h2>
-      <p className="text-xs text-ink/40 mb-4">Rooms they play most often</p>
-      <div className="space-y-3">
-        {venueData.map(({ venue, city, count }) => (
+      <p className="font-display text-xs uppercase text-ink/40 mb-4">Venue Affinity</p>
+      <div className="space-y-2.5">
+        {sorted.map(([venue, {city, n}]) => (
           <div key={venue} className="flex items-center gap-3">
-            <div className="w-32 shrink-0">
-              <p className="font-display text-xs text-ink uppercase truncate">{venue}</p>
-              {city && <p className="text-[10px] text-ink/40">{city}</p>}
+            <div className="w-28 shrink-0">
+              <p className="font-display text-xs text-ink uppercase truncate leading-none">{venue}</p>
+              {city && <p className="text-[9px] text-ink/40 mt-0.5">{city}</p>}
             </div>
-            <div className="flex-1 bg-ink/5 h-6 relative overflow-hidden border-2 border-ink/10">
-              <div className="h-full bg-magenta transition-all duration-500" style={{ width: `${(count/max)*100}%` }} />
+            <div className="flex-1 bg-ink/8 h-4 relative overflow-hidden border border-ink/10">
+              <div className="h-full bg-magenta transition-all" style={{width:`${(n/max)*100}%`}}/>
             </div>
-            <span className="font-display text-sm text-ink w-6 text-right shrink-0">{count}</span>
+            <span className="font-display text-xs text-ink w-4 text-right shrink-0">{n}</span>
           </div>
         ))}
       </div>
@@ -305,136 +207,167 @@ function VenueAffinity({ appearances, artist }: { appearances: Appearance[]; art
   );
 }
 
-/* ── Appearance Timeline ─────────────────────────────────────────────────────── */
-function AppearanceTimeline({ appearances, dates }: { appearances: Appearance[]; dates: ArtistDate[] }) {
-  const allEvents = [
-    ...appearances.map(ap => ({
-      id: ap.id, date: ap.event_date ?? "", year: ap.year ?? (ap.event_date?.slice(0,4) ? parseInt(ap.event_date.slice(0,4)) : null),
-      name: ap.event_name, venue: ap.venue, city: ap.city, role: ap.role, status: "done" as const, ticketUrl: null,
-    })),
-    ...dates.map(d => ({
-      id: d.id, date: d.event_date, year: parseInt(d.event_date.slice(0,4)),
-      name: null, venue: d.venue, city: d.city, role: "performer", status: d.status, ticketUrl: d.ticket_url,
-    })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+/* ── EPK Panel ─────────────────────────────────────────────────────────────── */
+function EPKCard({ artist, dates, appearances, isOwnProfile, onEdit }: {
+  artist: Artist; dates: ArtistDate[]; appearances: Appearance[];
+  isOwnProfile: boolean; onEdit?: () => void;
+}) {
+  const city = cityOf(artist);
+  const ig = igUrl(artist.instagram); const sc = ensUrl(artist.soundcloud);
+  const upcoming = dates.filter(d => new Date(d.event_date) >= new Date()).slice(0,4);
+  const fee = fmtFee(artist);
 
-  if (allEvents.length === 0) {
-    return (
-      <div className="border-4 border-dashed border-ink/20 p-12 text-center">
-        <p className="font-display text-2xl text-ink/30">No appearances on record yet</p>
-      </div>
-    );
-  }
-
-  const byYear: Record<number, typeof allEvents> = {};
-  for (const ev of allEvents) {
-    const yr = ev.year ?? 0;
-    (byYear[yr] = byYear[yr] ?? []).push(ev);
-  }
-  const years = Object.keys(byYear).map(Number).sort((a,b) => b-a);
+  const copyEPK = () => {
+    const text = [
+      `${artist.name}`,
+      `${artist.genres.join(" · ")} | ${city || "India"}`,
+      "",
+      artist.bio ?? "",
+      "",
+      artist.festivals.length ? `Stage Credits: ${artist.festivals.join(", ")}` : "",
+      artist.labels ? `Label: ${artist.labels}` : "",
+      "",
+      ig ? `Instagram: ${ig}` : "",
+      sc ? `SoundCloud: ${sc}` : "",
+      ensUrl(artist.spotify) ? `Spotify: ${ensUrl(artist.spotify)}` : "",
+      artist.booking_email ? `Booking: ${artist.booking_email}` : "Booking: via Cats Can Dance",
+      "",
+      `CCD Profile: ${typeof window !== "undefined" ? window.location.href : ""}`,
+    ].filter(Boolean).join("\n");
+    navigator.clipboard.writeText(text).then(() => toast.success("EPK text copied!")).catch(() => toast.error("Copy failed"));
+  };
 
   return (
-    <div>
-      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-6">
-        Full Appearance History ({allEvents.length} shows)
-      </h2>
-      <div className="relative">
-        <div className="absolute left-[72px] top-0 bottom-0 w-0.5 bg-ink/10" />
-        <div className="space-y-8">
-          {years.map(yr => (
-            <div key={yr} className="flex gap-4">
-              <div className="w-[68px] shrink-0 text-right pt-1">
-                <span className="font-display text-sm font-bold text-ink/60 uppercase">{yr || "?"}</span>
-                <p className="font-display text-[10px] text-ink/30">{byYear[yr].length} shows</p>
-              </div>
-              <div className="relative pl-6 flex-1 space-y-2">
-                <div className="absolute left-0 top-2 w-4 h-4 bg-magenta border-2 border-ink -translate-x-[8px]" />
-                {byYear[yr].map(ev => {
-                  const dt = ev.date ? new Date(ev.date + "T00:00:00") : null;
-                  const isPast = dt ? dt < new Date() : true;
-                  return (
-                    <div key={ev.id} className={`flex items-start gap-3 p-3 border-2 ${isPast ? "border-ink/10" : "border-magenta/40 bg-magenta/5"}`}>
-                      {dt && (
-                        <div className="text-center min-w-[36px] shrink-0">
-                          <p className="font-display text-base text-ink leading-none">{dt.getDate()}</p>
-                          <p className="font-display text-[9px] text-ink/40 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        {ev.name && <p className="font-display text-sm text-ink uppercase truncate">{ev.name}</p>}
-                        <p className="text-xs text-ink/60">{ev.city}{ev.venue ? ` · ${ev.venue}` : ""}</p>
-                        <div className="flex gap-2 mt-1">
-                          {ev.role !== "performer" && (
-                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 border border-magenta/40 text-magenta">{ev.role}</span>
-                          )}
-                          {ev.status !== "done" && (
-                            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 border ${ev.status==="confirmed"?"bg-acid-yellow text-ink border-acid-yellow":"border-ink/20 text-ink/40"}`}>{ev.status}</span>
-                          )}
-                        </div>
-                      </div>
-                      {ev.ticketUrl && (
-                        <a href={ev.ticketUrl.startsWith("http")?ev.ticketUrl:`https://${ev.ticketUrl}`} target="_blank" rel="noreferrer"
-                          className="font-display text-[9px] uppercase bg-magenta text-cream px-2 py-1 border border-ink shrink-0 hover:bg-ink">
-                          Tix
-                        </a>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+    <div id="epk" className="bg-ink text-cream border-4 border-ink">
+      {/* Header */}
+      <div className="bg-acid-yellow text-ink border-b-4 border-ink p-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="font-display text-xs uppercase opacity-60 mb-1">Press Kit / EPK</p>
+          <h3 className="font-display text-4xl uppercase leading-none">{artist.name}</h3>
+          <p className="font-display text-base mt-1 opacity-70">{artist.genres.join(" · ")} · {city || "India"}</p>
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          {isOwnProfile && onEdit && (
+            <button onClick={onEdit}
+              className="font-display text-[10px] uppercase bg-ink text-cream px-3 py-1.5 border-2 border-ink hover:bg-magenta transition-colors">
+              ✏ Edit Profile
+            </button>
+          )}
+          <p className="font-display text-[9px] uppercase opacity-40 text-right">Generated by<br/>CCD.SCHOOL</p>
         </div>
       </div>
-    </div>
-  );
-}
 
-/* ── Stage Credits with tier highlighting ────────────────────────────────────── */
-function StageCredits({ festivals }: { festivals: string[] }) {
-  if (!festivals.length) return null;
-  const big = (f: string) => INTERNATIONAL_FESTS.some(x => f.toLowerCase().includes(x)) || NATIONAL_FESTS.some(x => f.toLowerCase().includes(x));
-  const sorted = [...festivals].sort((a,b) => (big(b)?1:0)-(big(a)?1:0));
-  return (
-    <div>
-      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Stage Credits ({festivals.length})</h2>
-      <div className="flex flex-wrap gap-2">
-        {sorted.map(f => (
-          <span key={f} className={`font-display text-xs px-3 py-1.5 border-4 border-ink chunk-shadow ${big(f) ? "bg-acid-yellow text-ink" : "bg-cream text-ink"}`}>
-            {big(f) && "★ "}{f}
-          </span>
-        ))}
+      <div className="grid md:grid-cols-2 gap-0 divide-y-4 md:divide-y-0 md:divide-x-4 divide-cream/10">
+        {/* Left */}
+        <div className="p-6 space-y-5">
+          {artist.bio && (
+            <div>
+              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Bio</p>
+              <p className="text-cream/80 text-sm leading-relaxed">{artist.bio}</p>
+            </div>
+          )}
+          {artist.why && (
+            <div className="bg-cream/5 border border-cream/10 p-4">
+              <p className="font-display text-[9px] uppercase text-cream/40 mb-1">Why Book</p>
+              <p className="font-display text-base text-cream leading-tight">"{artist.why}"</p>
+            </div>
+          )}
+          {artist.festivals.length > 0 && (
+            <div>
+              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Stage Credits</p>
+              <div className="flex flex-wrap gap-1.5">
+                {artist.festivals.map(f => (
+                  <span key={f} className="font-display text-[9px] uppercase bg-cream/10 text-cream px-2 py-1 border border-cream/20">{f}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right */}
+        <div className="p-6 space-y-5">
+          {/* Key facts */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              {label:"City", val: city || "India"},
+              {label:"Genres", val: artist.genres.slice(0,2).join(", ")},
+              {label:"Label", val: artist.labels ?? "Independent"},
+              {label:"Booking", val: artist.open_to_bookings ? "Open" : "By Enquiry"},
+            ].map(({label, val}) => val && (
+              <div key={label} className="bg-cream/5 border border-cream/10 p-3">
+                <p className="font-display text-[9px] uppercase text-cream/40 mb-0.5">{label}</p>
+                <p className="font-display text-sm text-cream leading-tight">{val}</p>
+              </div>
+            ))}
+            {fee && (
+              <div className="col-span-2 bg-magenta/20 border border-magenta/40 p-3">
+                <p className="font-display text-[9px] uppercase text-cream/40 mb-0.5">Indicative Fee</p>
+                <p className="font-display text-2xl text-cream">{fee}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Links */}
+          <div>
+            <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Links</p>
+            <div className="space-y-1.5">
+              {ig && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Instagram</span><a href={ig} className="text-xs text-cream/70 hover:text-cream underline truncate">{ig.replace("https://","")}</a></div>}
+              {sc && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">SoundCloud</span><a href={sc} className="text-xs text-cream/70 hover:text-cream underline truncate">{sc.replace("https://","")}</a></div>}
+              {ensUrl(artist.spotify) && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Spotify</span><a href={ensUrl(artist.spotify)!} className="text-xs text-cream/70 hover:text-cream underline">open.spotify.com</a></div>}
+              {artist.booking_email && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Booking</span><a href={`mailto:${artist.booking_email}`} className="text-xs text-cream/70 hover:text-cream underline">{artist.booking_email}</a></div>}
+              <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Profile</span><span className="text-xs text-cream/40 truncate">{typeof window!=="undefined"?window.location.href:""}</span></div>
+            </div>
+          </div>
+
+          {/* Upcoming */}
+          {upcoming.length > 0 && (
+            <div>
+              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Upcoming Shows</p>
+              {upcoming.map(d=>(
+                <p key={d.id} className="text-xs text-cream/60 py-0.5">
+                  {d.event_date} · {d.city}{d.venue?`, ${d.venue}`:""}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer actions */}
+      <div className="border-t-4 border-cream/10 p-4 flex flex-wrap gap-3 items-center">
+        <button onClick={() => window.print()}
+          className="font-display text-xs uppercase bg-cream text-ink px-5 py-2.5 border-2 border-cream hover:bg-acid-yellow transition-colors">
+          🖨 Print / Save PDF
+        </button>
+        <button onClick={copyEPK}
+          className="font-display text-xs uppercase bg-cream/10 text-cream px-5 py-2.5 border-2 border-cream/20 hover:bg-cream/20 transition-colors">
+          📋 Copy EPK Text
+        </button>
+        {isOwnProfile && (
+          <button onClick={copyEPK}
+            className="font-display text-xs uppercase bg-acid-yellow text-ink px-5 py-2.5 border-2 border-acid-yellow hover:opacity-90 transition-opacity ml-auto">
+            ✦ Artist Kit Download
+          </button>
+        )}
+        <p className="font-display text-[9px] uppercase text-cream/20 ml-auto">Cats Can Dance · ccd.school</p>
       </div>
     </div>
   );
 }
 
-/* ── Scene Rank Badge ────────────────────────────────────────────────────────── */
-function SceneRankBadge({ rank }: { rank: ReturnType<typeof getSceneRank> }) {
-  return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 border-4 border-ink ${rank.color}`}>
-      <span className="font-display text-lg leading-none">T{rank.tier}</span>
-      <div>
-        <p className="font-display text-xs uppercase leading-none">{rank.label}</p>
-        <p className="text-[9px] opacity-60 mt-0.5">{rank.reason}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ── Contact Gate ───────────────────────────────────────────────────────────── */
-function ContactGate({ artist }: { artist: Artist }) {
+/* ── Contact/Booking Gate ────────────────────────────────────────────────────── */
+function BookingGate({ artist }: { artist: Artist }) {
   const { user } = useUser();
   const { openSignIn } = useClerk();
   const [verified, setVerified] = useState(false);
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
   const [enquiry, setEnquiry] = useState("");
+  const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const fee = fmtFee(artist);
   const isRevealed = user || verified;
 
-  const sendEnquiry = async () => {
+  const send = async () => {
     if (!email.trim()) { toast.error("Email required"); return; }
     setBusy(true);
     try {
@@ -445,98 +378,44 @@ function ContactGate({ artist }: { artist: Artist }) {
   };
 
   return (
-    <div className="border-4 border-ink bg-cream">
+    <div className="border-4 border-ink bg-cream sticky top-[72px]">
       {fee && (
         <div className="bg-magenta text-cream border-b-4 border-ink p-4">
-          <p className="font-display text-xs uppercase opacity-70 mb-1">Estimated Fee</p>
-          {isRevealed ? <p className="font-display text-3xl">{fee}</p> : <p className="font-display text-3xl blur-sm select-none">₹XXk–YYL</p>}
-          <p className="text-xs opacity-60 mt-1">Indicative — confirm per booking</p>
+          <p className="font-display text-[10px] uppercase opacity-60 mb-1">Indicative Fee</p>
+          {isRevealed ? <p className="font-display text-3xl">{fee}</p> : <p className="font-display text-3xl blur-sm select-none">₹XX–YYL</p>}
+          <p className="text-[10px] opacity-50 mt-1">Confirm per booking</p>
         </div>
       )}
       <div className="p-5 space-y-4">
-        <h3 className="font-display text-lg uppercase text-ink">Book {artist.name}</h3>
-        {!artist.open_to_bookings && <p className="text-xs bg-ink/5 border-2 border-ink/20 p-3 text-ink/60">Not actively taking bookings — enquiries still welcome.</p>}
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-base uppercase text-ink">Book {artist.name}</h3>
+          {artist.open_to_bookings
+            ? <span className="font-display text-[9px] uppercase bg-acid-yellow text-ink px-2 py-0.5 border border-ink">Open</span>
+            : <span className="font-display text-[9px] uppercase bg-ink/10 text-ink/40 px-2 py-0.5 border border-ink/20">Enquiry</span>}
+        </div>
         {!isRevealed && (
           <>
-            <p className="text-sm text-ink/70">Sign in or enter your email to reveal booking contact and fee.</p>
-            <button onClick={() => openSignIn()} className="w-full bg-ink text-cream font-display text-sm uppercase px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">Sign In to Reveal</button>
-            <div className="relative flex items-center gap-2 text-ink/30 text-xs font-display uppercase"><div className="flex-1 h-px bg-ink/20" /><span>or</span><div className="flex-1 h-px bg-ink/20" /></div>
+            <p className="text-sm text-ink/60">Sign in to reveal booking contact and fee details.</p>
+            <button onClick={()=>openSignIn()} className="w-full bg-ink text-cream font-display text-xs uppercase px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">Sign In to Reveal</button>
+            <div className="flex items-center gap-2 text-ink/20 text-xs"><div className="flex-1 h-px bg-ink/20"/><span>or</span><div className="flex-1 h-px bg-ink/20"/></div>
             <label className="block">
-              <span className="font-display text-xs uppercase text-ink block mb-1">Your Email</span>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none" />
+              <span className="font-display text-[10px] uppercase text-ink block mb-1">Your Email</span>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none"/>
             </label>
-            <button onClick={() => { if(email.includes("@")) setVerified(true); else toast.error("Enter a valid email"); }} className="w-full bg-acid-yellow text-ink font-display text-sm uppercase px-4 py-3 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">Continue as Guest →</button>
+            <button onClick={()=>{if(email.includes("@"))setVerified(true);else toast.error("Valid email needed");}} className="w-full bg-acid-yellow text-ink font-display text-xs uppercase px-4 py-3 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">Continue as Guest →</button>
           </>
         )}
         {isRevealed && !sent && (
           <>
-            {artist.booking_email && (
-              <div className="bg-acid-yellow border-4 border-ink p-3">
-                <p className="font-display text-xs uppercase text-ink/60 mb-1">Direct Booking</p>
-                <a href={`mailto:${artist.booking_email}`} className="font-display text-ink hover:text-magenta break-all">✉ {artist.booking_email}</a>
-              </div>
-            )}
-            {artist.manager_email && artist.manager_email !== artist.booking_email && (
-              <p className="text-sm text-ink/60 font-display">Manager: <a href={`mailto:${artist.manager_email}`} className="underline">{artist.manager_email}</a></p>
-            )}
-            {!artist.booking_email && !artist.manager_email && <p className="text-sm text-ink/60 bg-ink/5 border-2 border-ink/20 p-3">No direct contact — CCD will forward your enquiry.</p>}
-            <label className="block">
-              <span className="font-display text-xs uppercase text-ink block mb-1">Booking Enquiry</span>
-              <textarea value={enquiry} onChange={e=>setEnquiry(e.target.value)} rows={3} placeholder="Date, city, event type, budget…" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none resize-none" />
-            </label>
-            {!user && (
-              <label className="block">
-                <span className="font-display text-xs uppercase text-ink block mb-1">Your Email</span>
-                <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none" />
-              </label>
-            )}
-            <button onClick={sendEnquiry} disabled={busy} className="w-full bg-magenta text-cream font-display text-sm uppercase px-4 py-3 border-4 border-ink disabled:opacity-60 hover:bg-ink transition-colors">{busy ? "Sending…" : "Send Booking Enquiry"}</button>
+            {artist.booking_email && <div className="bg-acid-yellow border-4 border-ink p-3"><p className="font-display text-[9px] uppercase text-ink/50 mb-1">Direct Booking</p><a href={`mailto:${artist.booking_email}`} className="font-display text-sm text-ink hover:text-magenta break-all">✉ {artist.booking_email}</a></div>}
+            {!artist.booking_email && <p className="text-sm text-ink/50 bg-ink/5 border-2 border-ink/10 p-3">CCD will forward your enquiry.</p>}
+            <textarea value={enquiry} onChange={e=>setEnquiry(e.target.value)} rows={3} placeholder="Date, city, event type, budget…" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none resize-none"/>
+            {!user && <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none"/>}
+            <button onClick={send} disabled={busy} className="w-full bg-magenta text-cream font-display text-xs uppercase px-4 py-3 border-4 border-ink disabled:opacity-50 hover:bg-ink transition-colors">{busy?"Sending…":"Send Enquiry"}</button>
           </>
         )}
-        {sent && <div className="text-center py-4"><p className="font-display text-2xl text-ink mb-1">✓ Sent</p><p className="text-ink/60 text-sm">We'll be in touch.</p></div>}
+        {sent && <div className="text-center py-4"><p className="font-display text-2xl text-ink">✓ Sent</p><p className="text-ink/50 text-sm">We'll be in touch.</p></div>}
       </div>
-    </div>
-  );
-}
-
-/* ── EPK Sidebar Panel ──────────────────────────────────────────────────────── */
-function EPKPanel({ artist, dates }: { artist: Artist; dates: ArtistDate[] }) {
-  const [open, setOpen] = useState(false);
-  const city = cityOf(artist); const ig = igUrl(artist.instagram); const sc = ensUrl(artist.soundcloud);
-  return (
-    <div className="border-4 border-ink bg-cream mt-4">
-      <button onClick={() => setOpen(v=>!v)} className="w-full flex items-center justify-between p-4 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors">
-        <span>📄 Press Kit / EPK</span><span>{open?"▲":"▼"}</span>
-      </button>
-      {open && (
-        <div className="border-t-4 border-ink p-5 space-y-3">
-          {[
-            { label:"Artist", val: artist.name },
-            { label:"Based In", val: city || "India" },
-            { label:"Genre(s)", val: artist.genres.join(", ") },
-            { label:"Label(s)", val: artist.labels ?? null },
-            { label:"Notable Stages", val: artist.festivals.slice(0,6).join(" · ") || null },
-          ].filter(f => f.val).map(f => (
-            <div key={f.label} className="bg-ink/5 border-2 border-ink/10 p-2">
-              <p className="font-display text-[9px] uppercase text-ink/40 mb-0.5">{f.label}</p>
-              <p className="font-display text-sm text-ink">{f.val}</p>
-            </div>
-          ))}
-          {artist.bio && (
-            <div className="bg-ink/5 border-2 border-ink/10 p-2">
-              <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Bio</p>
-              <p className="text-xs text-ink/80 line-clamp-4">{artist.bio}</p>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button onClick={() => window.print()} className="flex-1 font-display text-xs uppercase bg-ink text-cream px-3 py-2 border-2 border-ink hover:bg-magenta transition-colors">🖨 Print</button>
-            <button onClick={() => {
-              const text = `${artist.name} — ${artist.genres.join(", ")} — ${city}\n\n${artist.bio??""}\n\nStages: ${artist.festivals.slice(0,5).join(", ")}\nIG: ${ig??""}\nSC: ${sc??""}\nBooking: ${artist.booking_email??"via CCD"}`;
-              navigator.clipboard.writeText(text).then(()=>toast.success("Copied!")).catch(()=>toast.error("Failed"));
-            }} className="flex-1 font-display text-xs uppercase bg-cream text-ink px-3 py-2 border-2 border-ink hover:bg-acid-yellow transition-colors">📋 Copy</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -544,16 +423,27 @@ function EPKPanel({ artist, dates }: { artist: Artist; dates: ArtistDate[] }) {
 /* ── Main Page ────────────────────────────────────────────────────────────── */
 const ArtistDetail = () => {
   const router = useRouter();
-  const slug = router.query.slug as string | undefined;
-  const [a, setA] = useState<Artist | null>(null);
+  const slug = router.query.slug as string|undefined;
+  const { user } = useUser();
+  const roleInfo = useUserRole();
+
+  const [a, setA] = useState<Artist|null>(null);
   const [dates, setDates] = useState<ArtistDate[]>([]);
   const [appearances, setAppearances] = useState<Appearance[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [allArtists, setAllArtists] = useState<OtherArtist[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [lightbox, setLightbox] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview"|"journey"|"network"|"venues"|"epk">("overview");
+  const [lightbox, setLightbox] = useState<string|null>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  const isOwnProfile = !!(user && a && (a.claimed_by === user.id || (roleInfo.isArtist && roleInfo.entitySlug === a.slug)));
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", handler);
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -574,11 +464,9 @@ const ArtistDetail = () => {
         featured: raw.featured??false,
       };
       setA(norm);
-
-      // Parallel data fetching
       const [dr, ar, appr, conns] = await Promise.all([
-        fetch(`/api/artist-dates?artist_id=${raw.id}`).then(r=>r.ok?r.json():[]),
-        fetch(`/api/artists`).then(r=>r.ok?r.json():[]),
+        fetch(`/api/artist-dates?artist_id=${raw.id}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
+        fetch(`/api/artists`).then(r=>r.ok?r.json():[]).catch(()=>[]),
         fetch(`/api/event-appearances?artist_slug=${slug}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
         fetch(`/api/artist-connections?slug=${slug}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
       ]);
@@ -590,22 +478,22 @@ const ArtistDetail = () => {
     })();
   }, [slug]);
 
-  const rank = useMemo(() => a ? getSceneRank(a, appearances) : null, [a, appearances]);
-  const venueData = useMemo(() => getVenueAffinity(appearances), [appearances]);
-  const related = useMemo(() => allArtists.filter(x=>x.slug!==slug).sort(()=>Math.random()-0.5).slice(0,4), [allArtists, slug]);
-  const connectedSlugs = useMemo(() => new Set(connections.map(c => c.artist_a_slug===slug?c.artist_b_slug:c.artist_a_slug)), [connections, slug]);
+  const upcoming = useMemo(() => dates.filter(d=>new Date(d.event_date+"T00:00:00")>=new Date()).sort((x,y)=>x.event_date.localeCompare(y.event_date)), [dates]);
+  const past     = useMemo(() => dates.filter(d=>new Date(d.event_date+"T00:00:00")<new Date()).sort((x,y)=>y.event_date.localeCompare(x.event_date)), [dates]);
+  const related  = useMemo(() => allArtists.filter(x=>x.slug!==slug).sort(()=>Math.random()-0.5).slice(0,5), [allArtists, slug]);
+  const ytVideos = useMemo(() => (a?.videos??[]).filter(v=>v.youtube_id), [a]);
 
   if (loading) return (
-    <div className="min-h-screen bg-cream"><Nav />
-      <div className="flex items-center justify-center min-h-[80vh] pt-20"><div className="space-y-4 text-center">
-        <div className="w-24 h-24 bg-ink/5 border-4 border-ink/10 mx-auto animate-pulse" />
-        <div className="h-6 w-48 bg-ink/10 mx-auto animate-pulse" />
-      </div></div>
+    <div className="min-h-screen bg-cream"><Nav/>
+      <div className="flex items-center justify-center min-h-[80vh] pt-20 gap-4 flex-col">
+        <div className="w-20 h-20 bg-ink/5 border-4 border-ink/10 animate-pulse"/>
+        <div className="h-5 w-40 bg-ink/10 animate-pulse"/>
+      </div>
     </div>
   );
 
-  if (notFound || !a) return (
-    <div className="min-h-screen bg-cream"><Nav />
+  if (notFound||!a) return (
+    <div className="min-h-screen bg-cream"><Nav/>
       <div className="container py-32 text-center">
         <p className="font-display text-4xl text-ink uppercase mb-4">Artist not found.</p>
         <a href="/artists" className="font-display underline text-magenta">← All artists</a>
@@ -615,26 +503,18 @@ const ArtistDetail = () => {
 
   const city = cityOf(a);
   const sc = ensUrl(a.soundcloud); const ig = igUrl(a.instagram);
-  const ytVideos = a.videos.filter(v=>v.youtube_id);
-  const upcoming = dates.filter(d=>new Date(d.event_date+"T00:00:00")>=new Date()).sort((x,y)=>x.event_date.localeCompare(y.event_date));
   const coverImg = a.photo_url||(ytVideos[0]?`https://img.youtube.com/vi/${ytVideos[0].youtube_id}/maxresdefault.jpg`:null)||(a.gallery[0]?.url??null);
-
-  const statsItems = [
-    a.festivals.length>0 && { n:a.festivals.length, label:"Stage credits" },
-    dates.filter(d=>new Date(d.event_date)<new Date()).length>0 && { n:dates.filter(d=>new Date(d.event_date)<new Date()).length, label:"Shows played" },
-    appearances.length>0 && { n:appearances.length, label:"Recorded shows" },
-    [...new Set(dates.map(d=>d.city).filter(Boolean))].length>1 && { n:[...new Set(dates.map(d=>d.city).filter(Boolean))].length, label:"Cities" },
-    connections.length>0 && { n:connections.length, label:"Connections" },
-    ytVideos.length>0 && { n:ytVideos.length, label:"Videos" },
+  const emerging = isEmerging(a, appearances);
+  const totalShows = dates.length + appearances.length;
+  const allCities = [...new Set([...dates.map(d=>d.city), ...appearances.map(ap=>ap.city)].filter(Boolean))];
+  const statItems = [
+    a.festivals.length>0 && { n: a.festivals.length, label: "stage credits" },
+    totalShows>0 && { n: totalShows, label: "shows recorded" },
+    allCities.length>1 && { n: allCities.length, label: "cities played" },
+    connections.length>0 && { n: connections.length, label: "connections" },
+    ytVideos.length>0 && { n: ytVideos.length, label: "videos" },
+    a.gallery.length>0 && { n: a.gallery.length, label: "photos" },
   ].filter(Boolean) as { n:number; label:string }[];
-
-  const TABS = [
-    { key:"overview", label:"Overview"                                                     },
-    { key:"journey",  label:`Journey${dates.length+appearances.length>0?` (${dates.length+appearances.length})`:""}`  },
-    { key:"network",  label:`Network${connections.length>0?` (${connections.length})`:""}`},
-    { key:"venues",   label:`Venues${venueData.length>0?` (${venueData.length})`:""}`     },
-    { key:"epk",      label:"EPK"                                                          },
-  ] as const;
 
   return (
     <div className="min-h-screen bg-cream">
@@ -644,158 +524,286 @@ const ArtistDetail = () => {
         path={`/artists/${a.slug}`}
         jsonLd={{"@context":"https://schema.org","@type":"MusicGroup",name:a.name,genre:a.genres.join(", "),description:a.bio?.slice(0,155),image:coverImg??undefined}}
       />
-      <Nav />
+      <Nav/>
 
+      {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <div className="pt-[60px] md:pt-[72px]">
-        {/* Hero */}
-        <div className="relative w-full h-[45vh] md:h-[60vh] overflow-hidden border-b-4 border-ink">
-          {coverImg ? <img src={coverImg} alt={a.name} className="absolute inset-0 w-full h-full object-cover" /> : <div className="absolute inset-0" style={{background:nameBg(a.name)}} />}
-          <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-transparent to-ink/90" />
-          {a.featured && <div className="absolute top-0 right-0 bg-acid-yellow text-ink font-display text-xs px-4 py-2 border-b-4 border-l-4 border-ink uppercase">⭐ CCD Featured</div>}
-          <div className="absolute bottom-0 inset-x-0 p-6 md:p-10">
-            <a href="/artists" className="font-display text-xs uppercase text-cream/40 hover:text-cream mb-3 inline-block">← All artists</a>
-            <div className="flex flex-wrap items-end gap-3 mb-3">
-              {a.genres.map(g=><span key={g} className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-2 py-1 border-2 border-ink">{g}</span>)}
-              {city && <span className="font-display text-[10px] uppercase bg-cream/10 border border-cream/30 text-cream px-2 py-1">📍 {city}</span>}
-              {rank && <SceneRankBadge rank={rank} />}
-            </div>
-            <h1 className="font-display text-5xl sm:text-7xl md:text-8xl text-cream uppercase leading-none" style={{textShadow:"4px 4px 0 rgba(0,0,0,0.4)"}}>{a.name}</h1>
-            {a.members && <p className="text-cream/50 text-sm mt-2">{a.members}</p>}
+        <div className="relative w-full overflow-hidden border-b-4 border-ink" style={{height:"min(70vh, 580px)"}}>
+          {coverImg
+            ? <img src={coverImg} alt={a.name} className="absolute inset-0 w-full h-full object-cover"/>
+            : <div className="absolute inset-0" style={{background:nameBg(a.name)}}/>}
+          <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink"/>
+
+          {/* Back */}
+          <div className="absolute top-5 left-5">
+            <a href="/artists" className="font-display text-[10px] uppercase text-cream/50 hover:text-cream bg-ink/40 px-3 py-1.5 border border-cream/20 backdrop-blur-sm">← All artists</a>
           </div>
-        </div>
 
-        {/* Meta strip */}
-        <div className="bg-ink text-cream border-b-4 border-cream/10">
-          <div className="container py-3 flex flex-wrap items-center gap-3 justify-between">
-            <div className="flex items-center gap-2 flex-wrap text-cream/40 font-display text-xs">
-              {a.labels && <span className="border border-cream/20 px-2 py-1">{a.labels}</span>}
-              {connections.length>0 && <span>{connections.length} connections</span>}
-              {a.festivals.length>0 && <span>· {a.festivals.length} stage credits</span>}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {ig && <a href={ig} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 border-2 border-cream/30 text-cream hover:border-cream">Instagram ↗</a>}
-              {sc && <a href={sc} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#ff5500] text-cream border-2 border-[#ff5500] hover:opacity-80">SoundCloud ↗</a>}
-              {ensUrl(a.spotify) && <a href={ensUrl(a.spotify)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#1db954] text-cream border-2 border-[#1db954]">Spotify ↗</a>}
-              {ensUrl(a.bandcamp) && <a href={ensUrl(a.bandcamp)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#1da0c3] text-cream border-2 border-[#1da0c3]">Bandcamp ↗</a>}
-              {ensUrl(a.website) && <a href={ensUrl(a.website)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 border-2 border-cream/30 text-cream">Website ↗</a>}
-            </div>
+          {/* Badges top right */}
+          <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
+            {a.featured && <span className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-3 py-1.5 border-2 border-ink">⭐ CCD Featured</span>}
+            {emerging && <span className="font-display text-[10px] uppercase bg-electric-blue text-cream px-3 py-1.5 border-2 border-cream/30">✦ Emerging</span>}
+            {isOwnProfile && <span className="font-display text-[10px] uppercase bg-magenta text-cream px-3 py-1.5 border-2 border-cream/30">Your Profile</span>}
           </div>
-        </div>
 
-        {/* Stats bar */}
-        {statsItems.length > 0 && (
-          <div className="container mt-8">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-px bg-ink border-4 border-ink mb-8">
-              {statsItems.slice(0,6).map(({n,label})=>(
-                <div key={label} className="bg-cream p-4 text-center">
-                  <p className="font-display text-3xl text-ink">{n}</p>
-                  <p className="font-display text-[10px] uppercase text-ink/50 mt-0.5">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tab nav */}
-        <div className="border-b-4 border-ink bg-cream sticky top-[60px] md:top-[72px] z-20">
-          <div className="container">
-            <div className="flex overflow-x-auto">
-              {TABS.map(tab => (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                  className={`font-display text-xs uppercase px-5 py-4 border-r-4 border-ink whitespace-nowrap transition-colors ${activeTab===tab.key ? "bg-ink text-cream" : "text-ink/50 hover:text-ink hover:bg-acid-yellow/30"}`}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Tab content */}
-        <div className="container py-10 grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-2 space-y-10">
-            {activeTab === "overview" && (
-              <>
-                {a.why && <div className="bg-acid-yellow border-4 border-ink p-6"><p className="font-display text-xs uppercase text-ink/60 mb-2">Why book them</p><p className="font-display text-2xl text-ink leading-tight">{a.why}</p></div>}
-                {a.bio && <div><h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Bio</h2><p className="text-ink/90 leading-relaxed whitespace-pre-line">{a.bio}</p></div>}
-                {sc && <div><h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Listen</h2><iframe className="w-full border-4 border-ink" height="200" scrolling="no" frameBorder="no" allow="autoplay" src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(sc)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`} title={`${a.name} on SoundCloud`} /></div>}
-                {ytVideos.length>0 && <div><h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Videos ({ytVideos.length})</h2><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{ytVideos.map(v=><div key={v.youtube_id} className="border-4 border-ink bg-ink overflow-hidden"><div className="aspect-video"><iframe className="w-full h-full" src={`https://www.youtube.com/embed/${v.youtube_id}`} title={v.title??"Video"} allowFullScreen /></div>{v.title&&<p className="font-display text-xs text-cream p-2 truncate">{v.title}</p>}</div>)}</div></div>}
-                {upcoming.length>0 && (
-                  <div>
-                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Upcoming Shows ({upcoming.length})</h2>
-                    <div className="space-y-3">
-                      {upcoming.map(d=>{
-                        const dt=new Date(d.event_date+"T00:00:00");
-                        return (
-                          <div key={d.id} className="flex items-center gap-4 border-4 border-ink p-4 bg-cream hover:bg-acid-yellow/10 transition-colors">
-                            <div className="text-center min-w-[52px]"><p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p><p className="font-display text-xs text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p><p className="font-display text-xs text-ink/30">{dt.getFullYear()}</p></div>
-                            <div className="flex-1"><p className="font-display text-lg text-ink uppercase">{d.city}</p>{d.venue&&<p className="text-sm text-ink/60">{d.venue}</p>}<span className={`text-xs font-display uppercase px-2 py-0.5 border-2 border-ink mt-1 inline-block ${d.status==="confirmed"?"bg-acid-yellow text-ink":d.status==="tentative"?"bg-cream text-ink/50":"bg-ink text-cream"}`}>{d.status}</span></div>
-                            {d.ticket_url&&<a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer" className="font-display text-xs uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0">Tickets →</a>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                <StageCredits festivals={a.festivals} />
-                {a.gallery.length>0 && (
-                  <div><h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Gallery</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {a.gallery.map((g,i)=><figure key={i} className="border-4 border-ink overflow-hidden cursor-zoom-in" onClick={()=>setLightbox(g.url)}><img src={g.url} alt={g.caption??a.name} className="w-full h-40 object-cover hover:scale-105 transition-transform" />{g.caption&&<figcaption className="p-2 font-display text-xs text-ink/60">{g.caption}</figcaption>}</figure>)}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeTab === "journey" && <AppearanceTimeline appearances={appearances} dates={[...upcoming, ...dates.filter(d=>new Date(d.event_date)<new Date()).sort((x,y)=>y.event_date.localeCompare(x.event_date))]} />}
-            {activeTab === "network" && <ConnectionGraph artist={a} connections={connections} allArtists={allArtists} />}
-            {activeTab === "venues" && <VenueAffinity appearances={appearances} artist={a} />}
-
-            {activeTab === "epk" && (
-              <div className="space-y-4">
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2">Press Kit</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  {[{label:"Artist",val:a.name},{label:"Based In",val:city||"India"},{label:"Genre(s)",val:a.genres.join(", ")},{label:"Label(s)",val:a.labels??null}].filter(f=>f.val).map(f=>(
-                    <div key={f.label} className="bg-ink/5 border-4 border-ink/10 p-4"><p className="font-display text-[10px] uppercase text-ink/40 mb-1">{f.label}</p><p className="font-display text-xl text-ink">{f.val}</p></div>
-                  ))}
-                </div>
-                {a.bio && <div className="bg-ink/5 border-4 border-ink/10 p-4"><p className="font-display text-[10px] uppercase text-ink/40 mb-2">Bio</p><p className="text-ink/80 text-sm leading-relaxed">{a.bio}</p></div>}
-                {a.festivals.length>0 && <div className="bg-ink/5 border-4 border-ink/10 p-4"><p className="font-display text-[10px] uppercase text-ink/40 mb-2">Stage Credits</p><p className="text-ink/80 text-sm">{a.festivals.join(", ")}</p></div>}
-                <div className="bg-ink/5 border-4 border-ink/10 p-4"><p className="font-display text-[10px] uppercase text-ink/40 mb-2">Links</p><div className="space-y-1 text-sm text-ink/70">{ig&&<p>Instagram: <a href={ig} className="underline">{ig}</a></p>}{sc&&<p>SoundCloud: <a href={sc} className="underline">{sc}</a></p>}{ensUrl(a.spotify)&&<p>Spotify: <a href={ensUrl(a.spotify)!} className="underline">{ensUrl(a.spotify)}</a></p>}</div></div>
-                {a.gallery.length>0 && <div><p className="font-display text-[10px] uppercase text-ink/40 mb-2">Press Photos</p><div className="grid grid-cols-3 gap-2">{a.gallery.slice(0,6).map((g,i)=><a key={i} href={g.url} target="_blank" rel="noreferrer" className="block border-4 border-ink overflow-hidden hover:opacity-80"><img src={g.url} alt={g.caption??a.name} className="w-full h-24 object-cover" /></a>)}</div></div>}
-                <div className="flex gap-3">
-                  <button onClick={()=>window.print()} className="flex-1 font-display text-sm uppercase bg-ink text-cream px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">🖨 Print / PDF</button>
-                  <button onClick={()=>{ const text=`${a.name}\n${a.genres.join(", ")} — ${city}\n\n${a.bio??""}\n\nStages: ${a.festivals.join(", ")}\n\nIG: ${ig??""}\nSC: ${sc??""}\nBooking: ${a.booking_email??"via CCD"}\nProfile: ${typeof window!=="undefined"?window.location.href:""}`; navigator.clipboard.writeText(text).then(()=>toast.success("Copied!")).catch(()=>toast.error("Failed")); }} className="flex-1 font-display text-sm uppercase bg-cream text-ink px-4 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">📋 Copy EPK</button>
-                </div>
+          {/* Hero content */}
+          <div className="absolute bottom-0 inset-x-0 p-6 md:p-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {a.genres.map(g => <span key={g} className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-2 py-1 border-2 border-ink">{g}</span>)}
+                {city && <span className="font-display text-[10px] uppercase bg-cream/10 border border-cream/20 text-cream px-2 py-1">📍 {city}</span>}
+                {a.labels && <span className="font-display text-[10px] text-cream/50 border border-cream/20 px-2 py-1">{a.labels}</span>}
               </div>
-            )}
-          </div>
+              <h1 className="font-display text-5xl sm:text-7xl md:text-8xl lg:text-9xl text-cream uppercase leading-none tracking-tight"
+                style={{textShadow:"3px 3px 0 rgba(0,0,0,0.3)"}}>{a.name}</h1>
+              {a.members && <p className="text-cream/50 text-sm mt-2">{a.members}</p>}
+            </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
-            <div className="lg:sticky lg:top-[140px]">
-              <ContactGate artist={a} />
-              <EPKPanel artist={a} dates={dates} />
-              {!a.claimed_by && (
-                <div className="border-4 border-ink bg-ink text-cream p-4 mt-4">
-                  <p className="font-display text-sm uppercase mb-2">Are you {a.name}?</p>
-                  <a href={`/sign-in?redirect_url=/artist/dashboard?claim=${a.id}`} className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-cream inline-block hover:bg-cream transition-colors">Claim this profile →</a>
+            {/* Social links */}
+            <div className="flex flex-wrap gap-2 shrink-0">
+              {ig && <a href={ig} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 border-2 border-cream/40 text-cream hover:border-cream hover:bg-cream hover:text-ink transition-all">IG ↗</a>}
+              {sc && <a href={sc} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#ff5500] text-cream border-2 border-[#ff5500]">SC ↗</a>}
+              {ensUrl(a.spotify) && <a href={ensUrl(a.spotify)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#1db954] text-cream border-2 border-[#1db954]">SP ↗</a>}
+              {ensUrl(a.bandcamp) && <a href={ensUrl(a.bandcamp)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#1da0c3] text-cream border-2 border-[#1da0c3]">BC ↗</a>}
+              {ensUrl(a.website) && <a href={ensUrl(a.website)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 border-2 border-cream/40 text-cream hover:border-cream">WEB ↗</a>}
+              <a href="#epk" className="font-display text-[10px] uppercase px-3 py-2 bg-cream text-ink border-2 border-cream hover:bg-acid-yellow transition-colors">EPK ↓</a>
+            </div>
+          </div>
+        </div>
+
+        {/* ── STATS RIBBON ─────────────────────────────────────────────── */}
+        {statItems.length > 0 && (
+          <div className="bg-ink border-b-4 border-ink overflow-hidden">
+            <div className="flex overflow-x-auto">
+              {statItems.map(({n,label}) => (
+                <div key={label} className="shrink-0 px-8 py-5 text-center border-r border-cream/10 last:border-r-0">
+                  <p className="font-display text-3xl text-cream">{n}</p>
+                  <p className="font-display text-[10px] uppercase text-cream/40 mt-0.5 whitespace-nowrap">{label}</p>
+                </div>
+              ))}
+              {a.available_cities.length>0 && (
+                <div className="shrink-0 px-8 py-5 text-center border-r border-cream/10">
+                  <p className="font-display text-xs uppercase text-cream/40 mb-1">Available in</p>
+                  <p className="font-display text-sm text-cream">{a.available_cities.slice(0,4).join(" · ")}</p>
                 </div>
               )}
             </div>
           </div>
+        )}
+
+        {/* ── MAIN BODY (2-col) ─────────────────────────────────────────── */}
+        <div className="container py-10 grid grid-cols-1 lg:grid-cols-3 gap-10">
+
+          {/* CONTENT (left 2/3) */}
+          <div className="lg:col-span-2 space-y-16">
+
+            {/* BIO + WHY BOOK */}
+            {(a.bio || a.why) && (
+              <div>
+                {a.why && (
+                  <div className="bg-acid-yellow border-4 border-ink p-6 mb-6">
+                    <p className="font-display text-[10px] uppercase text-ink/50 mb-2">Why Book</p>
+                    <p className="font-display text-2xl md:text-3xl text-ink leading-tight">"{a.why}"</p>
+                  </div>
+                )}
+                {a.bio && (
+                  <p className="text-ink/80 leading-relaxed text-base whitespace-pre-line">{a.bio}</p>
+                )}
+              </div>
+            )}
+
+            {/* MUSIC */}
+            {sc && (
+              <div>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-1 h-px bg-ink/10"/>
+                  <p className="font-display text-xs uppercase text-ink/40 shrink-0">Listen</p>
+                  <div className="flex-1 h-px bg-ink/10"/>
+                </div>
+                <iframe className="w-full border-4 border-ink" height="180" scrolling="no" frameBorder="no" allow="autoplay"
+                  src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(sc)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`}
+                  title={`${a.name} on SoundCloud`}/>
+              </div>
+            )}
+
+            {/* UPCOMING SHOWS */}
+            {upcoming.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1">Upcoming Shows</p>
+                  <span className="font-display text-xs text-ink/30">{upcoming.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {upcoming.map(d => {
+                    const dt = new Date(d.event_date+"T00:00:00");
+                    const isClose = (dt.getTime()-Date.now()) < 7*86400000;
+                    return (
+                      <div key={d.id} className={`flex items-center gap-4 border-4 p-4 ${isClose ? "border-magenta bg-magenta/5" : "border-ink bg-cream"}`}>
+                        <div className="text-center min-w-[48px]">
+                          <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
+                          <p className="font-display text-[10px] text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
+                          <p className="font-display text-[9px] text-ink/30">{dt.getFullYear()}</p>
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-display text-base text-ink uppercase">{d.city}</p>
+                          {d.venue && <p className="text-sm text-ink/50">{d.venue}</p>}
+                          <span className={`text-[9px] font-display uppercase px-1.5 py-0.5 border mt-1 inline-block ${d.status==="confirmed"?"bg-acid-yellow text-ink border-acid-yellow":"border-ink/20 text-ink/40"}`}>{d.status}</span>
+                        </div>
+                        {isClose && <span className="font-display text-[9px] uppercase bg-magenta text-cream px-2 py-1 animate-pulse">SOON</span>}
+                        {d.ticket_url && <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0 hover:bg-ink transition-colors">Tickets →</a>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* PAST SHOWS / TIMELINE */}
+            {past.length > 0 && (
+              <div>
+                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Show History</p>
+                <div className="space-y-2">
+                  {past.slice(0,8).map(d => {
+                    const dt = new Date(d.event_date+"T00:00:00");
+                    return (
+                      <div key={d.id} className="flex items-center gap-4 border-2 border-ink/10 p-3 opacity-70 hover:opacity-100 transition-opacity">
+                        <div className="text-center min-w-[44px]">
+                          <p className="font-display text-lg text-ink leading-none">{dt.getDate()}</p>
+                          <p className="font-display text-[9px] text-ink/40 uppercase">{dt.toLocaleString("en",{month:"short"})} {dt.getFullYear()}</p>
+                        </div>
+                        <div>
+                          <p className="font-display text-sm text-ink">{d.city}</p>
+                          {d.venue && <p className="text-xs text-ink/40">{d.venue}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {past.length > 8 && <p className="text-xs text-ink/30 font-display uppercase text-center pt-2">+{past.length-8} more shows</p>}
+                </div>
+              </div>
+            )}
+
+            {/* STAGE CREDITS */}
+            {a.festivals.length > 0 && (
+              <div>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-1 h-px bg-ink/10"/>
+                  <p className="font-display text-xs uppercase text-ink/40 shrink-0">Stage Credits</p>
+                  <div className="flex-1 h-px bg-ink/10"/>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {a.festivals.map(f => (
+                    <span key={f} className="font-display text-xs px-3 py-1.5 border-4 border-ink chunk-shadow bg-cream text-ink hover:bg-acid-yellow transition-colors cursor-default">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* CONNECTION GRAPH */}
+            {connections.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1">The Network</p>
+                  <span className="font-display text-xs text-ink/30">{connections.length} connections</span>
+                </div>
+                <ConnectionGraph artist={a} connections={connections} allArtists={allArtists}/>
+              </div>
+            )}
+
+            {/* VENUE AFFINITY */}
+            {(appearances.length > 0 || a.festivals.length > 1) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <VenueAffinity appearances={appearances} festivals={a.festivals}/>
+                {allCities.length > 1 && (
+                  <div>
+                    <p className="font-display text-xs uppercase text-ink/40 mb-4">Cities Played</p>
+                    <div className="flex flex-wrap gap-2">
+                      {allCities.map(c => c && (
+                        <span key={c} className="font-display text-xs uppercase bg-ink text-cream px-3 py-1.5 border-2 border-ink">📍 {c}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIDEOS */}
+            {ytVideos.length > 0 && (
+              <div>
+                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Videos</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {ytVideos.map(v => (
+                    <div key={v.youtube_id} className="border-4 border-ink bg-ink overflow-hidden">
+                      <div className="aspect-video"><iframe className="w-full h-full" src={`https://www.youtube.com/embed/${v.youtube_id}`} title={v.title??"Video"} allowFullScreen/></div>
+                      {v.title && <p className="font-display text-xs text-cream p-2 truncate">{v.title}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* GALLERY */}
+            {a.gallery.length > 0 && (
+              <div>
+                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Gallery</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {a.gallery.map((g,i) => (
+                    <figure key={i} className="border-4 border-ink overflow-hidden cursor-zoom-in" onClick={()=>setLightbox(g.url)}>
+                      <img src={g.url} alt={g.caption??a.name} className="w-full h-40 object-cover hover:scale-105 transition-transform"/>
+                      {g.caption && <figcaption className="p-2 font-display text-[10px] text-ink/50">{g.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* EPK */}
+            <EPKCard artist={a} dates={dates} appearances={appearances} isOwnProfile={isOwnProfile}
+              onEdit={isOwnProfile ? () => router.push(`/artist/dashboard`) : undefined}/>
+          </div>
+
+          {/* SIDEBAR (right 1/3) */}
+          <div className="space-y-4">
+            <BookingGate artist={a}/>
+
+            {!a.claimed_by && (
+              <div className="border-4 border-ink bg-ink text-cream p-4">
+                <p className="font-display text-sm uppercase mb-2">Are you {a.name}?</p>
+                <p className="text-xs text-cream/50 mb-3">Claim this profile to edit your bio, add links, manage bookings, and download your EPK.</p>
+                <a href={`/sign-in?redirect_url=/artist/dashboard?claim=${a.id}`}
+                  className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-cream inline-block hover:bg-cream transition-colors">
+                  Claim this profile →
+                </a>
+              </div>
+            )}
+
+            {isOwnProfile && (
+              <div className="border-4 border-acid-yellow bg-acid-yellow p-4">
+                <p className="font-display text-sm uppercase text-ink mb-2">✦ Artist Profile</p>
+                <p className="text-xs text-ink/60 mb-3">Edit your bio, links, gallery, and download your press kit.</p>
+                <a href="/artist/dashboard" className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-2 border-ink inline-block hover:bg-magenta transition-colors">Edit Profile →</a>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Related */}
-        {related.length>0 && (
+        {/* RELATED */}
+        {related.length > 0 && (
           <section className="border-t-4 border-ink bg-ink text-cream py-12">
             <div className="container">
-              <h2 className="font-display text-2xl uppercase text-cream mb-6">More From The Scene</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {related.map(r=>(
+              <p className="font-display text-2xl uppercase text-cream mb-6">More From The Scene</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {related.map(r => (
                   <a key={r.id} href={`/artists/${r.slug}`} className="block border-4 border-cream/20 hover:border-cream transition-colors overflow-hidden group">
-                    {r.photo_url ? <img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="w-full h-32 flex items-center justify-center font-display text-4xl text-cream/20" style={{background:nameBg(r.name)}}>{r.name[0]}</div>}
-                    <div className="p-3"><p className="font-display text-cream uppercase text-sm">{r.name}</p><p className="text-cream/40 text-xs mt-0.5">{r.based_city||""}</p></div>
+                    {r.photo_url
+                      ? <img src={r.photo_url} alt={r.name} className="w-full h-28 object-cover group-hover:scale-105 transition-transform duration-300"/>
+                      : <div className="w-full h-28 flex items-center justify-center font-display text-3xl text-cream/20" style={{background:nameBg(r.name)}}>{r.name[0]}</div>}
+                    <div className="p-2">
+                      <p className="font-display text-cream uppercase text-xs truncate">{r.name}</p>
+                      <p className="text-cream/30 text-[10px] mt-0.5">{r.based_city||""}</p>
+                    </div>
                   </a>
                 ))}
               </div>
@@ -804,8 +812,12 @@ const ArtistDetail = () => {
         )}
       </div>
 
-      {lightbox && <div className="fixed inset-0 bg-ink/95 z-50 flex items-center justify-center p-4 cursor-zoom-out" onClick={()=>setLightbox(null)}><img src={lightbox} alt="Gallery" className="max-w-full max-h-full object-contain border-4 border-cream" /></div>}
-      <Footer />
+      {lightbox && (
+        <div className="fixed inset-0 bg-ink/95 z-50 flex items-center justify-center p-4 cursor-zoom-out" onClick={()=>setLightbox(null)}>
+          <img src={lightbox} alt="Gallery" className="max-w-full max-h-full object-contain border-4 border-cream"/>
+        </div>
+      )}
+      <Footer/>
     </div>
   );
 };

@@ -136,3 +136,59 @@ insert into venue_profiles (slug, name, city, capacity, genre_focus, tier, is_ve
   ('echoes-blr',            'Echoes',                'Bangalore', 200,  '{Techno,House,Ambient}',    'basement', true),
   ('the-stamp-blr',         'The Stamp',             'Bangalore', 400,  '{House,Disco,Electronic}',  'club',     true)
 on conflict (slug) do nothing;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- PRIVILEGE SYSTEM
+-- ══════════════════════════════════════════════════════════════════════════════
+
+create table if not exists user_roles (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     text not null unique,       -- Clerk user ID
+  email       text,
+  role        text not null default 'user', -- user | artist | promoter | venue | admin
+  entity_id   text,                       -- FK to artists.id / venue_profiles.id / promoters.id
+  entity_slug text,                       -- artist slug etc for fast lookups
+  entity_name text,                       -- display name
+  granted_by  text,                       -- admin user_id who granted this
+  granted_at  timestamptz default now(),
+  notes       text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists idx_ur_user_id on user_roles (user_id);
+create index if not exists idx_ur_role    on user_roles (role);
+create index if not exists idx_ur_entity  on user_roles (entity_id);
+
+-- Role applications (people applying for artist / promoter / venue status)
+create table if not exists role_applications (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         text not null,
+  email           text not null,
+  display_name    text not null,
+  requested_role  text not null,  -- artist | promoter | venue
+  entity_id       text,           -- if claiming existing entity
+  entity_slug     text,
+  message         text,           -- why they want access
+  links           jsonb default '{}', -- instagram, soundcloud, etc.
+  status          text not null default 'pending', -- pending | approved | rejected
+  reviewed_by     text,
+  reviewed_at     timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_ra_user_id on role_applications (user_id);
+create index if not exists idx_ra_status  on role_applications (status);
+
+alter table user_roles        enable row level security;
+alter table role_applications enable row level security;
+
+create policy "public read user_roles"         on user_roles        for select using (true);
+create policy "service write user_roles"       on user_roles        for insert with check (true);
+create policy "service update user_roles"      on user_roles        for update using (true);
+create policy "public read role_applications"  on role_applications for select using (true);
+create policy "service write role_applications" on role_applications for insert with check (true);
+create policy "service update role_applications" on role_applications for update using (true);
+
+-- Data for appearances/connections (run AFTER migration, put in a separate file or paste after)
+-- See scripts/sql/002_seed_data.sql

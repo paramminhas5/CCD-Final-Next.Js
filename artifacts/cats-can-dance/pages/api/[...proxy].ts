@@ -587,6 +587,82 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  // PRIVILEGE SYSTEM
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // GET /api/user-role?user_id=xxx → returns role info for a user
+  if (path === "user-role" && m === "GET") {
+    const userId = rq.user_id;
+    if (!userId) return res.json({ role: "user", entity_id: null, entity_slug: null });
+    const rows = await get("user_roles", `?user_id=eq.${encodeURIComponent(userId)}&limit=1`) as any[];
+    if (!rows?.length) return res.json({ role: "user", entity_id: null, entity_slug: null, entity_name: null });
+    return res.json(rows[0]);
+  }
+
+  // POST /api/user-role (admin) → grant a role
+  if (path === "user-role" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const now = new Date().toISOString();
+    const existing = await get("user_roles", `?user_id=eq.${encodeURIComponent(body.user_id)}&limit=1`) as any[];
+    if (existing.length) {
+      const { ok } = await patch("user_roles", pq(eqf("user_id", body.user_id)), { ...body, updated_at: now });
+      return ok ? res.json({ ok: true, action: "updated" }) : res.status(400).json({ error: "Failed" });
+    }
+    const { ok, data } = await ins("user_roles", { ...body, created_at: now, updated_at: now });
+    return ok ? res.json({ ok: true, action: "created", data }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // GET /api/role-applications (admin)
+  if (path === "role-applications" && m === "GET") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const f: Record<string,string> = { ...ord("created_at", false) };
+    if (rq.status) f["status"] = `eq.${rq.status}`;
+    return res.json(await get("role_applications", pq(f)));
+  }
+
+  // POST /api/role-applications → submit application
+  if (path === "role-applications" && m === "POST") {
+    const { user_id, email, display_name, requested_role, entity_id, entity_slug, message, links } = body;
+    if (!user_id || !email || !requested_role) return res.status(400).json({ error: "user_id, email, requested_role required" });
+    const { ok } = await ins("role_applications", {
+      user_id, email, display_name, requested_role, entity_id: entity_id??null,
+      entity_slug: entity_slug??null, message: message??null, links: links??{},
+      status: "pending", created_at: new Date().toISOString()
+    });
+    return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // PATCH /api/role-applications/[id] → review (admin)
+  if (segs[0] === "role-applications" && segs[1] && m === "PATCH") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const now = new Date().toISOString();
+    const { status, reviewer_id } = body;
+    const { ok } = await patch("role_applications", pq(eqf("id", segs[1])), {
+      status, reviewed_by: reviewer_id, reviewed_at: now
+    });
+    // If approved — grant the role
+    if (ok && status === "approved") {
+      const apps = await get("role_applications", pq(eqf("id", segs[1]))) as any[];
+      if (apps.length) {
+        const app = apps[0];
+        const existing = await get("user_roles", pq(eqf("user_id", app.user_id))) as any[];
+        if (existing.length) {
+          await patch("user_roles", pq(eqf("user_id", app.user_id)), { role: app.requested_role, entity_id: app.entity_id, entity_slug: app.entity_slug, entity_name: app.display_name, granted_by: reviewer_id, granted_at: now, updated_at: now });
+        } else {
+          await ins("user_roles", { user_id: app.user_id, email: app.email, role: app.requested_role, entity_id: app.entity_id, entity_slug: app.entity_slug, entity_name: app.display_name, granted_by: reviewer_id, granted_at: now, created_at: now, updated_at: now });
+        }
+      }
+    }
+    return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // GET /api/admin-roles (admin) — list all user roles
+  if (path === "admin-roles" && m === "GET") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    return res.json(await get("user_roles", pq(ord("created_at", false))));
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // KNOWLEDGE GRAPH ROUTES
   // ════════════════════════════════════════════════════════════════════════════
 
