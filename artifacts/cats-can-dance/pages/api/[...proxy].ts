@@ -327,6 +327,132 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
   }
 
+  // ── Artists: basic profile + appearances (/api/artists/:slug/basic) ─────────
+  if (segs[0] === "artists" && segs[2] === "basic" && m === "GET") {
+    const slug = segs[1];
+    const artistRows = await get("artists", pq(eqf("slug", slug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Not found" });
+    const artist = artistRows[0];
+
+    // appearances — try both old schema (venue_name/venue_city) and new (venue/city)
+    let appearances: any[] = [];
+    try {
+      const raw = await get("event_appearances", `?artist_slug=eq.${slug}&order=event_date.desc&limit=50`) as any[];
+      appearances = (raw ?? []).map((a: any) => ({
+        ...a,
+        venue: a.venue ?? a.venue_name ?? null,
+        city: a.city ?? a.venue_city ?? null,
+        year: a.year ?? (a.event_date ? parseInt(a.event_date.split("-")[0]) : null),
+      }));
+    } catch { /* table may not have all columns yet */ }
+
+    let upcomingDates: any[] = [];
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      upcomingDates = await get("artist_dates", `?artist_id=eq.${artist.id}&event_date=gte.${today}&order=event_date.asc&limit=10`) as any[];
+    } catch { /* ignore */ }
+
+    const stats = {
+      total_gigs: appearances.length,
+      total_cities: new Set(appearances.map((a: any) => a.city).filter(Boolean)).size,
+      total_venues: new Set(appearances.map((a: any) => a.venue).filter(Boolean)).size,
+      total_connections: 0, years_active: 0, b2b_count: 0, festival_count: 0,
+    };
+    if (appearances.length > 0) {
+      const years = appearances.map((a: any) => a.year).filter(Boolean);
+      if (years.length) stats.years_active = Math.max(...years) - Math.min(...years) + 1;
+    }
+
+    return res.json({ artist, appearances, upcomingDates, stats, connections: [], milestones: [], socialStats: null, facts: [] });
+  }
+
+  // ── Artists: full enriched profile (/api/artists/:slug/full) ────────────────
+  if (segs[0] === "artists" && segs[2] === "full" && m === "GET") {
+    const slug = segs[1];
+    const artistRows = await get("artists", pq(eqf("slug", slug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Not found" });
+    const artist = artistRows[0];
+
+    // appearances — normalise column names across old and new schema
+    let appearances: any[] = [];
+    try {
+      const raw = await get("event_appearances", `?artist_slug=eq.${slug}&order=event_date.desc&limit=50`) as any[];
+      appearances = (raw ?? []).map((a: any) => ({
+        ...a,
+        venue: a.venue ?? a.venue_name ?? null,
+        city: a.city ?? a.venue_city ?? null,
+        year: a.year ?? (a.event_date ? parseInt(a.event_date.split("-")[0]) : null),
+      }));
+    } catch { /* resilient */ }
+
+    // connections — try new schema (artist_a_slug/artist_b_slug), fall back to old (artist_id/connected_artist_id)
+    let connections: any[] = [];
+    try {
+      const [asA, asB] = await Promise.all([
+        get("artist_connections", `?artist_a_slug=eq.${slug}&order=strength.desc&limit=20`),
+        get("artist_connections", `?artist_b_slug=eq.${slug}&order=strength.desc&limit=20`),
+      ]) as [any[], any[]];
+      connections = [...(asA ?? []), ...(asB ?? [])];
+      // if new-schema columns not present, try old schema
+      if (!connections.length) {
+        const oldRows = await get("artist_connections", `?artist_id=eq.${artist.id}&limit=20`) as any[];
+        connections = (oldRows ?? []).map((c: any) => ({
+          ...c,
+          artist_a_id: c.artist_id, artist_a_slug: slug,
+          artist_b_id: c.connected_artist_id, artist_b_slug: c.connected_artist_id,
+          strength: 1, shared_events: [], shared_venues: [],
+        }));
+      }
+    } catch { /* resilient */ }
+
+    let upcomingDates: any[] = [];
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      upcomingDates = await get("artist_dates", `?artist_id=eq.${artist.id}&event_date=gte.${today}&order=event_date.asc&limit=10`) as any[];
+    } catch { /* ignore */ }
+
+    let milestones: any[] = [];
+    try { milestones = await get("artist_milestones", `?artist_slug=eq.${slug}&order=date.asc&limit=30`) as any[]; } catch { /* table may not exist */ }
+
+    let socialStats: any = null;
+    try {
+      const ss = await get("artist_social_stats", `?artist_slug=eq.${slug}&order=captured_at.desc&limit=1`) as any[];
+      socialStats = ss?.[0] ?? null;
+    } catch { /* table may not exist */ }
+
+    let discography: any[] = [];
+    try { discography = await get("artist_discography", `?artist_slug=eq.${slug}&order=release_date.desc&limit=20`) as any[]; } catch { /* table may not exist */ }
+
+    let press: any[] = [];
+    try { press = await get("artist_press", `?artist_slug=eq.${slug}&order=date_published.desc&limit=10`) as any[]; } catch { /* table may not exist */ }
+
+    const stats = {
+      total_gigs: appearances.length,
+      total_cities: new Set(appearances.map((a: any) => a.city).filter(Boolean)).size,
+      total_venues: new Set(appearances.map((a: any) => a.venue).filter(Boolean)).size,
+      total_connections: connections.length,
+      years_active: 0,
+      b2b_count: connections.filter((c: any) => c.connection_type === "b2b").length,
+      festival_count: appearances.filter((a: any) => a.role === "headliner").length,
+    };
+    if (appearances.length > 0) {
+      const years = appearances.map((a: any) => a.year).filter(Boolean);
+      if (years.length) stats.years_active = Math.max(...years) - Math.min(...years) + 1;
+    }
+
+    // Generate cool facts inline
+    const facts: any[] = [];
+    if (stats.total_gigs > 0) facts.push({ icon: "🎧", label: "Gigs played", value: String(stats.total_gigs), detail: `Across ${stats.total_cities} cities and ${stats.total_venues} venues` });
+    if (stats.years_active > 1) facts.push({ icon: "📅", label: "Years active", value: String(stats.years_active), detail: "Consistently performing" });
+    if (stats.b2b_count > 0) facts.push({ icon: "🤝", label: "B2B partners", value: String(stats.b2b_count), detail: "Artists they've shared the decks with" });
+    if (stats.festival_count > 0) facts.push({ icon: "🏟️", label: "Festival slots", value: String(stats.festival_count), detail: "Headliner appearances" });
+    const cityCounts = appearances.reduce((acc: any, a: any) => { if (a.city) acc[a.city] = (acc[a.city] || 0) + 1; return acc; }, {});
+    const topCity = Object.entries(cityCounts).sort((x: any, y: any) => y[1] - x[1])[0] as [string, number] | undefined;
+    if (topCity) facts.push({ icon: "📍", label: "Home turf", value: topCity[0], detail: `${topCity[1]} gigs` });
+
+    return res.json({ artist, connections, appearances, upcomingDates, milestones, socialStats, discography, press, stats, facts });
+  }
+
   // ── Artists: by logged-in user (claimed_by) ────────────────────────────────
   if (path === "artists/by-user" && m === "GET") {
     const userId = rq.user_id;
