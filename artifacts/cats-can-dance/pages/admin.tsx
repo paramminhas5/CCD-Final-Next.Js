@@ -1,3 +1,3 @@
 import dynamic from "next/dynamic";
-const Admin = dynamic(() => import("@/pages/Admin"), { ssr: false });
-export default Admin;
+const AdminPanel = dynamic(() => import("@/pages/AdminPanel"), { ssr: false });
+export default AdminPanel;
