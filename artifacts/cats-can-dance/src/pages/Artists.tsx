@@ -1,121 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
-import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import SEO from "@/components/SEO";
-import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase-shim";
+import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Music, MapPin, Search, X, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-type DBArtist = {
-  id: string; slug: string; name: string; members: string | null;
-  from_city: string | null; based_city: string | null;
-  genres: string[]; festivals: string[];
-  bio: string | null; why: string | null;
-  instagram: string | null; soundcloud: string | null; website: string | null;
-  booking_email: string | null; photo_url: string | null; labels: string | null;
-  fee_min_inr: number | null; fee_max_inr: number | null;
-  videos: { youtube_id?: string; title?: string }[];
-  gallery: { url: string }[];
-};
+interface DBArtist {
+  id: string;
+  slug: string;
+  name: string;
+  members?: string;
+  from_city?: string;
+  based_city?: string;
+  genres: string[];
+  festivals: string[];
+  bio?: string;
+  why?: string;
+  instagram?: string;
+  soundcloud?: string;
+  website?: string;
+  booking_email?: string;
+  photo_url?: string;
+  labels?: string;
+  fee_min_inr?: number;
+  fee_max_inr?: number;
+  videos?: any[];
+  gallery?: any[];
+}
 
-const cityOf = (a: DBArtist) => a.based_city || a.from_city || "";
-const ensureUrl = (s: string | null) =>
-  s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
+function cityOf(a: DBArtist): string {
+  return a.based_city || a.from_city || "";
+}
 
-// Generate a stable pastel-ish bg from name
-const nameBg = (name: string) => {
-  const colors = [
-    "bg-magenta", "bg-electric-blue", "bg-ink",
-    "bg-orange", "bg-acid-yellow",
-  ];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return colors[Math.abs(h) % colors.length];
-};
-const nameTextColor = (bg: string) =>
-  bg === "bg-acid-yellow" ? "text-ink" : "text-cream";
-
-// Grab first YouTube thumbnail or null
-const ytThumb = (a: DBArtist): string | null => {
-  const vid = Array.isArray(a.videos) ? a.videos.find((v) => v.youtube_id) : null;
-  return vid?.youtube_id
-    ? `https://img.youtube.com/vi/${vid.youtube_id}/mqdefault.jpg`
-    : null;
-};
-
-const cover = (a: DBArtist) =>
-  a.photo_url ||
-  (Array.isArray(a.gallery) && a.gallery[0]?.url) ||
-  ytThumb(a);
-
-function ArtistCard({ a, size = "md" }: { a: DBArtist; size?: "sm" | "md" | "lg" }) {
-  const bg = nameBg(a.name);
-  const tc = nameTextColor(bg);
-  const img = cover(a);
-  const initials = a.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const scUrl = a.soundcloud ? ensureUrl(a.soundcloud) : null;
-  const igUrl = a.instagram ? ensureUrl(a.instagram.startsWith("http") ? a.instagram : `https://instagram.com/${a.instagram.replace(/^@/, "")}`) : null;
-
-  return (
-    <a
-      href={`/artists/${a.slug}`}
-      className={`group relative block overflow-hidden border-4 border-ink chunk-shadow
-        hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-all
-        ${size === "lg" ? "aspect-[3/4]" : size === "sm" ? "aspect-square" : "aspect-[4/5]"}`}
-    >
-      {/* Cover image or colour block */}
-      {img ? (
-        <img
-          src={img} alt={a.name}
-          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
-      ) : (
-        <div className={`absolute inset-0 ${bg} flex items-center justify-center`}>
-          <span className={`font-display leading-none select-none ${tc}
-            ${size === "sm" ? "text-4xl" : "text-6xl md:text-8xl"} opacity-30`}>
-            {initials}
-          </span>
-        </div>
-      )}
-
-      {/* Overlay gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/20 to-transparent" />
-
-      {/* Content */}
-      <div className="absolute inset-x-0 bottom-0 p-3 md:p-4">
-        <p className="font-display text-cream leading-tight uppercase
-          text-base md:text-lg truncate">
-          {a.name}
-        </p>
-        {cityOf(a) && (
-          <p className="text-cream/60 text-xs mt-0.5 truncate">{cityOf(a)}</p>
-        )}
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {a.genres.slice(0, 2).map((g) => (
-            <span key={g}
-              className="text-[9px] font-display uppercase bg-acid-yellow text-ink px-1.5 py-0.5 leading-none">
-              {g}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* SC/IG badges top-right */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {scUrl && (
-          <span onClick={(e) => { e.preventDefault(); window.open(scUrl, "_blank"); }}
-            className="text-[9px] font-display bg-[#ff5500] text-cream px-1.5 py-1 leading-none border border-cream/20">
-            SC
-          </span>
-        )}
-        {igUrl && (
-          <span onClick={(e) => { e.preventDefault(); window.open(igUrl, "_blank"); }}
-            className="text-[9px] font-display bg-cream/10 text-cream px-1.5 py-1 leading-none border border-cream/20 backdrop-blur-sm">
-            IG
-          </span>
-        )}
-      </div>
-    </a>
-  );
+function cover(a: DBArtist): string | null {
+  if (a.photo_url) return a.photo_url;
+  if (a.gallery && a.gallery.length > 0) {
+    const first = a.gallery[0];
+    if (typeof first === "string") return first;
+    if (first?.url) return first.url;
+    if (first?.src) return first.src;
+  }
+  if (a.videos && a.videos.length > 0) {
+    const first = a.videos[0];
+    if (typeof first === "string") return first;
+    if (first?.thumbnail) return first.thumbnail;
+    if (first?.cover) return first.cover;
+  }
+  return null;
 }
 
 type SortMode = "az" | "city" | "genre";
@@ -123,23 +55,60 @@ type SortMode = "az" | "city" | "genre";
 export default function ArtistsPage() {
   const [artists, setArtists] = useState<DBArtist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [city, setCity] = useState("All");
   const [activeGenres, setActiveGenres] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortMode>("az");
+  const { toast } = useToast();
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("artists")
-        .select("id,slug,name,members,from_city,based_city,genres,festivals,bio,why,instagram,soundcloud,website,booking_email,photo_url,labels,fee_min_inr,fee_max_inr,videos,gallery")
-        .eq("status", "approved")
-        .order("name", { ascending: true });
-      if (error) console.error("artists fetch", error);
-      setArtists((data ?? []) as DBArtist[]);
-      setLoading(false);
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from("artists")
+          .select("id,slug,name,members,from_city,based_city,genres,festivals,bio,why,instagram,soundcloud,website,booking_email,photo_url,labels,fee_min_inr,fee_max_inr,videos,gallery")
+          .eq("status", "approved")
+          .order("name", { ascending: true });
+
+        if (error) {
+          console.error("artists fetch error:", error);
+          setError(error.message);
+          toast({
+            title: "Error loading artists",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          setArtists((data ?? []) as DBArtist[]);
+          if ((data ?? []).length === 0) {
+            // Also try without status filter to see if that's the issue
+            const { data: allData, error: allError } = await supabase
+              .from("artists")
+              .select("id,slug,name,members,from_city,based_city,genres,festivals,bio,why,instagram,soundcloud,website,booking_email,photo_url,labels,fee_min_inr,fee_max_inr,videos,gallery")
+              .order("name", { ascending: true })
+              .limit(5);
+
+            if (!allError && (allData ?? []).length > 0) {
+              setError("No approved artists found. Artists exist but may have a different status value. Check the 'status' column in your database.");
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error("Unexpected error fetching artists:", e);
+        setError(e.message || "Unexpected error");
+        toast({
+          title: "Error loading artists",
+          description: e.message || "Please check your connection and try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, []);
+  }, [toast]);
 
   const allCities = useMemo(() => {
     const s = new Set<string>();
@@ -187,128 +156,199 @@ export default function ArtistsPage() {
   const withMedia = useMemo(() => artists.filter((a) => cover(a)), [artists]);
 
   return (
-    <div className="min-h-screen bg-ink">
-      <SEO
-        title="Artists — India's Electronic DJs & Producers | Cats Can Dance"
-        description={`${artists.length || ""}  festival-credentialed Indian electronic artists. Discover and book DJs and producers across India.`}
-        path="/artists"
-        keywords="Indian electronic DJs, India techno house artists, book Indian DJ, Magnetic Fields, DGTL"
-      />
-      <Nav />
-
+    <div className="min-h-screen bg-[#0a0a0f] text-cream">
       {/* ── Compact sticky header ──────────────────────────────────────────── */}
-      <div className="sticky top-[60px] md:top-[72px] z-40 bg-ink border-b-4 border-cream/10 pt-4 pb-3 px-4 md:px-8">
-        <div className="max-w-screen-2xl mx-auto flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-          <div className="flex-1">
-            <h1 className="font-display text-cream text-2xl md:text-3xl uppercase leading-none">
-              Artists
-              {!loading && <span className="text-cream/30 ml-3 text-base font-display">/ {artists.length}</span>}
-            </h1>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search…"
-              className="border-2 border-cream/20 bg-cream/5 text-cream placeholder:text-cream/30 h-8 text-sm w-full sm:w-48"
-            />
-            <select value={city} onChange={(e) => setCity(e.target.value)}
-              className="h-8 px-2 border-2 border-cream/20 bg-ink text-cream font-display text-xs">
-              <option value="All">All cities</option>
-              {allCities.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
-              className="h-8 px-2 border-2 border-cream/20 bg-ink text-cream font-display text-xs">
-              <option value="az">A–Z</option>
-              <option value="city">City</option>
-              <option value="genre">Genre</option>
-            </select>
-          </div>
-        </div>
+      <div className="sticky top-0 z-30 bg-[#0a0a0f]/95 backdrop-blur border-b border-cream/10">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <h1 className="text-xl font-bold tracking-tight shrink-0">Artists</h1>
 
-        {/* Genre pills */}
-        {allGenres.length > 0 && (
-          <div className="max-w-screen-2xl mx-auto flex flex-wrap gap-1.5 mt-2">
-            {allGenres.map((g) => {
-              const active = activeGenres.has(g);
-              return (
-                <button key={g} onClick={() => toggleGenre(g)}
-                  className={`text-[10px] font-display uppercase px-2 py-1 border border-cream/20 transition-colors ${
-                    active ? "bg-magenta text-cream border-magenta" : "bg-transparent text-cream/50 hover:text-cream hover:border-cream/50"
-                  }`}>
-                  {g}
-                </button>
-              );
-            })}
-            {activeGenres.size > 0 && (
-              <button onClick={() => setActiveGenres(new Set())}
-                className="text-[10px] font-display text-cream/30 hover:text-cream px-1 underline">
-                clear
-              </button>
-            )}
+            <div className="flex items-center gap-2 flex-1">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/30" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search…"
+                  className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-cream/20 bg-cream/5 text-cream placeholder:text-cream/30 text-sm focus:outline-none focus:border-cream/40"
+                />
+                {q && (
+                  <button onClick={() => setQ("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-cream/40 hover:text-cream">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border border-cream/20 bg-cream/5 text-cream text-sm focus:outline-none focus:border-cream/40"
+              >
+                <option value="All">All cities</option>
+                {allCities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortMode)}
+                className="px-3 py-1.5 rounded-lg border border-cream/20 bg-cream/5 text-cream text-sm focus:outline-none focus:border-cream/40"
+              >
+                <option value="az">A–Z</option>
+                <option value="city">City</option>
+                <option value="genre">Genre</option>
+              </select>
+            </div>
           </div>
-        )}
+
+          {/* Genre pills */}
+          {allGenres.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-hide">
+              {allGenres.map((g) => {
+                const active = activeGenres.has(g);
+                return (
+                  <button
+                    key={g}
+                    onClick={() => toggleGenre(g)}
+                    className={`px-2.5 py-0.5 rounded-full text-xs whitespace-nowrap border transition-colors ${
+                      active
+                        ? "bg-cream/15 border-cream/40 text-cream"
+                        : "border-cream/15 text-cream/50 hover:border-cream/30 hover:text-cream/70"
+                    }`}
+                  >
+                    {g}
+                  </button>
+                );
+              })}
+              {activeGenres.size > 0 && (
+                <button
+                  onClick={() => setActiveGenres(new Set())}
+                  className="px-2 py-0.5 rounded-full text-xs text-cream/40 hover:text-cream/60 border border-cream/10 hover:border-cream/20"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Instagram-style grid ───────────────────────────────────────────── */}
-      <main className="max-w-screen-2xl mx-auto px-2 md:px-4 py-4">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {Array(24).fill(null).map((_, i) => (
-              <div key={i} className="aspect-[4/5] bg-cream/5 animate-pulse border-4 border-cream/10" />
+              <div key={i} className="aspect-square rounded-xl bg-cream/5 animate-pulse" />
             ))}
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <AlertTriangle className="w-12 h-12 text-amber-500/60 mb-4" />
+            <h2 className="text-lg font-semibold text-cream/80 mb-2">Couldn&apos;t load artists</h2>
+            <p className="text-cream/50 text-sm text-center max-w-md mb-4">{error}</p>
+            <div className="flex gap-2">
+              <Button onClick={() => window.location.reload()} variant="outline" className="border-cream/20 text-cream/70">
+                Retry
+              </Button>
+            </div>
+            <div className="mt-6 p-4 rounded-lg bg-cream/5 border border-cream/10 max-w-lg">
+              <p className="text-xs text-cream/40 mb-2 font-semibold uppercase tracking-wider">Debugging tips:</p>
+              <ul className="text-xs text-cream/40 space-y-1 list-disc list-inside">
+                <li>Check that the <code className="text-cream/60 bg-cream/10 px-1 rounded">artists</code> table exists in Supabase</li>
+                <li>Verify the <code className="text-cream/60 bg-cream/10 px-1 rounded">status</code> column has values like &quot;approved&quot;</li>
+                <li>Check browser console for Supabase connection errors</li>
+                <li>Ensure RLS policies allow reading the artists table</li>
+              </ul>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="py-32 text-center">
-            <p className="font-display text-cream/30 text-3xl uppercase mb-3">No artists match.</p>
-            <button onClick={() => { setQ(""); setCity("All"); setActiveGenres(new Set()); }}
-              className="font-display text-cream/50 text-sm underline">
-              Clear all filters
-            </button>
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <Music className="w-12 h-12 text-cream/20 mb-4" />
+            <h2 className="text-lg font-semibold text-cream/60 mb-2">No artists match</h2>
+            <p className="text-cream/40 text-sm text-center">
+              {artists.length === 0
+                ? "No artists found in the database. Add some artists to get started."
+                : "Try adjusting your filters or search query."
+              }
+            </p>
+            {artists.length > 0 && (q || city !== "All" || activeGenres.size > 0) && (
+              <Button
+                onClick={() => { setQ(""); setCity("All"); setActiveGenres(new Set()); }}
+                variant="outline"
+                className="mt-4 border-cream/20 text-cream/70"
+              >
+                <X className="w-4 h-4 mr-1.5" /> Clear filters
+              </Button>
+            )}
           </div>
         ) : (
           <>
             {/* Stats bar */}
-            <p className="font-display text-cream/30 text-xs mb-3 px-1">
-              {filtered.length} artists
-              {withMedia.length > 0 && ` · ${withMedia.length} with media`}
-              {activeGenres.size > 0 && ` · filtered by genre`}
-            </p>
+            <div className="flex items-center gap-2 text-sm text-cream/40 mb-4">
+              <span>{filtered.length} artists</span>
+              {withMedia.length > 0 && <span>· {withMedia.length} with media</span>}
+              {activeGenres.size > 0 && <span>· filtered by genre</span>}
+            </div>
 
             {/* Grid — varying sizes for visual interest */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {filtered.map((a, i) => {
-                // Every 7th starting at 0 gets a large card (2-col span)
                 const isLarge = i % 7 === 0 && cover(a);
+                const img = cover(a);
                 return (
-                  <div
+                  <Link
                     key={a.id}
-                    className={isLarge ? "col-span-2 row-span-1" : ""}
+                    to={`/artists/${a.slug}`}
+                    className={`group relative rounded-xl overflow-hidden bg-cream/5 border border-cream/10 hover:border-cream/20 transition-all ${
+                      isLarge ? "col-span-2 row-span-2" : "aspect-square"
+                    }`}
                   >
-                    <ArtistCard
-                      a={a}
-                      size={isLarge ? "lg" : i % 5 === 3 ? "sm" : "md"}
-                    />
-                  </div>
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={a.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-cream/20">
+                        <Music className="w-8 h-8" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <div className="font-semibold text-cream text-sm truncate">{a.name}</div>
+                      {cityOf(a) && (
+                        <div className="text-xs text-cream/60 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {cityOf(a)}
+                        </div>
+                      )}
+                      {(a.genres ?? []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(a.genres ?? []).slice(0, 2).map(g => (
+                            <span key={g} className="text-[10px] px-1.5 py-0.5 rounded-full bg-cream/10 text-cream/70">
+                              {g}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
                 );
               })}
             </div>
 
             {/* CTA */}
-            <div className="mt-16 py-12 border-t border-cream/10 text-center">
-              <p className="font-display text-cream/40 text-sm mb-4 uppercase">
-                Are you an artist?
+            <div className="mt-10 text-center">
+              <p className="text-cream/40 text-sm">
+                Are you an artist?{" "}
+                <Link to="/for-artists" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
+                  Join the roster
+                </Link>
               </p>
-              <a href="/for-artists"
-                className="inline-block font-display text-sm uppercase bg-acid-yellow text-ink px-6 py-3 border-4 border-acid-yellow chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                Get on CCD →
-              </a>
             </div>
           </>
         )}
-      </main>
-
-      <Footer />
+      </div>
     </div>
   );
 }
