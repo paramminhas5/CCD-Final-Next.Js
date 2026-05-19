@@ -1,4 +1,5 @@
-import { useParams, Link } from "react-router-dom";
+import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
 import {
   Play, PartyPopper, Disc, TrendingUp, Route, Users, Building2, Award, Radio,
@@ -123,8 +124,8 @@ const roleColors: Record<string, string> = {
 };
 
 export default function ArtistDetailPage() {
-  const params = useParams();
-  const slug = params?.slug as string;
+  const router = useRouter();
+  const slug = (router.query?.slug as string) || "";
   const { toast } = useToast();
 
   const [data, setData] = useState<{
@@ -152,17 +153,14 @@ export default function ArtistDetailPage() {
     setFetchError(null);
     setUsedFallback(false);
 
-    // Try /full first, then fall back to /basic if it fails
     fetch(`/api/artists/${slug}/full`)
       .then(async (r) => {
         if (!r.ok) {
-          // If /full fails, try /basic
           console.warn(`/full failed with ${r.status}, falling back to /basic`);
           setUsedFallback(true);
           const basicRes = await fetch(`/api/artists/${slug}/basic`);
           if (!basicRes.ok) throw new Error(`basic also failed: ${basicRes.status}`);
           const basicData = await basicRes.json();
-          // Normalize basic data to match full data shape
           setData({
             artist: basicData.artist,
             connections: [],
@@ -188,7 +186,6 @@ export default function ArtistDetailPage() {
           return;
         }
         const fullData = await r.json();
-        // Ensure all arrays exist (defensive)
         setData({
           artist: fullData.artist,
           connections: fullData.connections || [],
@@ -252,12 +249,12 @@ export default function ArtistDetailPage() {
       <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4 px-4">
         <div className="text-red-400 text-lg">⚠️ {fetchError}</div>
         <p className="text-cream/50 text-sm text-center max-w-md">
-          There was a problem loading this artist's profile. This may be due to recent database changes.
+          There was a problem loading this artist&apos;s profile. This may be due to recent database changes.
         </p>
         <Button variant="outline" onClick={() => window.location.reload()}>
           Try Again
         </Button>
-        <Link to="/artists">
+        <Link href="/artists">
           <Button variant="ghost" className="text-cream/60">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Artists
           </Button>
@@ -270,7 +267,7 @@ export default function ArtistDetailPage() {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4 px-4">
         <div className="text-cream/60 text-lg">Artist not found</div>
-        <Link to="/artists">
+        <Link href="/artists">
           <Button variant="ghost" className="text-cream/60">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Artists
           </Button>
@@ -287,9 +284,8 @@ export default function ArtistDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-cream">
-      {/* ─── Hero Section ───────────────────────────────────────────────────── */}
+      {/* Hero Section */}
       <div className="relative">
-        {/* Background */}
         <div className="absolute inset-0 h-80 overflow-hidden">
           {artist.photo_url ? (
             <img src={artist.photo_url} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
@@ -301,7 +297,6 @@ export default function ArtistDetailPage() {
 
         <div className="relative max-w-6xl mx-auto px-4 pt-12 pb-8">
           <div className="flex flex-col md:flex-row gap-6 items-start">
-            {/* Photo */}
             <div className="shrink-0">
               <div className="w-32 h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-cream/10 bg-cream/5">
                 {artist.photo_url ? (
@@ -319,7 +314,6 @@ export default function ArtistDetailPage() {
               )}
             </div>
 
-            {/* Info */}
             <div className="flex-1 min-w-0">
               <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{artist.name}</h1>
               {artist.claimed_by && (
@@ -344,7 +338,6 @@ export default function ArtistDetailPage() {
                 )}
               </div>
 
-              {/* Genres */}
               {artist.genres.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {artist.genres.map(g => (
@@ -355,7 +348,6 @@ export default function ArtistDetailPage() {
                 </div>
               )}
 
-              {/* Social links */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {artist.instagram && (
                   <a href={`https://instagram.com/${artist.instagram.replace('@', '')}`} target="_blank" rel="noreferrer">
@@ -387,7 +379,6 @@ export default function ArtistDetailPage() {
                 )}
               </div>
 
-              {/* Quick stats row */}
               <div className="flex flex-wrap gap-4 mt-4">
                 {stats.total_gigs > 0 && <StatBadge icon={MapPin} value={stats.total_gigs} label="gigs" />}
                 {stats.total_cities > 0 && <StatBadge icon={MapPin} value={stats.total_cities} label="cities" />}
@@ -397,7 +388,6 @@ export default function ArtistDetailPage() {
                 )}
               </div>
 
-              {/* Actions */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {artist.open_to_bookings && (
                   <Button onClick={() => setShowBookingModal(true)} className="bg-purple-600 hover:bg-purple-700">
@@ -423,7 +413,7 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
-      {/* ─── Navigation Tabs ────────────────────────────────────────────────── */}
+      {/* Navigation Tabs */}
       <div className="sticky top-0 z-30 bg-[#0a0a0f]/95 backdrop-blur border-b border-cream/10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto py-2 scrollbar-hide">
@@ -458,7 +448,7 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
-      {/* ─── Content Sections ───────────────────────────────────────────────── */}
+      {/* Content Sections */}
       <div className="max-w-6xl mx-auto px-4 py-8">
         {activeSection === "overview" && (
           <OverviewSection
@@ -524,7 +514,6 @@ function OverviewSection({
 }: any) {
   return (
     <div className="space-y-8">
-      {/* Bio */}
       {artist.bio && (
         <section>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -545,7 +534,6 @@ function OverviewSection({
         </section>
       )}
 
-      {/* Cool Facts */}
       {facts.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3">Cool Facts</h3>
@@ -562,7 +550,6 @@ function OverviewSection({
         </section>
       )}
 
-      {/* Recent Gigs */}
       {appearances.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -593,7 +580,6 @@ function OverviewSection({
         </section>
       )}
 
-      {/* Connections Preview */}
       {connections.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -604,7 +590,7 @@ function OverviewSection({
             {connections.slice(0, 8).map((conn: Connection, i: number) => {
               const partnerSlug = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
               return (
-                <Link key={i} to={`/artists/${partnerSlug}`}>
+                <Link key={i} href={`/artists/${partnerSlug}`}>
                   <Badge variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10 cursor-pointer">
                     <span className="w-5 h-5 rounded-full bg-cream/10 flex items-center justify-center text-xs mr-1.5">
                       {partnerSlug.charAt(0).toUpperCase()}
@@ -621,7 +607,6 @@ function OverviewSection({
         </section>
       )}
 
-      {/* Milestones Preview */}
       {milestones.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -702,7 +687,7 @@ function ConnectionsSection({ connections, artistSlug }: { connections: Connecti
                   {partnerSlug.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <Link to={`/artists/${partnerSlug}`} className="font-medium text-cream hover:text-purple-400 truncate block">
+                  <Link href={`/artists/${partnerSlug}`} className="font-medium text-cream hover:text-purple-400 truncate block">
                     {partnerSlug}
                   </Link>
                   <div className="text-sm text-cream/50 capitalize">{conn.connection_type}</div>
@@ -763,7 +748,6 @@ function GigographySection({
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <select
           value={selectedYear}
@@ -792,7 +776,6 @@ function GigographySection({
         </div>
       </div>
 
-      {/* Stats bar */}
       <div className="flex flex-wrap gap-4 text-sm text-cream/50">
         <span>{filteredAppearances.length} gigs shown</span>
         <span>{new Set(filteredAppearances.map((a: any) => a.city).filter(Boolean)).size} cities</span>
@@ -918,7 +901,7 @@ function JourneySection({ milestones }: { milestones: Milestone[] }) {
                   <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{milestone.venue}</span>
                 )}
                 {milestone.related_artist_slug && (
-                  <Link to={`/artists/${milestone.related_artist_slug}`} className="flex items-center gap-1 text-purple-400 hover:text-purple-300">
+                  <Link href={`/artists/${milestone.related_artist_slug}`} className="flex items-center gap-1 text-purple-400 hover:text-purple-300">
                     <Users className="w-3 h-3" />
                     {milestone.related_artist_name || milestone.related_artist_slug}
                   </Link>
@@ -942,7 +925,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     );
   }
 
-  // Compute yearly breakdown
   const byYear = appearances.reduce((acc: any, gig: Appearance) => {
     const y = gig.year || 0;
     if (!acc[y]) acc[y] = { count: 0, cities: new Set(), venues: new Set() };
@@ -961,7 +943,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     }))
     .sort((a, b) => a.year - b.year);
 
-  // City breakdown
   const cityData = appearances.reduce((acc: Record<string, number>, gig: Appearance) => {
     if (gig.city) acc[gig.city] = (acc[gig.city] || 0) + 1;
     return acc;
@@ -971,7 +952,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // Venue breakdown
   const venueData = appearances.reduce((acc: Record<string, any>, gig: Appearance) => {
     if (gig.venue) {
       if (!acc[gig.venue]) acc[gig.venue] = { count: 0, city: gig.city || "Unknown" };
@@ -990,7 +970,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
 
   return (
     <div className="space-y-8">
-      {/* Key metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="Total Gigs" value={stats.total_gigs} icon={MapPin} />
         <MetricCard label="Cities" value={stats.total_cities} icon={MapPin} />
@@ -1007,7 +986,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
         )}
       </div>
 
-      {/* Yearly chart */}
       {yearData.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3">Gigs Per Year</h3>
@@ -1030,7 +1008,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
         </section>
       )}
 
-      {/* Top cities */}
       {topCities.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3">Top Cities</h3>
@@ -1053,7 +1030,6 @@ function StatsSection({ stats, appearances, socialStats }: any) {
         </section>
       )}
 
-      {/* Top venues */}
       {topVenues.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3">Top Venues</h3>
@@ -1121,7 +1097,6 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
 
   return (
     <div className="space-y-8">
-      {/* EPK Header */}
       <div className="flex flex-col md:flex-row gap-6 p-6 rounded-2xl bg-cream/5 border border-cream/10">
         {artist.photo_url && (
           <img src={artist.photo_url} alt={artist.name} className="w-32 h-32 rounded-xl object-cover" />
@@ -1140,7 +1115,6 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
         </div>
       </div>
 
-      {/* Quick Facts for Press */}
       {facts.length > 0 && (
         <section>
           <h3 className="text-lg font-semibold mb-3">Quick Facts</h3>
@@ -1156,7 +1130,6 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
         </section>
       )}
 
-      {/* Contact */}
       <section>
         <h3 className="text-lg font-semibold mb-3">Contact</h3>
         <div className="space-y-2">
@@ -1178,7 +1151,6 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
         </div>
       </section>
 
-      {/* Social Links */}
       <section>
         <h3 className="text-lg font-semibold mb-3">Social</h3>
         <div className="flex flex-wrap gap-2">
@@ -1206,7 +1178,6 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
         </div>
       </section>
 
-      {/* Tech Specs */}
       <section>
         <h3 className="text-lg font-semibold mb-3">Technical</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -1234,15 +1205,12 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
         </div>
       </section>
 
-      {/* Download CTA */}
       <Button onClick={handleDownloadEPK} disabled={downloading} className="w-full bg-purple-600 hover:bg-purple-700">
         {downloading ? "Generating..." : "Download EPK PDF"}
       </Button>
     </div>
   );
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatNumber(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
