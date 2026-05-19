@@ -1019,7 +1019,7 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     return acc;
   }, {});
   const topCities = Object.entries(cityData)
-    .map(([city, count]) => ({ city, count }))
+    .map(([city, count]) => ({ city, count: count as number }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
@@ -1032,13 +1032,13 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     return acc;
   }, {});
   const topVenues = Object.entries(venueData)
-    .map(([venue, data]) => ({ venue, ...data }))
+    .map(([venue, data]) => ({ venue, count: (data as any).count, city: (data as any).city }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
   const maxGigs = Math.max(...yearData.map(d => d.gigs), 1);
   const maxCityCount = Math.max(...topCities.map(c => c.count), 1);
-  const maxVenueCount = Math.max(...topVenues.map(v => v.count), 1);
+  const maxVenueCount = Math.max(...topVenues.map(v => v.count as number), 1);
 
   return (
     <div className="space-y-8">
