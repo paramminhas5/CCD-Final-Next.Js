@@ -12,6 +12,7 @@ import {
 import { eq } from "drizzle-orm";
 import * as crypto from "crypto";
 import { requireAdmin } from "../middleware/adminAuth";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -36,7 +37,8 @@ router.post("/contact", async (req, res) => {
     });
     res.status(201).json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    logger.error({ error: e.message, stack: e.stack }, "Contact form error");
+    res.status(500).json({ error: e.message || "Failed to save contact message" });
   }
 });
 
@@ -46,6 +48,7 @@ router.get("/admin/contact-messages", requireAdmin, async (_req, res) => {
     const rows = await db.select().from(contactMessagesTable);
     res.json(rows);
   } catch (e: any) {
+    logger.error({ error: e.message }, "Failed to fetch contact messages");
     res.status(500).json({ error: e.message });
   }
 });
@@ -62,8 +65,9 @@ router.post("/early-access", async (req, res) => {
     });
     res.status(201).json({ ok: true });
   } catch (e: any) {
+    logger.error({ error: e.message, stack: e.stack }, "Early access signup error");
     if (e.message?.includes("unique")) return res.status(409).json({ error: "Already signed up" });
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message || "Failed to save signup" });
   }
 });
 
@@ -73,6 +77,7 @@ router.get("/admin/signups", requireAdmin, async (_req, res) => {
     const rows = await db.select().from(earlyAccessSignupsTable);
     res.json(rows);
   } catch (e: any) {
+    logger.error({ error: e.message }, "Failed to fetch signups");
     res.status(500).json({ error: e.message });
   }
 });
@@ -94,7 +99,8 @@ router.post("/event-rsvp", async (req, res) => {
     });
     res.status(201).json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    logger.error({ error: e.message, stack: e.stack }, "Event RSVP error");
+    res.status(500).json({ error: e.message || "Failed to save RSVP" });
   }
 });
 
@@ -104,6 +110,7 @@ router.get("/admin/rsvps", requireAdmin, async (_req, res) => {
     const rows = await db.select().from(eventRsvpsTable);
     res.json(rows);
   } catch (e: any) {
+    logger.error({ error: e.message }, "Failed to fetch RSVPs");
     res.status(500).json({ error: e.message });
   }
 });
@@ -119,7 +126,8 @@ router.post("/artist-submissions", async (req, res) => {
     });
     res.status(201).json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    logger.error({ error: e.message, stack: e.stack }, "Artist submission error");
+    res.status(500).json({ error: e.message || "Failed to save artist submission" });
   }
 });
 
@@ -169,7 +177,8 @@ router.post("/booking-otp/start", async (req, res) => {
       ...(isDev ? { code } : {}),
     });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    logger.error({ error: e.message, stack: e.stack }, "Booking OTP start error");
+    res.status(500).json({ error: e.message || "Failed to start booking OTP" });
   }
 });
 
@@ -230,7 +239,8 @@ router.post("/booking-otp/verify", async (req, res) => {
 
     res.json({ ok: true, requestId: effectiveRequestId, artist_email, manager_email });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    logger.error({ error: e.message, stack: e.stack }, "Booking OTP verify error");
+    res.status(500).json({ error: e.message || "Failed to verify OTP" });
   }
 });
 
