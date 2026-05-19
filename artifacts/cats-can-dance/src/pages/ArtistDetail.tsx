@@ -1,101 +1,78 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { useParams, Link } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
 import {
-  MapPin, Calendar, Music, ExternalLink, Instagram, Globe, Mail,
-  ChevronDown, ChevronUp, Heart, Share2, Download, Users, TrendingUp,
-  Award, Radio, Disc, Mic2, Headphones, Star, Clock, Zap, Target,
-  BarChart3, Route, Flag, Sparkles, ArrowRight, Play, Pause,
-  Link2, Building2, PartyPopper, Milestone, BookOpen, Newspaper,
-  FileText, Image as ImageIcon, Video, Copy, CheckCircle2
+  Play, PartyPopper, Disc, TrendingUp, Route, Users, Building2, Award, Radio,
+  Star, MapPin, Calendar, Music, Share2, Copy, Check, ExternalLink, Instagram,
+  Globe, Mail, Headphones, ChevronDown, ChevronUp, BarChart3, Newspaper, FileText,
+  BookOpen, Ticket, ArrowLeft
 } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 interface Artist {
   id: string;
   slug: string;
   name: string;
-  based_city: string | null;
-  from_city: string | null;
-  bio: string | null;
-  why: string | null;
+  based_city?: string;
+  from_city?: string;
+  bio?: string;
   genres: string[];
-  festivals: string[];
-  instagram: string | null;
-  soundcloud: string | null;
-  bandcamp: string | null;
-  spotify: string | null;
-  website: string | null;
-  booking_email: string | null;
-  manager_email: string | null;
-  labels: string | null;
-  members: string | null;
-  photo_url: string | null;
-  fee_min_inr: number | null;
-  fee_max_inr: number | null;
-  fee_currency: string;
-  open_to_bookings: boolean;
-  available_cities: string[];
+  photo_url?: string;
+  instagram?: string;
+  soundcloud?: string;
+  spotify?: string;
+  website?: string;
+  booking_email?: string;
+  manager_email?: string;
   featured: boolean;
-  status: string;
-  gallery: any[];
-  videos: any[];
-  claimed_by: string | null;
-  enrichment_status: string;
+  claimed_by?: string;
+  open_to_bookings: boolean;
+  fee_min_inr?: number;
+  fee_max_inr?: number;
+  available_cities: string[];
+  labels?: string;
+  videos?: any[];
+  gallery?: any[];
 }
 
 interface Connection {
   artist_a_slug: string;
   artist_b_slug: string;
-  artist_b_id: string;
   connection_type: string;
   strength: number;
   shared_events: string[];
   shared_venues: string[];
-  notes: string | null;
+  notes?: string;
 }
 
 interface Appearance {
-  id: string;
   event_name: string;
-  venue: string | null;
-  city: string | null;
-  event_date: string | null;
-  year: number | null;
+  venue?: string;
+  city?: string;
+  event_date?: string;
+  year?: number;
   role: string;
 }
 
 interface Milestone {
-  id: string;
-  date: string;
-  year: number | null;
   type: string;
   title: string;
-  description: string | null;
-  venue: string | null;
-  city: string | null;
-  event_name: string | null;
-  related_artist_slug: string | null;
-  related_artist_name: string | null;
-  importance: number;
-  is_featured: boolean;
+  description?: string;
+  year?: number;
+  date: string;
+  city?: string;
+  venue?: string;
+  is_featured?: boolean;
+  related_artist_slug?: string;
+  related_artist_name?: string;
 }
 
 interface SocialStats {
-  instagram_followers: number | null;
-  soundcloud_followers: number | null;
-  soundcloud_plays: number | null;
-  spotify_monthly_listeners: number | null;
-}
-
-interface CoolFact {
-  icon: string;
-  label: string;
-  value: string;
-  detail: string;
+  instagram_followers?: number;
+  soundcloud_followers?: number;
+  spotify_monthly_listeners?: number;
 }
 
 interface ArtistStats {
@@ -108,20 +85,18 @@ interface ArtistStats {
   festival_count: number;
 }
 
-type SectionType = 
-  | "overview" 
-  | "connections" 
-  | "gigography" 
-  | "journey" 
-  | "press" 
-  | "epk" 
-  | "stats";
+interface CoolFact {
+  icon: string;
+  label: string;
+  value: string;
+  detail: string;
+}
 
-const sectionTabs: { id: SectionType; label: string; icon: any }[] = [
+const sectionTabs = [
   { id: "overview", label: "Overview", icon: Star },
-  { id: "connections", label: "Connections", icon: Link2 },
-  { id: "gigography", label: "Gigography", icon: Route },
-  { id: "journey", label: "Journey", icon: Milestone },
+  { id: "connections", label: "Connections", icon: Users },
+  { id: "gigography", label: "Gigography", icon: MapPin },
+  { id: "journey", label: "Journey", icon: Route },
   { id: "stats", label: "Stats", icon: BarChart3 },
   { id: "press", label: "Press", icon: Newspaper },
   { id: "epk", label: "EPK", icon: FileText },
@@ -150,6 +125,7 @@ const roleColors: Record<string, string> = {
 export default function ArtistDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { toast } = useToast();
 
   const [data, setData] = useState<{
     artist: Artist | null;
@@ -161,32 +137,95 @@ export default function ArtistDetailPage() {
     facts: CoolFact[];
   } | null>(null);
 
-  const [activeSection, setActiveSection] = useState<SectionType>("overview");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
+  const [activeSection, setActiveSection] = useState("overview");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedBio, setExpandedBio] = useState(false);
-  const [selectedYear, setSelectedYear] = useState<number | "all">("all");
+  const [selectedYear, setSelectedYear] = useState("all");
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
+    setIsLoading(true);
+    setFetchError(null);
+    setUsedFallback(false);
 
+    // Try /full first, then fall back to /basic if it fails
     fetch(`/api/artists/${slug}/full`)
-      .then(r => r.json())
-      .then(data => {
-        setData(data);
-        setIsLoading(false);
+      .then(async (r) => {
+        if (!r.ok) {
+          // If /full fails, try /basic
+          console.warn(`/full failed with ${r.status}, falling back to /basic`);
+          setUsedFallback(true);
+          const basicRes = await fetch(`/api/artists/${slug}/basic`);
+          if (!basicRes.ok) throw new Error(`basic also failed: ${basicRes.status}`);
+          const basicData = await basicRes.json();
+          // Normalize basic data to match full data shape
+          setData({
+            artist: basicData.artist,
+            connections: [],
+            appearances: basicData.appearances || [],
+            milestones: [],
+            socialStats: null,
+            stats: basicData.stats || {
+              total_gigs: 0,
+              total_cities: 0,
+              total_venues: 0,
+              total_connections: 0,
+              years_active: 0,
+              b2b_count: 0,
+              festival_count: 0,
+            },
+            facts: [],
+          });
+          toast({
+            title: "Limited data available",
+            description: "Showing artist profile with basic info only. Some sections may be empty.",
+            variant: "default",
+          });
+          return;
+        }
+        const fullData = await r.json();
+        // Ensure all arrays exist (defensive)
+        setData({
+          artist: fullData.artist,
+          connections: fullData.connections || [],
+          appearances: fullData.appearances || [],
+          milestones: fullData.milestones || [],
+          socialStats: fullData.socialStats || null,
+          stats: fullData.stats || {
+            total_gigs: 0,
+            total_cities: 0,
+            total_venues: 0,
+            total_connections: 0,
+            years_active: 0,
+            b2b_count: 0,
+            festival_count: 0,
+          },
+          facts: fullData.facts || [],
+        });
       })
-      .catch(err => {
-        console.error(err);
+      .catch((err) => {
+        console.error("Failed to fetch artist:", err);
+        setFetchError(err.message || "Failed to load artist data");
+        toast({
+          title: "Error loading artist",
+          description: err.message || "Please try again later.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
         setIsLoading(false);
       });
-  }, [slug]);
+  }, [slug, toast]);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+    toast({ title: "Copied to clipboard", description: text });
   };
 
   const handleShare = async () => {
@@ -196,214 +235,219 @@ export default function ArtistDetailPage() {
       await navigator.share({ title: data.artist.name, url });
     } else {
       await navigator.clipboard.writeText(url);
+      toast({ title: "Link copied", description: url });
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white rounded-full" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-cream/60 animate-pulse">Loading artist profile…</div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4 px-4">
+        <div className="text-red-400 text-lg">⚠️ {fetchError}</div>
+        <p className="text-cream/50 text-sm text-center max-w-md">
+          There was a problem loading this artist's profile. This may be due to recent database changes.
+        </p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Try Again
+        </Button>
+        <Link to="/artists">
+          <Button variant="ghost" className="text-cream/60">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Artists
+          </Button>
+        </Link>
       </div>
     );
   }
 
   if (!data?.artist) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white/40">
-        Artist not found
+      <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4 px-4">
+        <div className="text-cream/60 text-lg">Artist not found</div>
+        <Link to="/artists">
+          <Button variant="ghost" className="text-cream/60">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Artists
+          </Button>
+        </Link>
       </div>
     );
   }
 
   const { artist, connections, appearances, milestones, socialStats, stats, facts } = data;
   const years = [...new Set(appearances.map(a => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
-  const filteredAppearances = selectedYear === "all" 
-    ? appearances 
-    : appearances.filter(a => a.year === selectedYear);
+  const filteredAppearances = selectedYear === "all"
+    ? appearances
+    : appearances.filter(a => a.year === parseInt(selectedYear));
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-cream">
       {/* ─── Hero Section ───────────────────────────────────────────────────── */}
       <div className="relative">
         {/* Background */}
-        <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 h-80 overflow-hidden">
           {artist.photo_url ? (
-            <Image
-              src={artist.photo_url}
-              alt={artist.name}
-              fill
-              className="object-cover opacity-30 blur-sm scale-110"
-            />
+            <img src={artist.photo_url} alt="" className="w-full h-full object-cover opacity-30 blur-sm" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-white/5 to-transparent" />
+            <div className="w-full h-full bg-gradient-to-b from-purple-900/30 to-[#0a0a0f]" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/80 to-[#0a0a0a]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0f]/60 to-[#0a0a0f]" />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 pt-12 pb-8">
-          <div className="flex flex-col md:flex-row gap-8 items-start">
+        <div className="relative max-w-6xl mx-auto px-4 pt-12 pb-8">
+          <div className="flex flex-col md:flex-row gap-6 items-start">
             {/* Photo */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="relative w-40 h-40 md:w-52 md:h-52 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-white/10"
-            >
-              {artist.photo_url ? (
-                <Image src={artist.photo_url} alt={artist.name} fill className="object-cover" />
-              ) : (
-                <div className="w-full h-full bg-white/5 flex items-center justify-center">
-                  <Music className="w-12 h-12 text-white/20" />
-                </div>
-              )}
+            <div className="shrink-0">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-cream/10 bg-cream/5">
+                {artist.photo_url ? (
+                  <img src={artist.photo_url} alt={artist.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-cream/30">
+                    <Music className="w-12 h-12" />
+                  </div>
+                )}
+              </div>
               {artist.featured && (
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-medium backdrop-blur-sm">
-                  Featured
-                </div>
+                <Badge className="mt-2 bg-amber-500/20 text-amber-300 border-amber-500/30">
+                  <Star className="w-3 h-3 mr-1" /> Featured
+                </Badge>
               )}
-            </motion.div>
+            </div>
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{artist.name}</h1>
-                  {artist.claimed_by && (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-medium">
-                      Verified
-                    </span>
-                  )}
-                </div>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{artist.name}</h1>
+              {artist.claimed_by && (
+                <Badge variant="outline" className="mt-1 border-green-500/30 text-green-400">
+                  <Check className="w-3 h-3 mr-1" /> Verified
+                </Badge>
+              )}
 
-                <div className="flex flex-wrap items-center gap-3 text-sm text-white/50 mb-4">
-                  {artist.based_city && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {artist.based_city}
-                    </span>
-                  )}
-                  {artist.from_city && artist.from_city !== artist.based_city && (
-                    <span className="text-white/30">Originally from {artist.from_city}</span>
-                  )}
-                  {stats.years_active > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {stats.years_active} years active
-                    </span>
-                  )}
-                </div>
-
-                {/* Genres */}
-                {artist.genres.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {artist.genres.map(g => (
-                      <span key={g} className="px-2.5 py-1 rounded-full text-xs bg-white/5 text-white/60 border border-white/5">
-                        {g}
-                      </span>
-                    ))}
-                  </div>
+              <div className="flex flex-wrap items-center gap-2 mt-2 text-cream/60 text-sm">
+                {artist.based_city && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" /> {artist.based_city}
+                  </span>
                 )}
+                {artist.from_city && artist.from_city !== artist.based_city && (
+                  <span className="text-cream/40">Originally from {artist.from_city}</span>
+                )}
+                {stats.years_active > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" /> {stats.years_active} years active
+                  </span>
+                )}
+              </div>
 
-                {/* Social links */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {artist.instagram && (
-                    <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
-                      <Instagram className="w-3.5 h-3.5" /> Instagram
-                    </a>
-                  )}
-                  {artist.soundcloud && (
-                    <a href={artist.soundcloud} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
-                      <Headphones className="w-3.5 h-3.5" /> SoundCloud
-                    </a>
-                  )}
-                  {artist.spotify && (
-                    <a href={artist.spotify} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
-                      <Disc className="w-3.5 h-3.5" /> Spotify
-                    </a>
-                  )}
-                  {artist.bandcamp && (
-                    <a href={artist.bandcamp} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
-                      <Music className="w-3.5 h-3.5" /> Bandcamp
-                    </a>
-                  )}
-                  {artist.website && (
-                    <a href={artist.website} target="_blank" rel="noopener noreferrer"
-                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
-                      <Globe className="w-3.5 h-3.5" /> Website
-                    </a>
-                  )}
+              {/* Genres */}
+              {artist.genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {artist.genres.map(g => (
+                    <Badge key={g} variant="secondary" className="bg-cream/10 text-cream/80 hover:bg-cream/15">
+                      {g}
+                    </Badge>
+                  ))}
                 </div>
+              )}
 
-                {/* Quick stats row */}
-                <div className="flex flex-wrap gap-4 mb-6">
-                  <StatBadge icon={Route} value={stats.total_gigs} label="Gigs" />
-                  <StatBadge icon={MapPin} value={stats.total_cities} label="Cities" />
-                  <StatBadge icon={Link2} value={stats.total_connections} label="Connections" />
-                  <StatBadge icon={Users} value={stats.b2b_count} label="B2Bs" />
-                  {socialStats?.instagram_followers && (
-                    <StatBadge 
-                      icon={TrendingUp} 
-                      value={formatNumber(socialStats.instagram_followers)} 
-                      label="Followers" 
-                    />
-                  )}
-                </div>
+              {/* Social links */}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {artist.instagram && (
+                  <a href={`https://instagram.com/${artist.instagram.replace('@', '')}`} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                      <Instagram className="w-4 h-4 mr-1.5" /> Instagram
+                    </Button>
+                  </a>
+                )}
+                {artist.soundcloud && (
+                  <a href={artist.soundcloud} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                      <Headphones className="w-4 h-4 mr-1.5" /> SoundCloud
+                    </Button>
+                  </a>
+                )}
+                {artist.spotify && (
+                  <a href={artist.spotify} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                      <Music className="w-4 h-4 mr-1.5" /> Spotify
+                    </Button>
+                  </a>
+                )}
+                {artist.website && (
+                  <a href={artist.website} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                      <Globe className="w-4 h-4 mr-1.5" /> Website
+                    </Button>
+                  </a>
+                )}
+              </div>
 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-3">
-                  {artist.open_to_bookings && (
-                    <button
-                      onClick={() => setShowBookingModal(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
-                    >
-                      <Mail className="w-4 h-4" />
-                      Book This Artist
-                    </button>
-                  )}
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 text-sm hover:bg-white/10 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share
-                  </button>
-                  <Link
-                    href={`/artists/${slug}/epk`}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 text-sm hover:bg-white/10 transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download EPK
-                  </Link>
+              {/* Quick stats row */}
+              <div className="flex flex-wrap gap-4 mt-4">
+                {stats.total_gigs > 0 && <StatBadge icon={MapPin} value={stats.total_gigs} label="gigs" />}
+                {stats.total_cities > 0 && <StatBadge icon={MapPin} value={stats.total_cities} label="cities" />}
+                {stats.total_connections > 0 && <StatBadge icon={Users} value={stats.total_connections} label="connections" />}
+                {socialStats?.instagram_followers && (
+                  <StatBadge icon={Instagram} value={formatNumber(socialStats.instagram_followers)} label="followers" />
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {artist.open_to_bookings && (
+                  <Button onClick={() => setShowBookingModal(true)} className="bg-purple-600 hover:bg-purple-700">
+                    <Mail className="w-4 h-4 mr-1.5" /> Book Artist
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleShare} className="border-cream/20 text-cream/70">
+                  <Share2 className="w-4 h-4 mr-1.5" /> Share
+                </Button>
+                <Button variant="outline" onClick={() => handleCopy(`${window.location.origin}/artists/${slug}`, "link")} className="border-cream/20 text-cream/70">
+                  {copiedField === "link" ? <Check className="w-4 h-4 mr-1.5" /> : <Copy className="w-4 h-4 mr-1.5" />}
+                  {copiedField === "link" ? "Copied" : "Copy Link"}
+                </Button>
+              </div>
+
+              {usedFallback && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+                  ⚠️ Showing limited profile data. Some sections may be unavailable due to recent database changes.
                 </div>
-              </motion.div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* ─── Navigation Tabs ────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4">
+      <div className="sticky top-0 z-30 bg-[#0a0a0f]/95 backdrop-blur border-b border-cream/10">
+        <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto py-2 scrollbar-hide">
             {sectionTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeSection === tab.id;
+              const hasData =
+                tab.id === "overview" ? true :
+                tab.id === "connections" ? connections.length > 0 :
+                tab.id === "gigography" ? appearances.length > 0 :
+                tab.id === "journey" ? milestones.length > 0 :
+                tab.id === "stats" ? stats.total_gigs > 0 :
+                tab.id === "press" ? true :
+                tab.id === "epk" ? true :
+                true;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveSection(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                    isActive 
-                      ? "bg-white/10 text-white" 
-                      : "text-white/40 hover:text-white/60 hover:bg-white/5"
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors ${
+                    isActive
+                      ? "bg-cream/10 text-cream"
+                      : "text-cream/50 hover:text-cream/70 hover:bg-cream/5"
+                  } ${!hasData ? "opacity-40" : ""}`}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
@@ -415,59 +459,49 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* ─── Content Sections ───────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeSection}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
-            {activeSection === "overview" && (
-              <OverviewSection 
-                artist={artist} 
-                facts={facts} 
-                stats={stats}
-                appearances={appearances.slice(0, 5)}
-                connections={connections.slice(0, 6)}
-                milestones={milestones.filter(m => m.is_featured).slice(0, 4)}
-                expandedBio={expandedBio}
-                setExpandedBio={setExpandedBio}
-              />
-            )}
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {activeSection === "overview" && (
+          <OverviewSection
+            artist={artist}
+            facts={facts}
+            stats={stats}
+            appearances={appearances}
+            connections={connections}
+            milestones={milestones.filter(m => m.is_featured).slice(0, 4)}
+            expandedBio={expandedBio}
+            setExpandedBio={setExpandedBio}
+          />
+        )}
 
-            {activeSection === "connections" && (
-              <ConnectionsSection connections={connections} artistSlug={slug} />
-            )}
+        {activeSection === "connections" && (
+          <ConnectionsSection connections={connections} artistSlug={slug} />
+        )}
 
-            {activeSection === "gigography" && (
-              <GigographySection 
-                appearances={appearances}
-                filteredAppearances={filteredAppearances}
-                years={years}
-                selectedYear={selectedYear}
-                setSelectedYear={setSelectedYear}
-              />
-            )}
+        {activeSection === "gigography" && (
+          <GigographySection
+            appearances={appearances}
+            filteredAppearances={filteredAppearances}
+            years={years}
+            selectedYear={selectedYear}
+            setSelectedYear={setSelectedYear}
+          />
+        )}
 
-            {activeSection === "journey" && (
-              <JourneySection milestones={milestones} />
-            )}
+        {activeSection === "journey" && (
+          <JourneySection milestones={milestones} />
+        )}
 
-            {activeSection === "stats" && (
-              <StatsSection stats={stats} appearances={appearances} socialStats={socialStats} />
-            )}
+        {activeSection === "stats" && (
+          <StatsSection stats={stats} appearances={appearances} socialStats={socialStats} />
+        )}
 
-            {activeSection === "press" && (
-              <PressSection artist={artist} />
-            )}
+        {activeSection === "press" && (
+          <PressSection artist={artist} />
+        )}
 
-            {activeSection === "epk" && (
-              <EPKSection artist={artist} stats={stats} facts={facts} appearances={appearances} />
-            )}
-          </motion.div>
-        </AnimatePresence>
+        {activeSection === "epk" && (
+          <EPKSection artist={artist} stats={stats} facts={facts} appearances={appearances} />
+        )}
       </div>
     </div>
   );
@@ -477,162 +511,144 @@ export default function ArtistDetailPage() {
 
 function StatBadge({ icon: Icon, value, label }: { icon: any; value: string | number; label: string }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5">
-      <Icon className="w-3.5 h-3.5 text-white/40" />
-      <span className="text-sm font-semibold">{value}</span>
-      <span className="text-xs text-white/40">{label}</span>
+    <div className="flex items-center gap-1.5 text-sm text-cream/60">
+      <Icon className="w-4 h-4 text-cream/40" />
+      <span className="font-semibold text-cream">{value}</span>
+      <span>{label}</span>
     </div>
   );
 }
 
-function OverviewSection({ 
-  artist, facts, stats, appearances, connections, milestones, expandedBio, setExpandedBio 
+function OverviewSection({
+  artist, facts, stats, appearances, connections, milestones, expandedBio, setExpandedBio
 }: any) {
   return (
     <div className="space-y-8">
       {/* Bio */}
       {artist.bio && (
-        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">About</h3>
-          <p className={`text-sm leading-relaxed text-white/70 ${expandedBio ? "" : "line-clamp-4"}`}>
+        <section>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-cream/50" /> About
+          </h3>
+          <div className={`text-cream/70 leading-relaxed ${expandedBio ? "" : "line-clamp-4"}`}>
             {artist.bio}
-          </p>
+          </div>
           {artist.bio.length > 300 && (
             <button
               onClick={() => setExpandedBio(!expandedBio)}
-              className="flex items-center gap-1 mt-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+              className="mt-2 text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
             >
-              {expandedBio ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {expandedBio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               {expandedBio ? "Show less" : "Read more"}
             </button>
           )}
-        </div>
+        </section>
       )}
 
       {/* Cool Facts */}
       {facts.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Cool Facts</h3>
+        <section>
+          <h3 className="text-lg font-semibold mb-3">Cool Facts</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {facts.map((fact: CoolFact, i: number) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-xl bg-white/[0.03] border border-white/5 p-4 hover:bg-white/[0.06] transition-colors"
-              >
-                <div className="text-2xl mb-2">{fact.icon}</div>
-                <div className="text-xs text-white/40 mb-1">{fact.label}</div>
-                <div className="text-lg font-bold mb-1">{fact.value}</div>
-                <div className="text-xs text-white/30">{fact.detail}</div>
-              </motion.div>
+              <div key={i} className="p-3 rounded-xl bg-cream/5 border border-cream/10">
+                <div className="text-2xl mb-1">{fact.icon}</div>
+                <div className="text-xs text-cream/50 uppercase tracking-wider">{fact.label}</div>
+                <div className="text-lg font-bold text-cream">{fact.value}</div>
+                <div className="text-xs text-cream/40 mt-0.5">{fact.detail}</div>
+              </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Recent Gigs */}
       {appearances.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">Recent Gigs</h3>
-            <button className="text-xs text-white/40 hover:text-white/60 flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
+        <section>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-cream/50" /> Recent Gigs
+          </h3>
           <div className="space-y-2">
-            {appearances.map((gig: Appearance, i: number) => (
-              <motion.div
-                key={gig.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors"
-              >
-                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
-                  <Calendar className="w-5 h-5 text-white/20" />
+            {appearances.slice(0, 6).map((gig: Appearance, i: number) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-cream/5 border border-cream/10">
+                <div className="text-xs text-cream/40 w-16 shrink-0 text-right">
+                  <div className="font-mono">{gig.year || "?"}</div>
+                  {gig.event_date && (
+                    <div>{new Date(gig.event_date).toLocaleDateString("en-IN", { month: "short" })}</div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{gig.event_name}</div>
-                  <div className="text-xs text-white/40">
-                    {gig.venue} {gig.city && `· ${gig.city}`}
+                  <div className="font-medium text-cream truncate">{gig.event_name}</div>
+                  <div className="text-sm text-cream/50">
+                    {gig.venue && <span>{gig.venue}</span>}
+                    {gig.city && <span className="text-cream/30"> · {gig.city}</span>}
                   </div>
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${roleColors[gig.role] || roleColors.performer}`}>
+                <Badge className={`shrink-0 ${roleColors[gig.role] || roleColors.performer}`}>
                   {gig.role}
-                </span>
-                <div className="text-xs text-white/30">{gig.year}</div>
-              </motion.div>
+                </Badge>
+              </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Connections Preview */}
       {connections.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">Connections</h3>
-            <span className="text-xs text-white/30">{stats.total_connections} total</span>
-          </div>
+        <section>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Users className="w-5 h-5 text-cream/50" /> Connections
+          </h3>
+          <div className="text-sm text-cream/50 mb-2">{stats.total_connections} total</div>
           <div className="flex flex-wrap gap-2">
-            {connections.map((conn: Connection, i: number) => {
+            {connections.slice(0, 8).map((conn: Connection, i: number) => {
               const partnerSlug = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
               return (
-                <Link
-                  key={i}
-                  href={`/artists/${partnerSlug}`}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium">
-                    {partnerSlug.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium">{partnerSlug}</div>
-                    <div className="text-[10px] text-white/30">
+                <Link key={i} to={`/artists/${partnerSlug}`}>
+                  <Badge variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10 cursor-pointer">
+                    <span className="w-5 h-5 rounded-full bg-cream/10 flex items-center justify-center text-xs mr-1.5">
+                      {partnerSlug.charAt(0).toUpperCase()}
+                    </span>
+                    {partnerSlug}
+                    <span className="ml-1.5 text-cream/40">
                       {conn.connection_type} · {conn.shared_events.length} events
-                    </div>
-                  </div>
+                    </span>
+                  </Badge>
                 </Link>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Milestones Preview */}
       {milestones.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Journey Highlights</h3>
-          <div className="space-y-3">
-            {milestones.map((m: Milestone, i: number) => {
+        <section>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Route className="w-5 h-5 text-cream/50" /> Journey Highlights
+          </h3>
+          <div className="space-y-2">
+            {milestones.slice(0, 4).map((m: Milestone, i: number) => {
               const Icon = milestoneIcons[m.type] || Star;
               return (
-                <motion.div
-                  key={m.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-white/40" />
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-cream/5 border border-cream/10">
+                  <div className="w-8 h-8 rounded-lg bg-cream/10 flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-cream/60" />
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{m.title}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-cream">{m.title}</div>
                     {m.description && (
-                      <div className="text-xs text-white/40 mt-0.5">{m.description}</div>
+                      <div className="text-sm text-cream/50 mt-0.5">{m.description}</div>
                     )}
-                    <div className="text-[10px] text-white/30 mt-1">
+                    <div className="text-xs text-cream/40 mt-1">
                       {m.year} {m.city && `· ${m.city}`}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
@@ -641,32 +657,37 @@ function OverviewSection({
 function ConnectionsSection({ connections, artistSlug }: { connections: Connection[]; artistSlug: string }) {
   const [filterType, setFilterType] = useState<string>("all");
 
-  const filtered = filterType === "all" 
-    ? connections 
+  const filtered = filterType === "all"
+    ? connections
     : connections.filter(c => c.connection_type === filterType);
 
   const types = [...new Set(connections.map(c => c.connection_type))];
 
+  if (connections.length === 0) {
+    return (
+      <div className="text-center py-16 text-cream/40">
+        <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p>No connections found for this artist yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilterType("all")}
-          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-            filterType === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-          }`}
+          className={`px-3 py-1 rounded-full text-sm border ${filterType === "all" ? "bg-cream/10 border-cream/30 text-cream" : "border-cream/20 text-cream/50 hover:bg-cream/5"}`}
         >
-          All ({connections.length})
+          All
         </button>
         {types.map(type => (
           <button
             key={type}
             onClick={() => setFilterType(type)}
-            className={`px-3 py-1.5 rounded-full text-xs transition-colors capitalize ${
-              filterType === type ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-            }`}
+            className={`px-3 py-1 rounded-full text-sm border capitalize ${filterType === type ? "bg-cream/10 border-cream/30 text-cream" : "border-cream/20 text-cream/50 hover:bg-cream/5"}`}
           >
-            {type} ({connections.filter(c => c.connection_type === type).length})
+            {type}
           </button>
         ))}
       </div>
@@ -675,73 +696,50 @@ function ConnectionsSection({ connections, artistSlug }: { connections: Connecti
         {filtered.map((conn, i) => {
           const partnerSlug = conn.artist_a_slug === artistSlug ? conn.artist_b_slug : conn.artist_a_slug;
           return (
-            <motion.div
-              key={`${conn.artist_a_slug}-${conn.artist_b_slug}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="rounded-xl bg-white/[0.03] border border-white/5 p-4 hover:bg-white/[0.06] transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <Link href={`/artists/${partnerSlug}`}>
-                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-lg font-bold hover:bg-white/15 transition-colors">
-                    {partnerSlug.charAt(0).toUpperCase()}
-                  </div>
-                </Link>
+            <div key={i} className="p-4 rounded-xl bg-cream/5 border border-cream/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center text-lg font-bold text-cream/70">
+                  {partnerSlug.charAt(0).toUpperCase()}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <Link href={`/artists/${partnerSlug}`} className="text-sm font-semibold hover:text-white/80 transition-colors">
+                  <Link to={`/artists/${partnerSlug}`} className="font-medium text-cream hover:text-purple-400 truncate block">
                     {partnerSlug}
                   </Link>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${
-                      conn.connection_type === 'b2b' ? 'bg-purple-500/20 text-purple-300' :
-                      conn.connection_type === 'collab' ? 'bg-blue-500/20 text-blue-300' :
-                      conn.connection_type === 'label' ? 'bg-amber-500/20 text-amber-300' :
-                      'bg-gray-500/20 text-gray-300'
-                    }`}>
-                      {conn.connection_type}
-                    </span>
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(10)].map((_, j) => (
-                        <div
-                          key={j}
-                          className={`w-1 h-3 rounded-full ${
-                            j < conn.strength ? 'bg-white/40' : 'bg-white/10'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {conn.shared_events.length > 0 && (
-                    <div className="mt-2">
-                      <div className="text-[10px] text-white/30 mb-1">Shared events:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {conn.shared_events.slice(0, 3).map(e => (
-                          <span key={e} className="px-1.5 py-0.5 rounded text-[10px] bg-white/5 text-white/40">
-                            {e}
-                          </span>
-                        ))}
-                        {conn.shared_events.length > 3 && (
-                          <span className="text-[10px] text-white/30">+{conn.shared_events.length - 3} more</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {conn.shared_venues.length > 0 && (
-                    <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/30">
-                      <MapPin className="w-3 h-3" />
-                      {conn.shared_venues.slice(0, 3).join(", ")}
-                    </div>
-                  )}
-
-                  {conn.notes && (
-                    <p className="mt-2 text-xs text-white/30 italic">{conn.notes}</p>
-                  )}
+                  <div className="text-sm text-cream/50 capitalize">{conn.connection_type}</div>
                 </div>
               </div>
-            </motion.div>
+
+              <div className="mt-3 flex items-center gap-1">
+                {[...Array(10)].map((_, j) => (
+                  <div
+                    key={j}
+                    className={`h-1.5 flex-1 rounded-full ${j < conn.strength ? "bg-purple-500/60" : "bg-cream/10"}`}
+                  />
+                ))}
+              </div>
+
+              {conn.shared_events.length > 0 && (
+                <div className="mt-2 text-sm text-cream/50">
+                  Shared events:
+                  {conn.shared_events.slice(0, 3).map(e => (
+                    <span key={e} className="ml-1 text-cream/40">{e}</span>
+                  ))}
+                  {conn.shared_events.length > 3 && (
+                    <span className="text-cream/30"> +{conn.shared_events.length - 3} more</span>
+                  )}
+                </div>
+              )}
+
+              {conn.shared_venues.length > 0 && (
+                <div className="mt-1 text-xs text-cream/40">
+                  {conn.shared_venues.slice(0, 3).join(", ")}
+                </div>
+              )}
+
+              {conn.notes && (
+                <div className="mt-2 text-xs text-cream/40 italic">{conn.notes}</div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -749,59 +747,53 @@ function ConnectionsSection({ connections, artistSlug }: { connections: Connecti
   );
 }
 
-function GigographySection({ 
-  appearances, filteredAppearances, years, selectedYear, setSelectedYear 
+function GigographySection({
+  appearances, filteredAppearances, years, selectedYear, setSelectedYear
 }: any) {
   const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
 
+  if (appearances.length === 0) {
+    return (
+      <div className="text-center py-16 text-cream/40">
+        <MapPin className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p>No gig history found for this artist yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+        <select
+          value={selectedYear}
+          onChange={e => setSelectedYear(e.target.value)}
+          className="bg-cream/5 border border-cream/20 rounded-lg px-3 py-1.5 text-sm text-cream"
+        >
+          <option value="all">All years</option>
+          {years.map((year: number) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+
+        <div className="flex gap-1">
           <button
             onClick={() => setViewMode("list")}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
-              viewMode === "list" ? "bg-white/10 text-white" : "text-white/40"
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-sm ${viewMode === "list" ? "bg-cream/10 text-cream" : "text-cream/50 hover:bg-cream/5"}`}
           >
             List
           </button>
           <button
             onClick={() => setViewMode("timeline")}
-            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
-              viewMode === "timeline" ? "bg-white/10 text-white" : "text-white/40"
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-sm ${viewMode === "timeline" ? "bg-cream/10 text-cream" : "text-cream/50 hover:bg-cream/5"}`}
           >
             Timeline
           </button>
         </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setSelectedYear("all")}
-            className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-              selectedYear === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-            }`}
-          >
-            All Years
-          </button>
-          {years.map((year: number) => (
-            <button
-              key={year}
-              onClick={() => setSelectedYear(year === selectedYear ? "all" : year)}
-              className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-                selectedYear === year ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-              }`}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Stats bar */}
-      <div className="flex gap-4 text-xs text-white/40">
+      <div className="flex flex-wrap gap-4 text-sm text-cream/50">
         <span>{filteredAppearances.length} gigs shown</span>
         <span>{new Set(filteredAppearances.map((a: any) => a.city).filter(Boolean)).size} cities</span>
         <span>{new Set(filteredAppearances.map((a: any) => a.venue).filter(Boolean)).size} venues</span>
@@ -810,33 +802,19 @@ function GigographySection({
       {viewMode === "list" ? (
         <div className="space-y-2">
           {filteredAppearances.map((gig: Appearance, i: number) => (
-            <motion.div
-              key={gig.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: i * 0.03 }}
-              className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors group"
-            >
-              <div className="w-14 text-center flex-shrink-0">
-                <div className="text-lg font-bold">{gig.year || "?"}</div>
-                <div className="text-[10px] text-white/30">
-                  {gig.event_date ? new Date(gig.event_date).toLocaleDateString("en-IN", { month: "short" }) : ""}
-                </div>
+            <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-cream/5 border border-cream/10">
+              <div className="text-xs text-cream/40 w-14 shrink-0 text-right font-mono">
+                <div className="font-bold">{gig.year || "?"}</div>
+                {gig.event_date && (
+                  <div>{new Date(gig.event_date).toLocaleDateString("en-IN", { month: "short" })}</div>
+                )}
               </div>
-
-              <div className="w-px h-10 bg-white/10" />
-
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{gig.event_name}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${roleColors[gig.role] || roleColors.performer}`}>
-                    {gig.role}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
+                <div className="font-medium text-cream">{gig.event_name}</div>
+                <div className="flex items-center gap-2 text-sm text-cream/50">
                   {gig.venue && (
                     <span className="flex items-center gap-1">
-                      <Building2 className="w-3 h-3" /> {gig.venue}
+                      <MapPin className="w-3 h-3" /> {gig.venue}
                     </span>
                   )}
                   {gig.city && (
@@ -846,37 +824,27 @@ function GigographySection({
                   )}
                 </div>
               </div>
-
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="w-4 h-4 text-white/20" />
-              </div>
-            </motion.div>
+              <Badge className={`shrink-0 ${roleColors[gig.role] || roleColors.performer}`}>
+                {gig.role}
+              </Badge>
+            </div>
           ))}
         </div>
       ) : (
-        <div className="relative pl-8">
-          <div className="absolute left-3 top-0 bottom-0 w-px bg-white/10" />
+        <div className="relative pl-6 border-l border-cream/10 space-y-6">
           {filteredAppearances.map((gig: Appearance, i: number) => (
-            <motion.div
-              key={gig.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="relative mb-6"
-            >
-              <div className="absolute -left-5 top-1 w-2.5 h-2.5 rounded-full bg-white/20 border-2 border-[#0a0a0a]" />
-              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5">
-                <div className="text-xs text-white/30 mb-1">{gig.year}</div>
-                <div className="text-sm font-medium">{gig.event_name}</div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
-                  {gig.venue && <span>{gig.venue}</span>}
-                  {gig.city && <span>{gig.city}</span>}
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${roleColors[gig.role] || roleColors.performer}`}>
-                    {gig.role}
-                  </span>
-                </div>
+            <div key={i} className="relative">
+              <div className="absolute -left-[29px] w-3 h-3 rounded-full bg-cream/20 border-2 border-[#0a0a0f]" />
+              <div className="text-xs text-cream/40 font-mono mb-1">{gig.year}</div>
+              <div className="font-medium text-cream">{gig.event_name}</div>
+              <div className="text-sm text-cream/50">
+                {gig.venue && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{gig.venue}</span>}
+                {gig.city && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{gig.city}</span>}
               </div>
-            </motion.div>
+              <Badge className={`mt-1 ${roleColors[gig.role] || roleColors.performer}`}>
+                {gig.role}
+              </Badge>
+            </div>
           ))}
         </div>
       )}
@@ -889,103 +857,74 @@ function JourneySection({ milestones }: { milestones: Milestone[] }) {
   const types = [...new Set(milestones.map(m => m.type))];
   const filtered = filterType === "all" ? milestones : milestones.filter(m => m.type === filterType);
 
+  if (milestones.length === 0) {
+    return (
+      <div className="text-center py-16 text-cream/40">
+        <Route className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p>No milestones recorded for this artist yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setFilterType("all")}
-          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-            filterType === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-          }`}
+          className={`px-3 py-1 rounded-full text-sm border ${filterType === "all" ? "bg-cream/10 border-cream/30 text-cream" : "border-cream/20 text-cream/50 hover:bg-cream/5"}`}
         >
-          All ({milestones.length})
+          All
         </button>
         {types.map(type => (
           <button
             key={type}
             onClick={() => setFilterType(type)}
-            className={`px-3 py-1.5 rounded-full text-xs transition-colors capitalize ${
-              filterType === type ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
-            }`}
+            className={`px-3 py-1 rounded-full text-sm border capitalize ${filterType === type ? "bg-cream/10 border-cream/30 text-cream" : "border-cream/20 text-cream/50 hover:bg-cream/5"}`}
           >
-            {type.replace('_', ' ')}
+            {type.replace("_", " ")}
           </button>
         ))}
       </div>
 
-      <div className="relative pl-8">
-        <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-white/20 via-white/10 to-transparent" />
-
+      <div className="relative pl-6 border-l border-cream/10 space-y-6">
         {filtered.map((milestone, i) => {
           const Icon = milestoneIcons[milestone.type] || Star;
           return (
-            <motion.div
-              key={milestone.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="relative mb-8 group"
-            >
-              <div className={`absolute -left-5 top-2 w-4 h-4 rounded-full border-2 border-[#0a0a0a] flex items-center justify-center ${
-                milestone.is_featured ? 'bg-amber-500/30' : 'bg-white/10'
-              }`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  milestone.is_featured ? 'bg-amber-400' : 'bg-white/40'
-                }`} />
+            <div key={i} className="relative">
+              <div className="absolute -left-[29px] w-8 h-8 rounded-lg bg-cream/10 flex items-center justify-center">
+                <Icon className="w-4 h-4 text-cream/60" />
               </div>
-
-              <div className={`p-5 rounded-xl border transition-all ${
-                milestone.is_featured 
-                  ? 'bg-amber-500/[0.03] border-amber-500/20' 
-                  : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'
-              }`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    milestone.is_featured ? 'bg-amber-500/10' : 'bg-white/5'
-                  }`}>
-                    <Icon className={`w-5 h-5 ${milestone.is_featured ? 'text-amber-300' : 'text-white/40'}`} />
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold">{milestone.title}</span>
-                      {milestone.is_featured && (
-                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                      )}
-                    </div>
-
-                    {milestone.description && (
-                      <p className="text-xs text-white/50 mb-2">{milestone.description}</p>
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <div className="font-medium text-cream flex items-center gap-2">
+                    {milestone.title}
+                    {milestone.is_featured && (
+                      <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                        <Star className="w-3 h-3 mr-0.5" /> Featured
+                      </Badge>
                     )}
-
-                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/30">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {milestone.year || milestone.date.split('-')[0]}
-                      </span>
-                      {milestone.city && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" /> {milestone.city}
-                        </span>
-                      )}
-                      {milestone.venue && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="w-3 h-3" /> {milestone.venue}
-                        </span>
-                      )}
-                      {milestone.related_artist_slug && (
-                        <Link 
-                          href={`/artists/${milestone.related_artist_slug}`}
-                          className="flex items-center gap-1 text-white/40 hover:text-white/60"
-                        >
-                          <Users className="w-3 h-3" /> {milestone.related_artist_name || milestone.related_artist_slug}
-                        </Link>
-                      )}
-                    </div>
                   </div>
+                  {milestone.description && (
+                    <div className="text-sm text-cream/50 mt-1">{milestone.description}</div>
+                  )}
                 </div>
               </div>
-            </motion.div>
+              <div className="flex flex-wrap gap-2 mt-2 text-xs text-cream/40">
+                <span className="font-mono">{milestone.year || milestone.date.split('-')[0]}</span>
+                {milestone.city && (
+                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{milestone.city}</span>
+                )}
+                {milestone.venue && (
+                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{milestone.venue}</span>
+                )}
+                {milestone.related_artist_slug && (
+                  <Link to={`/artists/${milestone.related_artist_slug}`} className="flex items-center gap-1 text-purple-400 hover:text-purple-300">
+                    <Users className="w-3 h-3" />
+                    {milestone.related_artist_name || milestone.related_artist_slug}
+                  </Link>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -994,6 +933,15 @@ function JourneySection({ milestones }: { milestones: Milestone[] }) {
 }
 
 function StatsSection({ stats, appearances, socialStats }: any) {
+  if (appearances.length === 0) {
+    return (
+      <div className="text-center py-16 text-cream/40">
+        <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p>No gig data available for statistics.</p>
+      </div>
+    );
+  }
+
   // Compute yearly breakdown
   const byYear = appearances.reduce((acc: any, gig: Appearance) => {
     const y = gig.year || 0;
@@ -1024,7 +972,7 @@ function StatsSection({ stats, appearances, socialStats }: any) {
     .slice(0, 10);
 
   // Venue breakdown
-  const venueData = appearances.reduce((acc: Record<string, { count: number; city: string }>, gig: Appearance) => {
+  const venueData = appearances.reduce((acc: Record<string, any>, gig: Appearance) => {
     if (gig.venue) {
       if (!acc[gig.venue]) acc[gig.venue] = { count: 0, city: gig.city || "Unknown" };
       acc[gig.venue].count++;
@@ -1043,85 +991,90 @@ function StatsSection({ stats, appearances, socialStats }: any) {
   return (
     <div className="space-y-8">
       {/* Key metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard label="Total Gigs" value={stats.total_gigs} icon={Route} />
-        <MetricCard label="Cities Played" value={stats.total_cities} icon={MapPin} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Total Gigs" value={stats.total_gigs} icon={MapPin} />
+        <MetricCard label="Cities" value={stats.total_cities} icon={MapPin} />
         <MetricCard label="Venues" value={stats.total_venues} icon={Building2} />
-        <MetricCard label="Connections" value={stats.total_connections} icon={Link2} />
-        <MetricCard label="B2B Partners" value={stats.b2b_count} icon={Users} />
-        <MetricCard label="Festivals" value={stats.festival_count} icon={PartyPopper} />
-        <MetricCard label="Years Active" value={stats.years_active} icon={Clock} />
+        <MetricCard label="Connections" value={stats.total_connections} icon={Users} />
         {socialStats?.instagram_followers && (
-          <MetricCard label="IG Followers" value={formatNumber(socialStats.instagram_followers)} icon={TrendingUp} />
+          <MetricCard label="IG Followers" value={formatNumber(socialStats.instagram_followers)} icon={Instagram} />
+        )}
+        {socialStats?.soundcloud_followers && (
+          <MetricCard label="SC Followers" value={formatNumber(socialStats.soundcloud_followers)} icon={Headphones} />
+        )}
+        {socialStats?.spotify_monthly_listeners && (
+          <MetricCard label="Spotify Monthly" value={formatNumber(socialStats.spotify_monthly_listeners)} icon={Music} />
         )}
       </div>
 
       {/* Yearly chart */}
       {yearData.length > 0 && (
-        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Gigs Per Year</h3>
-          <div className="flex items-end gap-2 h-40">
+        <section>
+          <h3 className="text-lg font-semibold mb-3">Gigs Per Year</h3>
+          <div className="space-y-2">
             {yearData.map(d => (
-              <div key={d.year} className="flex-1 flex flex-col items-center gap-1">
-                <div className="text-[10px] text-white/30">{d.gigs}</div>
-                <div 
-                  className="w-full rounded-t-md bg-white/10 hover:bg-white/20 transition-colors relative group"
-                  style={{ height: `${(d.gigs / maxGigs) * 100}%`, minHeight: '4px' }}
-                >
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-black/80 text-[10px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">
+              <div key={d.year} className="flex items-center gap-3">
+                <div className="w-12 text-sm text-cream/50 font-mono text-right">{d.year}</div>
+                <div className="flex-1 h-6 bg-cream/5 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full bg-purple-500/40 rounded-full transition-all"
+                    style={{ width: `${(d.gigs / maxGigs) * 100}%` }}
+                  />
+                  <span className="absolute inset-0 flex items-center px-2 text-xs text-cream/70">
                     {d.gigs} gigs · {d.cities} cities · {d.venues} venues
-                  </div>
+                  </span>
                 </div>
-                <div className="text-[10px] text-white/40">{d.year}</div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Top cities */}
       {topCities.length > 0 && (
-        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Top Cities</h3>
-          <div className="space-y-3">
+        <section>
+          <h3 className="text-lg font-semibold mb-3">Top Cities</h3>
+          <div className="space-y-2">
             {topCities.map(c => (
               <div key={c.city} className="flex items-center gap-3">
-                <div className="w-24 text-xs text-white/40">{c.city}</div>
-                <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full bg-white/15 transition-all"
+                <div className="w-24 text-sm text-cream/50 truncate">{c.city}</div>
+                <div className="flex-1 h-5 bg-cream/5 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full bg-blue-500/40 rounded-full"
                     style={{ width: `${(c.count / maxCityCount) * 100}%` }}
                   />
+                  <span className="absolute inset-0 flex items-center px-2 text-xs text-cream/70">
+                    {c.count}
+                  </span>
                 </div>
-                <div className="w-8 text-xs text-white/60 text-right">{c.count}</div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Top venues */}
       {topVenues.length > 0 && (
-        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Top Venues</h3>
-          <div className="space-y-3">
+        <section>
+          <h3 className="text-lg font-semibold mb-3">Top Venues</h3>
+          <div className="space-y-2">
             {topVenues.map(v => (
               <div key={v.venue} className="flex items-center gap-3">
-                <div className="w-32">
-                  <div className="text-xs text-white/40 truncate">{v.venue}</div>
-                  <div className="text-[10px] text-white/20">{v.city}</div>
-                </div>
-                <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full bg-white/15 transition-all"
+                <div className="w-32 text-sm text-cream/50 truncate">{v.venue}</div>
+                <div className="text-xs text-cream/30 w-16">{v.city}</div>
+                <div className="flex-1 h-5 bg-cream/5 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full bg-green-500/40 rounded-full"
                     style={{ width: `${(v.count / maxVenueCount) * 100}%` }}
                   />
+                  <span className="absolute inset-0 flex items-center px-2 text-xs text-cream/70">
+                    {v.count}
+                  </span>
                 </div>
-                <div className="w-8 text-xs text-white/60 text-right">{v.count}</div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
@@ -1129,31 +1082,30 @@ function StatsSection({ stats, appearances, socialStats }: any) {
 
 function MetricCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: any }) {
   return (
-    <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4">
-      <Icon className="w-4 h-4 text-white/20 mb-2" />
-      <div className="text-xl font-bold">{value}</div>
-      <div className="text-xs text-white/30">{label}</div>
+    <div className="p-4 rounded-xl bg-cream/5 border border-cream/10 text-center">
+      <Icon className="w-5 h-5 mx-auto mb-2 text-cream/40" />
+      <div className="text-2xl font-bold text-cream">{value}</div>
+      <div className="text-xs text-cream/50 mt-0.5">{label}</div>
     </div>
   );
 }
 
 function PressSection({ artist }: { artist: Artist }) {
-  // Placeholder — would fetch from artist_press table
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-8 text-center">
-        <Newspaper className="w-10 h-10 text-white/10 mx-auto mb-4" />
-        <h3 className="text-lg font-medium mb-2">Press & Media</h3>
-        <p className="text-sm text-white/40 max-w-md mx-auto mb-4">
-          Press mentions, reviews, and interviews for {artist.name}. 
-          This section is populated from the artist_press table.
-        </p>
-        <div className="flex items-center justify-center gap-2 text-xs text-white/30">
-          <span className="px-2 py-1 rounded bg-white/5">Reviews</span>
-          <span className="px-2 py-1 rounded bg-white/5">Interviews</span>
-          <span className="px-2 py-1 rounded bg-white/5">Premieres</span>
-          <span className="px-2 py-1 rounded bg-white/5">Features</span>
-        </div>
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold flex items-center gap-2">
+        <Newspaper className="w-5 h-5 text-cream/50" /> Press & Media
+      </h3>
+      <p className="text-cream/50">
+        Press mentions, reviews, and interviews for {artist.name}.
+        This section is populated from the artist_press table.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {["Reviews", "Interviews", "Premieres", "Features"].map(tag => (
+          <Badge key={tag} variant="outline" className="border-cream/20 text-cream/50">
+            {tag}
+          </Badge>
+        ))}
       </div>
     </div>
   );
@@ -1164,168 +1116,128 @@ function EPKSection({ artist, stats, facts, appearances }: any) {
 
   const handleDownloadEPK = async () => {
     setDownloading(true);
-    // In production, this would generate a PDF
     setTimeout(() => setDownloading(false), 2000);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* EPK Header */}
-      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-        <div className="flex items-start gap-4">
-          {artist.photo_url && (
-            <Image 
-              src={artist.photo_url} 
-              alt={artist.name} 
-              width={120} 
-              height={120} 
-              className="rounded-xl object-cover"
-            />
-          )}
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold mb-1">{artist.name}</h2>
-            <p className="text-sm text-white/50 mb-3">
-              {artist.genres.join(" · ")} · {artist.based_city}
-            </p>
-            <p className="text-sm text-white/40 leading-relaxed mb-4">
-              {artist.bio?.slice(0, 200)}...
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs text-white/30">
-              <span>{stats.total_gigs}+ gigs</span>
-              <span>·</span>
-              <span>{stats.total_cities} cities</span>
-              <span>·</span>
-              <span>{stats.years_active} years active</span>
-            </div>
+      <div className="flex flex-col md:flex-row gap-6 p-6 rounded-2xl bg-cream/5 border border-cream/10">
+        {artist.photo_url && (
+          <img src={artist.photo_url} alt={artist.name} className="w-32 h-32 rounded-xl object-cover" />
+        )}
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold">{artist.name}</h2>
+          <p className="text-cream/60 mt-1">{artist.genres.join(" · ")} · {artist.based_city}</p>
+          <p className="text-cream/50 mt-2 text-sm">{artist.bio?.slice(0, 200)}...</p>
+          <div className="flex flex-wrap gap-3 mt-3 text-sm text-cream/50">
+            <span>{stats.total_gigs}+ gigs</span>
+            <span>·</span>
+            <span>{stats.total_cities} cities</span>
+            <span>·</span>
+            <span>{stats.years_active} years active</span>
           </div>
         </div>
       </div>
 
       {/* Quick Facts for Press */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {facts.slice(0, 6).map((fact: CoolFact, i: number) => (
-          <div key={i} className="rounded-xl bg-white/[0.03] border border-white/5 p-4">
-            <div className="text-lg mb-1">{fact.icon}</div>
-            <div className="text-xs text-white/30">{fact.label}</div>
-            <div className="text-sm font-semibold">{fact.value}</div>
+      {facts.length > 0 && (
+        <section>
+          <h3 className="text-lg font-semibold mb-3">Quick Facts</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {facts.slice(0, 6).map((fact: CoolFact, i: number) => (
+              <div key={i} className="p-3 rounded-lg bg-cream/5 border border-cream/10">
+                <div className="text-xl">{fact.icon}</div>
+                <div className="text-xs text-cream/50 mt-1">{fact.label}</div>
+                <div className="font-bold text-cream">{fact.value}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </section>
+      )}
 
       {/* Contact */}
-      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Contact</h3>
-        <div className="space-y-3">
+      <section>
+        <h3 className="text-lg font-semibold mb-3">Contact</h3>
+        <div className="space-y-2">
           {artist.booking_email && (
-            <div className="flex items-center gap-3">
-              <Mail className="w-4 h-4 text-white/30" />
-              <span className="text-sm">{artist.booking_email}</span>
-              <button 
-                onClick={() => navigator.clipboard.writeText(artist.booking_email)}
-                className="text-white/20 hover:text-white/40"
-              >
-                <Copy className="w-3 h-3" />
-              </button>
-            </div>
+            <a href={`mailto:${artist.booking_email}`} className="flex items-center gap-2 text-cream/70 hover:text-cream">
+              <Mail className="w-4 h-4" /> {artist.booking_email}
+            </a>
           )}
           {artist.manager_email && (
-            <div className="flex items-center gap-3">
-              <Users className="w-4 h-4 text-white/30" />
-              <span className="text-sm">{artist.manager_email}</span>
-              <span className="text-[10px] text-white/20">(Management)</span>
-            </div>
+            <a href={`mailto:${artist.manager_email}`} className="flex items-center gap-2 text-cream/70 hover:text-cream">
+              <Mail className="w-4 h-4" /> {artist.manager_email} (Management)
+            </a>
           )}
           {artist.website && (
-            <div className="flex items-center gap-3">
-              <Globe className="w-4 h-4 text-white/30" />
-              <a href={artist.website} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-white/80">
-                {artist.website}
-              </a>
-            </div>
+            <a href={artist.website} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-cream/70 hover:text-cream">
+              <Globe className="w-4 h-4" /> {artist.website}
+            </a>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Social Links */}
-      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Social & Streaming</h3>
+      <section>
+        <h3 className="text-lg font-semibold mb-3">Social</h3>
         <div className="flex flex-wrap gap-2">
           {artist.instagram && (
-            <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noopener noreferrer"
-               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
-              <Instagram className="w-4 h-4" /> Instagram
+            <a href={`https://instagram.com/${artist.instagram.replace('@', '')}`} target="_blank" rel="noreferrer">
+              <Badge variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                <Instagram className="w-3 h-3 mr-1" /> Instagram
+              </Badge>
             </a>
           )}
           {artist.soundcloud && (
-            <a href={artist.soundcloud} target="_blank" rel="noopener noreferrer"
-               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
-              <Headphones className="w-4 h-4" /> SoundCloud
+            <a href={artist.soundcloud} target="_blank" rel="noreferrer">
+              <Badge variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                <Headphones className="w-3 h-3 mr-1" /> SoundCloud
+              </Badge>
             </a>
           )}
           {artist.spotify && (
-            <a href={artist.spotify} target="_blank" rel="noopener noreferrer"
-               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
-              <Disc className="w-4 h-4" /> Spotify
-            </a>
-          )}
-          {artist.bandcamp && (
-            <a href={artist.bandcamp} target="_blank" rel="noopener noreferrer"
-               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
-              <Music className="w-4 h-4" /> Bandcamp
+            <a href={artist.spotify} target="_blank" rel="noreferrer">
+              <Badge variant="outline" className="border-cream/20 text-cream/70 hover:bg-cream/10">
+                <Music className="w-3 h-3 mr-1" /> Spotify
+              </Badge>
             </a>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Tech Specs */}
-      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
-        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Technical</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <div className="text-white/30 text-xs mb-1">Available for</div>
-            <div>{artist.available_cities.length > 0 ? artist.available_cities.join(", ") : "All cities"}</div>
+      <section>
+        <h3 className="text-lg font-semibold mb-3">Technical</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div className="p-3 rounded-lg bg-cream/5 border border-cream/10">
+            <div className="text-cream/50">Available for</div>
+            <div className="text-cream">{artist.available_cities.length > 0 ? artist.available_cities.join(", ") : "All cities"}</div>
           </div>
-          <div>
-            <div className="text-white/30 text-xs mb-1">Fee Range</div>
-            <div>
-              {artist.fee_min_inr && artist.fee_max_inr 
+          <div className="p-3 rounded-lg bg-cream/5 border border-cream/10">
+            <div className="text-cream/50">Fee Range</div>
+            <div className="text-cream">
+              {artist.fee_min_inr && artist.fee_max_inr
                 ? `₹${artist.fee_min_inr.toLocaleString()} - ₹${artist.fee_max_inr.toLocaleString()}`
                 : "Contact for rates"
               }
             </div>
           </div>
-          <div>
-            <div className="text-white/30 text-xs mb-1">Status</div>
-            <div className="flex items-center gap-1">
-              <div className={`w-2 h-2 rounded-full ${artist.open_to_bookings ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              {artist.open_to_bookings ? "Open for bookings" : "Not taking bookings"}
-            </div>
+          <div className="p-3 rounded-lg bg-cream/5 border border-cream/10">
+            <div className="text-cream/50">Status</div>
+            <div className="text-cream">{artist.open_to_bookings ? "Open for bookings" : "Not taking bookings"}</div>
           </div>
-          <div>
-            <div className="text-white/30 text-xs mb-1">Genres</div>
-            <div>{artist.genres.join(", ")}</div>
+          <div className="p-3 rounded-lg bg-cream/5 border border-cream/10">
+            <div className="text-cream/50">Genres</div>
+            <div className="text-cream">{artist.genres.join(", ")}</div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Download CTA */}
-      <button
-        onClick={handleDownloadEPK}
-        disabled={downloading}
-        className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
-      >
-        {downloading ? (
-          <>
-            <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-            Generating EPK...
-          </>
-        ) : (
-          <>
-            <Download className="w-4 h-4" />
-            Download Press Kit (PDF)
-          </>
-        )}
-      </button>
+      <Button onClick={handleDownloadEPK} disabled={downloading} className="w-full bg-purple-600 hover:bg-purple-700">
+        {downloading ? "Generating..." : "Download EPK PDF"}
+      </Button>
     </div>
   );
 }
