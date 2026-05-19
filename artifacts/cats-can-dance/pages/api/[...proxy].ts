@@ -586,6 +586,155 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.json({ videos });
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // KNOWLEDGE GRAPH ROUTES
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── Artist connections: GET /api/artist-connections?artist_id=xxx ───────────
+  if (path === "artist-connections" && m === "GET") {
+    const artistId = rq.artist_id ?? rq.id;
+    const artistSlug = rq.slug;
+    if (!artistId && !artistSlug) return res.status(400).json({ error: "artist_id or slug required" });
+
+    let filter: Record<string,string> = {};
+    if (artistId) {
+      // Get both directions (a→b and b→a)
+      const [asA, asB] = await Promise.all([
+        get("artist_connections", `?artist_a_id=eq.${artistId}&order=strength.desc`),
+        get("artist_connections", `?artist_b_id=eq.${artistId}&order=strength.desc`),
+      ]);
+      const all = [...(asA as any[]), ...(asB as any[])];
+      return res.json(all);
+    }
+    if (artistSlug) {
+      const [asA, asB] = await Promise.all([
+        get("artist_connections", `?artist_a_slug=eq.${artistSlug}&order=strength.desc`),
+        get("artist_connections", `?artist_b_slug=eq.${artistSlug}&order=strength.desc`),
+      ]);
+      const all = [...(asA as any[]), ...(asB as any[])];
+      return res.json(all);
+    }
+  }
+
+  // ── Artist connections: POST (admin) ────────────────────────────────────────
+  if (path === "artist-connections" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const now = new Date().toISOString();
+    const { ok, data } = await upsert("artist_connections", { ...body, created_at: now, updated_at: now });
+    return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Event appearances: GET /api/event-appearances?artist_id=xxx ────────────
+  if (path === "event-appearances" && m === "GET") {
+    const f: Record<string,string> = { ...ord("event_date", false) };
+    if (rq.artist_id)   f["artist_id"]   = `eq.${rq.artist_id}`;
+    if (rq.artist_slug) f["artist_slug"] = `eq.${rq.artist_slug}`;
+    if (rq.city)        f["city"]        = `ilike.*${rq.city}*`;
+    if (rq.year)        f["year"]        = `eq.${rq.year}`;
+    return res.json(await get("event_appearances", pq(f)));
+  }
+
+  // ── Event appearances: POST (admin) ─────────────────────────────────────────
+  if (path === "event-appearances" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const { ok, data } = await ins("event_appearances", { ...body, created_at: new Date().toISOString() });
+    return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Graph traversal: "Artists who played with X" ────────────────────────────
+  // GET /api/artist-graph/[slug]?depth=1
+  if (segs[0] === "artist-graph" && segs[1] && m === "GET") {
+    const targetSlug = segs[1];
+    const depth = Math.min(parseInt(rq.depth ?? "1"), 2);
+
+    // Seed: all direct connections of target
+    const [asA, asB] = await Promise.all([
+      get("artist_connections", `?artist_a_slug=eq.${targetSlug}&order=strength.desc&limit=20`) as Promise<any[]>,
+      get("artist_connections", `?artist_b_slug=eq.${targetSlug}&order=strength.desc&limit=20`) as Promise<any[]>,
+    ]);
+    const directConnections: any[] = [...(asA as any[]), ...(asB as any[])];
+
+    // Get slugs of all direct connections
+    const connectedSlugs = new Set<string>();
+    for (const conn of directConnections) {
+      connectedSlugs.add(conn.artist_a_slug === targetSlug ? conn.artist_b_slug : conn.artist_a_slug);
+    }
+
+    // Depth-2: connections of connections (limited)
+    let secondDegree: any[] = [];
+    if (depth >= 2 && connectedSlugs.size > 0) {
+      const slugList = [...connectedSlugs].slice(0, 8).join(",");
+      // fetch connections where either side is one of our connected slugs (minus target)
+      secondDegree = (await get("artist_connections", `?artist_a_slug=in.(${slugList})&limit=30`) as any[])
+        .filter((c: any) => c.artist_a_slug !== targetSlug && c.artist_b_slug !== targetSlug);
+    }
+
+    // Appearances (for timeline)
+    const appearances = await get("event_appearances", `?artist_slug=eq.${targetSlug}&order=event_date.desc&limit=50`);
+
+    return res.json({
+      target_slug: targetSlug,
+      connections: directConnections,
+      second_degree: secondDegree,
+      appearances,
+    });
+  }
+
+  // ── Venue profiles ──────────────────────────────────────────────────────────
+  if (path === "venue-profiles" && m === "GET") {
+    const f: Record<string,string> = { ...ord("name") };
+    if (rq.city) f["city"] = `ilike.*${rq.city}*`;
+    if (rq.tier) f["tier"] = `eq.${rq.tier}`;
+    return res.json(await get("venue_profiles", pq(f)));
+  }
+
+  if (path === "venue-profiles" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const now = new Date().toISOString();
+    const { ok, data } = await ins("venue_profiles", { ...body, created_at: now, updated_at: now });
+    return ok ? res.json(data) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Event signals (recommendation engine) ──────────────────────────────────
+  // POST /api/event-signals  { session_id, event_id, signal_type, city?, genre? }
+  if (path === "event-signals" && m === "POST") {
+    const { session_id, event_id, signal_type, city, genre } = body;
+    if (!session_id || !event_id) return res.status(400).json({ error: "session_id and event_id required" });
+    const { ok } = await ins("event_signals", { session_id, event_id, signal_type: signal_type ?? "click", city, genre, created_at: new Date().toISOString() });
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+  }
+
+  // GET /api/event-signals/trending  — returns top clicked events in last 7 days
+  if (segs[0] === "event-signals" && segs[1] === "trending" && m === "GET") {
+    const since = new Date(Date.now() - 7 * 86400000).toISOString();
+    // PostgREST doesn't support GROUP BY directly; get raw signals and aggregate server-side
+    const rows = await get("event_signals", `?created_at=gte.${since}&signal_type=eq.click&select=event_id`) as { event_id: string }[];
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[r.event_id] = (counts[r.event_id] ?? 0) + 1;
+    const sorted = Object.entries(counts)
+      .sort(([,a],[,b]) => b - a)
+      .slice(0, 20)
+      .map(([event_id, clicks]) => ({ event_id, clicks }));
+    return res.json(sorted);
+  }
+
+  // ── Admin: curate trigger ────────────────────────────────────────────────────
+  // POST /api/functions/v1/curate-events → already handled above as stub
+  // Allow admin to manually trigger the scraper via a different path
+  if (path === "cron/trigger" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    try {
+      const r = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/api/cron/scrape-events`, {
+        method: "POST",
+        headers: { "x-admin-password": ADMIN_PW },
+      });
+      const data = await r.json();
+      return res.json(data);
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message });
+    }
+  }
+
   return res.status(404).json({ error: `No handler for ${m} /${path}` });
   } catch (err: any) {
     console.error("[proxy] unhandled error:", err);

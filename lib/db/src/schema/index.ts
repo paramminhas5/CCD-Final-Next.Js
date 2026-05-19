@@ -7,3 +7,6 @@ export * from "./site_videos";
 export * from "./promoters";
 export * from "./forms";
 export * from "./bookings";
+export * from "./event_appearances";
+export * from "./artist_connections";
+export * from "./venue_profiles";
