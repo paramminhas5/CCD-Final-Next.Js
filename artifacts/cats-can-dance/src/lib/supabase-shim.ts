@@ -45,6 +45,8 @@ const TABLE_ROUTE: Record<string, string> = {
   early_access_signups: "early-access",
   event_rsvps: "event-rsvp",
   site_videos: "videos",
+  // promoter_applications does not have a DB table — routes to contact_messages via proxy
+  promoter_applications: "promoter-applications",
 };
 
 function tableRoute(table: string): string {

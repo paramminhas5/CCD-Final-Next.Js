@@ -325,9 +325,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Artists: insert (public submission) ─────────────────────────────────────
   if (path === "artists" && m === "POST") {
-    // Public submissions go to artist_submissions, not artists (requires admin approval)
+    // Public submissions go to artist_submissions (requires admin approval)
+    // Only pass known artist_submissions columns — strip honeypots and unknown fields
+    const {
+      name, submitter_email, submitter_role, bio, from_city, based_city,
+      genres, festivals, instagram, soundcloud, bandcamp, spotify, website,
+      booking_email, manager_email, labels, members, photo_url, notes,
+    } = body;
     const now = new Date().toISOString();
-    const { ok } = await ins("artist_submissions", { ...body, status: "pending", created_at: now });
+    const { ok } = await ins("artist_submissions", {
+      ...(name && { name }),
+      ...(submitter_email && { submitter_email }),
+      ...(submitter_role && { submitter_role }),
+      ...(bio && { bio }),
+      ...(from_city && { from_city }),
+      ...(based_city && { based_city }),
+      ...(genres !== undefined && { genres }),
+      ...(festivals !== undefined && { festivals }),
+      ...(instagram && { instagram }),
+      ...(soundcloud && { soundcloud }),
+      ...(bandcamp && { bandcamp }),
+      ...(spotify && { spotify }),
+      ...(website && { website }),
+      ...(booking_email && { booking_email }),
+      ...(manager_email && { manager_email }),
+      ...(labels && { labels }),
+      ...(members && { members }),
+      ...(photo_url && { photo_url }),
+      ...(notes && { notes }),
+      status: "pending",
+      created_at: now,
+    });
     return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
   }
 
@@ -408,27 +436,96 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ── Public forms ────────────────────────────────────────────────────────────
+  // NOTE: Only pass known table columns — Supabase PostgREST (PGRST204) rejects
+  // unknown fields. Honeypot fields (website), UI-only fields (kind, reason, phone)
+  // must be stripped before inserting.
+
   if (path === "contact" && m === "POST") {
-    const { ok } = await ins("contact_messages", { ...body, created_at: new Date().toISOString() });
+    const { name, email, message } = body;
+    if (!name || !email || !message) return res.status(400).json({ error: "name, email, message required" });
+    const { ok } = await ins("contact_messages", { name, email, message, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
+
   if (path === "early-access" && m === "POST") {
-    // check for existing
     const email = body.email?.toLowerCase()?.trim();
     if (!email) return res.status(400).json({ error: "Email required" });
     const existing = await get("early_access_signups", pq(eqf("email", email))) as any[];
     if (existing?.length) return res.json({ ok: true, duplicate: true });
-    const { ok } = await ins("early_access_signups", { ...body, email, created_at: new Date().toISOString() });
+    // Only pass known columns: email, source (strip website honeypot and others)
+    const { ok } = await ins("early_access_signups", {
+      email,
+      source: body.source ?? "home",
+      created_at: new Date().toISOString(),
+    });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
+
   if (path === "event-rsvp" && m === "POST") {
-    const { ok } = await ins("event_rsvps", { ...body, created_at: new Date().toISOString() });
+    const { event_slug, name, email, plus_ones } = body;
+    if (!event_slug || !name || !email) return res.status(400).json({ error: "event_slug, name, email required" });
+    // Only pass known columns (strip website honeypot)
+    const { ok } = await ins("event_rsvps", {
+      event_slug,
+      name,
+      email,
+      plus_ones: Number(plus_ones) || 0,
+      created_at: new Date().toISOString(),
+    });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
 
   // ── Artist submissions (public) ─────────────────────────────────────────────
+  // Only pass columns that exist in artist_submissions table
   if (path === "artist-submissions" && m === "POST") {
-    const { ok } = await ins("artist_submissions", { ...body, status: "pending", created_at: new Date().toISOString() });
+    const {
+      name, submitter_email, submitter_role, bio, from_city, based_city,
+      genres, festivals, instagram, soundcloud, bandcamp, spotify, website,
+      booking_email, manager_email, labels, members, photo_url, notes,
+    } = body;
+    const { ok } = await ins("artist_submissions", {
+      ...(name && { name }),
+      ...(submitter_email && { submitter_email }),
+      ...(submitter_role && { submitter_role }),
+      ...(bio && { bio }),
+      ...(from_city && { from_city }),
+      ...(based_city && { based_city }),
+      ...(genres !== undefined && { genres }),
+      ...(festivals !== undefined && { festivals }),
+      ...(instagram && { instagram }),
+      ...(soundcloud && { soundcloud }),
+      ...(bandcamp && { bandcamp }),
+      ...(spotify && { spotify }),
+      ...(website && { website }),
+      ...(booking_email && { booking_email }),
+      ...(manager_email && { manager_email }),
+      ...(labels && { labels }),
+      ...(members && { members }),
+      ...(photo_url && { photo_url }),
+      ...(notes && { notes }),
+      status: "pending",
+      created_at: new Date().toISOString(),
+    });
+    return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+  }
+
+  // ── Promoter applications (public) — lands in contact_messages ──────────────
+  // The promoter_applications table doesn't exist; route to contact_messages
+  // so submissions are visible in the admin Messages tab.
+  if (path === "promoter-applications" && m === "POST") {
+    const { name, email, instagram, website: pWebsite, city, genres, bio, sample_event } = body;
+    if (!name || !email) return res.status(400).json({ error: "name and email required" });
+    const message = [
+      "[Promoter Application]",
+      `City: ${city || "—"}`,
+      `Genres: ${Array.isArray(genres) ? genres.join(", ") : (genres || "—")}`,
+      `Instagram: ${instagram || "—"}`,
+      `Website: ${pWebsite || "—"}`,
+      `Sample Event: ${sample_event || "—"}`,
+      "",
+      `Bio: ${bio || "—"}`,
+    ].join("\n");
+    const { ok } = await ins("contact_messages", { name, email, message, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
   }
 
