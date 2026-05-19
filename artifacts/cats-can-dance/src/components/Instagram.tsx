@@ -1,14 +1,32 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-shim";
 
 const HANDLE = "catscan.dance";
+const BEHOLD_URL = "https://feeds.behold.so/6bt7nDISwk0mUzAQMd9s";
 
 type IgPost = {
   id: string;
-  mediaUrl: string;
+  mediaUrl: string; // stable behold.pictures CDN URL
   permalink: string;
   caption?: string;
+  mediaType: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM";
 };
+
+function mapBeholdPost(p: any): IgPost {
+  // Use stable behold.pictures CDN URL (medium = 700×700)
+  // Falls back to large, then full, then raw mediaUrl
+  const stable =
+    p.sizes?.medium?.mediaUrl ??
+    p.sizes?.large?.mediaUrl ??
+    p.sizes?.full?.mediaUrl ??
+    p.mediaUrl;
+  return {
+    id: String(p.id),
+    mediaUrl: stable,
+    permalink: p.permalink,
+    caption: p.prunedCaption ?? p.caption,
+    mediaType: p.mediaType ?? "IMAGE",
+  };
+}
 
 const Instagram = () => {
   const [posts, setPosts] = useState<IgPost[] | null>(null);
@@ -18,13 +36,13 @@ const Instagram = () => {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("instagram-feed");
+        const r = await fetch(BEHOLD_URL);
+        if (!r.ok) throw new Error("fetch failed");
+        const data = await r.json();
         if (cancelled) return;
-        if (error || !data?.posts) {
-          setError(true);
-          return;
-        }
-        setPosts((data.posts as IgPost[]).slice(0, 9));
+        const raw: any[] = data?.posts ?? [];
+        if (!raw.length) { setError(true); return; }
+        setPosts(raw.slice(0, 9).map(mapBeholdPost));
       } catch {
         if (!cancelled) setError(true);
       }
@@ -85,6 +103,17 @@ const Instagram = () => {
                 loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
+              {/* Badge for videos and carousels */}
+              {p.mediaType === "VIDEO" && (
+                <span className="absolute top-2 right-2 bg-ink/80 text-cream text-xs font-display px-1.5 py-0.5 leading-none">
+                  ▶
+                </span>
+              )}
+              {p.mediaType === "CAROUSEL_ALBUM" && (
+                <span className="absolute top-2 right-2 bg-ink/80 text-cream text-xs font-display px-1.5 py-0.5 leading-none">
+                  ⧉
+                </span>
+              )}
             </a>
           ))}
         </div>
