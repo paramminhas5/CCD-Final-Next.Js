@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { Music, MapPin, Search, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +84,6 @@ export default function ArtistsPage() {
         } else {
           setArtists((data ?? []) as DBArtist[]);
           if ((data ?? []).length === 0) {
-            // Also try without status filter to see if that's the issue
             const { data: allData, error: allError } = await supabase
               .from("artists")
               .select("id,slug,name,members,from_city,based_city,genres,festivals,bio,why,instagram,soundcloud,website,booking_email,photo_url,labels,fee_min_inr,fee_max_inr,videos,gallery")
@@ -157,7 +156,6 @@ export default function ArtistsPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-cream">
-      {/* ── Compact sticky header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-[#0a0a0f]/95 backdrop-blur border-b border-cream/10">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -200,7 +198,6 @@ export default function ArtistsPage() {
             </div>
           </div>
 
-          {/* Genre pills */}
           {allGenres.length > 0 && (
             <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-hide">
               {allGenres.map((g) => {
@@ -232,7 +229,6 @@ export default function ArtistsPage() {
         </div>
       </div>
 
-      {/* ── Instagram-style grid ───────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -282,14 +278,12 @@ export default function ArtistsPage() {
           </div>
         ) : (
           <>
-            {/* Stats bar */}
             <div className="flex items-center gap-2 text-sm text-cream/40 mb-4">
               <span>{filtered.length} artists</span>
               {withMedia.length > 0 && <span>· {withMedia.length} with media</span>}
               {activeGenres.size > 0 && <span>· filtered by genre</span>}
             </div>
 
-            {/* Grid — varying sizes for visual interest */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {filtered.map((a, i) => {
                 const isLarge = i % 7 === 0 && cover(a);
@@ -297,7 +291,7 @@ export default function ArtistsPage() {
                 return (
                   <Link
                     key={a.id}
-                    to={`/artists/${a.slug}`}
+                    href={`/artists/${a.slug}`}
                     className={`group relative rounded-xl overflow-hidden bg-cream/5 border border-cream/10 hover:border-cream/20 transition-all ${
                       isLarge ? "col-span-2 row-span-2" : "aspect-square"
                     }`}
@@ -337,11 +331,10 @@ export default function ArtistsPage() {
               })}
             </div>
 
-            {/* CTA */}
             <div className="mt-10 text-center">
               <p className="text-cream/40 text-sm">
                 Are you an artist?{" "}
-                <Link to="/for-artists" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
+                <Link href="/for-artists" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
                   Join the roster
                 </Link>
               </p>
