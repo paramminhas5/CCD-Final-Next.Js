@@ -1,825 +1,1339 @@
-/**
- * ArtistDetail v4 — Social Magazine Layout
- *
- * No tabs. One continuous scroll like a proper artist page.
- * Sections: Hero → Bio strip → Stats ribbon → Music → Live →
- *           Network graph → Stage credits marquee → Videos → Gallery → EPK
- *
- * Privilege-aware:
- *   - Anyone: view full profile
- *   - Logged-in artist (their profile): edit bio/links inline, download EPK
- *   - Admin: see claimed_by, role info
- *
- * Emerging highlight: replaces tier system with a single "Emerging" badge
- */
-import { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter } from "next/router";
-import { useUser, useClerk } from "@clerk/react";
-import Nav from "@/components/Nav";
-import Footer from "@/components/Footer";
-import SEO from "@/components/SEO";
-import { toast } from "sonner";
-import { useUserRole } from "@/hooks/useUserRole";
+"use client";
 
-/* ── Types ─────────────────────────────────────────────────────────────────── */
-type Artist = {
-  id: string; slug: string; name: string; members: string | null;
-  from_city: string | null; based_city: string | null;
-  genres: string[]; festivals: string[];
-  bio: string | null; why: string | null;
-  instagram: string | null; soundcloud: string | null;
-  bandcamp: string | null; spotify: string | null; website: string | null;
-  booking_email: string | null; manager_email: string | null;
-  labels: string | null; photo_url: string | null;
-  fee_min_inr: number | null; fee_max_inr: number | null; fee_currency: string;
-  gallery: { url: string; caption?: string }[];
-  videos: { youtube_id?: string; title?: string }[];
-  open_to_bookings: boolean; available_cities: string[];
-  claimed_by: string | null; featured: boolean; created_at?: string;
-};
-type ArtistDate = {
-  id: string; city: string; venue: string | null; event_date: string;
-  event_time: string | null; status: string; ticket_url: string | null;
-};
-type Appearance = {
-  id: string; artist_slug: string; event_name: string; venue: string | null;
-  city: string | null; event_date: string | null; year: number | null; role: string;
-};
-type Connection = {
-  id: string; artist_a_slug: string; artist_b_slug: string;
-  connection_type: string; strength: number; shared_events: string[]; notes: string | null;
-};
-type OtherArtist = {
-  id: string; slug: string; name: string; based_city: string | null;
-  genres: string[]; photo_url: string | null; festivals: string[];
-};
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  MapPin, Calendar, Music, ExternalLink, Instagram, Globe, Mail,
+  ChevronDown, ChevronUp, Heart, Share2, Download, Users, TrendingUp,
+  Award, Radio, Disc, Mic2, Headphones, Star, Clock, Zap, Target,
+  BarChart3, Route, Flag, Sparkles, ArrowRight, Play, Pause,
+  Link2, Building2, PartyPopper, Milestone, BookOpen, Newspaper,
+  FileText, Image as ImageIcon, Video, Copy, CheckCircle2
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 
-/* ── Helpers ───────────────────────────────────────────────────────────────── */
-const ensUrl = (s: string | null) => s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
-const igUrl  = (s: string | null) => s ? ensUrl(s.startsWith("http") ? s : `https://instagram.com/${s.replace(/^@/, "")}`) : null;
-const cityOf = (a: Artist) => a.based_city || a.from_city || "";
-const nameBg = (n: string) => { const c=["#E91E8C","#0066FF","#0D0D0D","#FF6B00"]; let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))&0xffffffff; return c[Math.abs(h)%c.length]; };
-const fmtFee = (a: Artist) => {
-  if (!a.fee_min_inr && !a.fee_max_inr) return null;
-  const f=(n:number)=>n>=100000?`${(n/100000).toFixed(1).replace(/\.0$/,"")}L`:n>=1000?`${(n/1000).toFixed(0)}k`:String(n);
-  const sym=(a.fee_currency||"INR")==="USD"?"$":"₹";
-  if(a.fee_min_inr&&a.fee_max_inr&&a.fee_min_inr!==a.fee_max_inr) return `${sym}${f(a.fee_min_inr)} – ${sym}${f(a.fee_max_inr)}`;
-  return `${sym}${f(a.fee_min_inr??a.fee_max_inr!)}`;
-};
-
-const isEmerging = (a: Artist, appearances: Appearance[]) => a.festivals.length <= 1 && appearances.length <= 2;
-
-const CONN_COLORS: Record<string, string> = {
-  b2b:"#E91E8C", label:"#0066FF", crew:"#FF6B00", booker:"#22c55e", collab:"#a855f7"
-};
-const CONN_LABELS: Record<string, string> = {
-  b2b:"B2B", label:"Same Label", crew:"Crew", booker:"Booked By", collab:"Collab"
-};
-
-/* ── Connection Graph SVG ────────────────────────────────────────────────────── */
-function ConnectionGraph({ artist, connections, allArtists }: {
-  artist: Artist; connections: Connection[]; allArtists: OtherArtist[];
-}) {
-  const [hovered, setHovered] = useState<string|null>(null);
-  if (!connections.length) return null;
-
-  const connectedSlugs = connections.map(c => c.artist_a_slug === artist.slug ? c.artist_b_slug : c.artist_a_slug);
-  const nodes = connectedSlugs.map(s => allArtists.find(a => a.slug === s)).filter(Boolean) as OtherArtist[];
-
-  const W=560; const H=420; const CX=W/2; const CY=H/2; const R=155;
-
-  return (
-    <div className="bg-ink border-4 border-ink overflow-hidden">
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 px-5 pt-4 pb-2">
-        {Object.entries(CONN_LABELS).map(([type, label]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5" style={{background:CONN_COLORS[type]}} />
-            <span className="font-display text-[9px] uppercase text-cream/40">{label}</span>
-          </div>
-        ))}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{maxHeight:420}}>
-        {connections.map((conn) => {
-          const otherSlug = conn.artist_a_slug===artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
-          const ni = nodes.findIndex(n=>n.slug===otherSlug);
-          if(ni<0) return null;
-          const angle=(2*Math.PI*ni)/nodes.length - Math.PI/2;
-          const nx=CX+R*Math.cos(angle); const ny=CY+R*Math.sin(angle);
-          const col=CONN_COLORS[conn.connection_type]??"#666";
-          const isH=hovered===otherSlug;
-          return (
-            <g key={conn.id}>
-              <line x1={CX} y1={CY} x2={nx} y2={ny} stroke={col}
-                strokeWidth={isH?conn.strength*1.8+1:conn.strength*0.9+0.5}
-                strokeOpacity={isH?1:0.45}
-                strokeDasharray={conn.connection_type==="booker"?"5 3":undefined} />
-              {conn.shared_events.length>1&&<text x={(CX+nx)/2} y={(CY+ny)/2-5} textAnchor="middle" fontSize="8" fill={col} opacity={0.7}>{conn.shared_events.length}×</text>}
-            </g>
-          );
-        })}
-        {/* Center */}
-        <circle cx={CX} cy={CY} r={32} fill={nameBg(artist.name)} stroke="#F5E6D0" strokeWidth={3}/>
-        {artist.photo_url
-          ? <image href={artist.photo_url} x={CX-28} y={CY-28} width={56} height={56} clipPathUnits="userSpaceOnUse" style={{clipPath:"circle(50%)"}}/>
-          : <text x={CX} y={CY+6} textAnchor="middle" fontSize="18" fill="#F5E6D0" fontWeight="bold">{artist.name[0]}</text>}
-        <text x={CX} y={CY+48} textAnchor="middle" fontSize="8" fill="#F5E6D0" fontWeight="bold">{artist.name.slice(0,12).toUpperCase()}</text>
-
-        {/* Nodes */}
-        {nodes.map((node,i)=>{
-          const conn=connections.find(c=>(c.artist_a_slug===artist.slug&&c.artist_b_slug===node.slug)||(c.artist_b_slug===artist.slug&&c.artist_a_slug===node.slug));
-          const angle=(2*Math.PI*i)/nodes.length-Math.PI/2;
-          const nx=CX+R*Math.cos(angle); const ny=CY+R*Math.sin(angle);
-          const col=conn?CONN_COLORS[conn.connection_type]??"#666":"#666";
-          const isH=hovered===node.slug;
-          return (
-            <a key={node.slug} href={`/artists/${node.slug}`}
-              onMouseEnter={()=>setHovered(node.slug)} onMouseLeave={()=>setHovered(null)}>
-              <circle cx={nx} cy={ny} r={isH?24:20} fill={col} stroke="#F5E6D0" strokeWidth={isH?3:2}
-                style={{transition:"r 0.12s"}}/>
-              {node.photo_url
-                ? <image href={node.photo_url} x={nx-16} y={ny-16} width={32} height={32} style={{clipPath:"circle(50%)"}}/>
-                : <text x={nx} y={ny+5} textAnchor="middle" fontSize="11" fill="white" fontWeight="bold">{node.name[0]}</text>}
-              <text x={nx} y={ny+(isH?38:34)} textAnchor="middle" fontSize="7" fill="#F5E6D0">{node.name.slice(0,11)}</text>
-              {isH&&conn&&<text x={nx} y={ny+46} textAnchor="middle" fontSize="6.5" fill={col}>{CONN_LABELS[conn.connection_type]}</text>}
-            </a>
-          );
-        })}
-      </svg>
-      {/* List view below graph */}
-      <div className="border-t-2 border-cream/10 p-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {connections.map(conn=>{
-          const otherSlug=conn.artist_a_slug===artist.slug?conn.artist_b_slug:conn.artist_a_slug;
-          const other=allArtists.find(a=>a.slug===otherSlug);
-          const col=CONN_COLORS[conn.connection_type]??"#666";
-          return (
-            <a key={conn.id} href={`/artists/${otherSlug}`}
-              className="flex items-center gap-3 p-2 hover:bg-cream/5 transition-colors">
-              <div className="w-1 h-8 shrink-0" style={{background:col}}/>
-              <div className="flex-1 min-w-0">
-                <p className="font-display text-xs text-cream uppercase truncate">{other?.name??otherSlug}</p>
-                <p className="text-[10px] text-cream/40">
-                  {CONN_LABELS[conn.connection_type]}
-                  {conn.shared_events.length>0&&` · ${conn.shared_events.slice(0,2).join(", ")}`}
-                </p>
-              </div>
-              <div className="flex gap-0.5 shrink-0">
-                {[...Array(Math.min(conn.strength,5))].map((_,i)=><div key={i} className="w-1.5 h-1.5" style={{background:col}}/>)}
-              </div>
-            </a>
-          );
-        })}
-      </div>
-    </div>
-  );
+interface Artist {
+  id: string;
+  slug: string;
+  name: string;
+  based_city: string | null;
+  from_city: string | null;
+  bio: string | null;
+  why: string | null;
+  genres: string[];
+  festivals: string[];
+  instagram: string | null;
+  soundcloud: string | null;
+  bandcamp: string | null;
+  spotify: string | null;
+  website: string | null;
+  booking_email: string | null;
+  manager_email: string | null;
+  labels: string | null;
+  members: string | null;
+  photo_url: string | null;
+  fee_min_inr: number | null;
+  fee_max_inr: number | null;
+  fee_currency: string;
+  open_to_bookings: boolean;
+  available_cities: string[];
+  featured: boolean;
+  status: string;
+  gallery: any[];
+  videos: any[];
+  claimed_by: string | null;
+  enrichment_status: string;
 }
 
-/* ── Venue affinity bar ──────────────────────────────────────────────────────── */
-function VenueAffinity({ appearances, festivals }: { appearances: Appearance[]; festivals: string[] }) {
-  const counts: Record<string, { city: string|null; n: number }> = {};
-  for (const ap of appearances) {
-    if (!ap.venue) continue;
-    if (!counts[ap.venue]) counts[ap.venue] = { city: ap.city, n: 0 };
-    counts[ap.venue].n++;
-  }
-  for (const f of festivals) { if (!counts[f]) counts[f] = { city: null, n: 1 }; else counts[f].n++; }
-  const sorted = Object.entries(counts).sort(([,a],[,b]) => b.n - a.n).slice(0,7);
-  if (!sorted.length) return null;
-  const max = sorted[0][1].n;
-  return (
-    <div>
-      <p className="font-display text-xs uppercase text-ink/40 mb-4">Venue Affinity</p>
-      <div className="space-y-2.5">
-        {sorted.map(([venue, {city, n}]) => (
-          <div key={venue} className="flex items-center gap-3">
-            <div className="w-28 shrink-0">
-              <p className="font-display text-xs text-ink uppercase truncate leading-none">{venue}</p>
-              {city && <p className="text-[9px] text-ink/40 mt-0.5">{city}</p>}
-            </div>
-            <div className="flex-1 bg-ink/8 h-4 relative overflow-hidden border border-ink/10">
-              <div className="h-full bg-magenta transition-all" style={{width:`${(n/max)*100}%`}}/>
-            </div>
-            <span className="font-display text-xs text-ink w-4 text-right shrink-0">{n}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+interface Connection {
+  artist_a_slug: string;
+  artist_b_slug: string;
+  artist_b_id: string;
+  connection_type: string;
+  strength: number;
+  shared_events: string[];
+  shared_venues: string[];
+  notes: string | null;
 }
 
-/* ── EPK Panel ─────────────────────────────────────────────────────────────── */
-function EPKCard({ artist, dates, appearances, isOwnProfile, onEdit }: {
-  artist: Artist; dates: ArtistDate[]; appearances: Appearance[];
-  isOwnProfile: boolean; onEdit?: () => void;
-}) {
-  const city = cityOf(artist);
-  const ig = igUrl(artist.instagram); const sc = ensUrl(artist.soundcloud);
-  const upcoming = dates.filter(d => new Date(d.event_date) >= new Date()).slice(0,4);
-  const fee = fmtFee(artist);
-
-  const copyEPK = () => {
-    const text = [
-      `${artist.name}`,
-      `${artist.genres.join(" · ")} | ${city || "India"}`,
-      "",
-      artist.bio ?? "",
-      "",
-      artist.festivals.length ? `Stage Credits: ${artist.festivals.join(", ")}` : "",
-      artist.labels ? `Label: ${artist.labels}` : "",
-      "",
-      ig ? `Instagram: ${ig}` : "",
-      sc ? `SoundCloud: ${sc}` : "",
-      ensUrl(artist.spotify) ? `Spotify: ${ensUrl(artist.spotify)}` : "",
-      artist.booking_email ? `Booking: ${artist.booking_email}` : "Booking: via Cats Can Dance",
-      "",
-      `CCD Profile: ${typeof window !== "undefined" ? window.location.href : ""}`,
-    ].filter(Boolean).join("\n");
-    navigator.clipboard.writeText(text).then(() => toast.success("EPK text copied!")).catch(() => toast.error("Copy failed"));
-  };
-
-  return (
-    <div id="epk" className="bg-ink text-cream border-4 border-ink">
-      {/* Header */}
-      <div className="bg-acid-yellow text-ink border-b-4 border-ink p-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="font-display text-xs uppercase opacity-60 mb-1">Press Kit / EPK</p>
-          <h3 className="font-display text-4xl uppercase leading-none">{artist.name}</h3>
-          <p className="font-display text-base mt-1 opacity-70">{artist.genres.join(" · ")} · {city || "India"}</p>
-        </div>
-        <div className="shrink-0 flex flex-col items-end gap-2">
-          {isOwnProfile && onEdit && (
-            <button onClick={onEdit}
-              className="font-display text-[10px] uppercase bg-ink text-cream px-3 py-1.5 border-2 border-ink hover:bg-magenta transition-colors">
-              ✏ Edit Profile
-            </button>
-          )}
-          <p className="font-display text-[9px] uppercase opacity-40 text-right">Generated by<br/>CCD.SCHOOL</p>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-0 divide-y-4 md:divide-y-0 md:divide-x-4 divide-cream/10">
-        {/* Left */}
-        <div className="p-6 space-y-5">
-          {artist.bio && (
-            <div>
-              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Bio</p>
-              <p className="text-cream/80 text-sm leading-relaxed">{artist.bio}</p>
-            </div>
-          )}
-          {artist.why && (
-            <div className="bg-cream/5 border border-cream/10 p-4">
-              <p className="font-display text-[9px] uppercase text-cream/40 mb-1">Why Book</p>
-              <p className="font-display text-base text-cream leading-tight">"{artist.why}"</p>
-            </div>
-          )}
-          {artist.festivals.length > 0 && (
-            <div>
-              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Stage Credits</p>
-              <div className="flex flex-wrap gap-1.5">
-                {artist.festivals.map(f => (
-                  <span key={f} className="font-display text-[9px] uppercase bg-cream/10 text-cream px-2 py-1 border border-cream/20">{f}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right */}
-        <div className="p-6 space-y-5">
-          {/* Key facts */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              {label:"City", val: city || "India"},
-              {label:"Genres", val: artist.genres.slice(0,2).join(", ")},
-              {label:"Label", val: artist.labels ?? "Independent"},
-              {label:"Booking", val: artist.open_to_bookings ? "Open" : "By Enquiry"},
-            ].map(({label, val}) => val && (
-              <div key={label} className="bg-cream/5 border border-cream/10 p-3">
-                <p className="font-display text-[9px] uppercase text-cream/40 mb-0.5">{label}</p>
-                <p className="font-display text-sm text-cream leading-tight">{val}</p>
-              </div>
-            ))}
-            {fee && (
-              <div className="col-span-2 bg-magenta/20 border border-magenta/40 p-3">
-                <p className="font-display text-[9px] uppercase text-cream/40 mb-0.5">Indicative Fee</p>
-                <p className="font-display text-2xl text-cream">{fee}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Links */}
-          <div>
-            <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Links</p>
-            <div className="space-y-1.5">
-              {ig && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Instagram</span><a href={ig} className="text-xs text-cream/70 hover:text-cream underline truncate">{ig.replace("https://","")}</a></div>}
-              {sc && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">SoundCloud</span><a href={sc} className="text-xs text-cream/70 hover:text-cream underline truncate">{sc.replace("https://","")}</a></div>}
-              {ensUrl(artist.spotify) && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Spotify</span><a href={ensUrl(artist.spotify)!} className="text-xs text-cream/70 hover:text-cream underline">open.spotify.com</a></div>}
-              {artist.booking_email && <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Booking</span><a href={`mailto:${artist.booking_email}`} className="text-xs text-cream/70 hover:text-cream underline">{artist.booking_email}</a></div>}
-              <div className="flex items-center gap-2"><span className="w-14 font-display text-[9px] uppercase text-cream/30">Profile</span><span className="text-xs text-cream/40 truncate">{typeof window!=="undefined"?window.location.href:""}</span></div>
-            </div>
-          </div>
-
-          {/* Upcoming */}
-          {upcoming.length > 0 && (
-            <div>
-              <p className="font-display text-[9px] uppercase text-cream/40 mb-2">Upcoming Shows</p>
-              {upcoming.map(d=>(
-                <p key={d.id} className="text-xs text-cream/60 py-0.5">
-                  {d.event_date} · {d.city}{d.venue?`, ${d.venue}`:""}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer actions */}
-      <div className="border-t-4 border-cream/10 p-4 flex flex-wrap gap-3 items-center">
-        <button onClick={() => window.print()}
-          className="font-display text-xs uppercase bg-cream text-ink px-5 py-2.5 border-2 border-cream hover:bg-acid-yellow transition-colors">
-          🖨 Print / Save PDF
-        </button>
-        <button onClick={copyEPK}
-          className="font-display text-xs uppercase bg-cream/10 text-cream px-5 py-2.5 border-2 border-cream/20 hover:bg-cream/20 transition-colors">
-          📋 Copy EPK Text
-        </button>
-        {isOwnProfile && (
-          <button onClick={copyEPK}
-            className="font-display text-xs uppercase bg-acid-yellow text-ink px-5 py-2.5 border-2 border-acid-yellow hover:opacity-90 transition-opacity ml-auto">
-            ✦ Artist Kit Download
-          </button>
-        )}
-        <p className="font-display text-[9px] uppercase text-cream/20 ml-auto">Cats Can Dance · ccd.school</p>
-      </div>
-    </div>
-  );
+interface Appearance {
+  id: string;
+  event_name: string;
+  venue: string | null;
+  city: string | null;
+  event_date: string | null;
+  year: number | null;
+  role: string;
 }
 
-/* ── Contact/Booking Gate ────────────────────────────────────────────────────── */
-function BookingGate({ artist }: { artist: Artist }) {
-  const { user } = useUser();
-  const { openSignIn } = useClerk();
-  const [verified, setVerified] = useState(false);
-  const [email, setEmail] = useState("");
-  const [enquiry, setEnquiry] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-  const fee = fmtFee(artist);
-  const isRevealed = user || verified;
-
-  const send = async () => {
-    if (!email.trim()) { toast.error("Email required"); return; }
-    setBusy(true);
-    try {
-      await fetch("/api/event-rsvp", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ event_slug:`booking-${artist.slug}`, name:email.split("@")[0], email, plus_ones:0 }) });
-      setSent(true); toast.success("Enquiry sent!");
-    } catch { toast.error("Failed"); } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="border-4 border-ink bg-cream sticky top-[72px]">
-      {fee && (
-        <div className="bg-magenta text-cream border-b-4 border-ink p-4">
-          <p className="font-display text-[10px] uppercase opacity-60 mb-1">Indicative Fee</p>
-          {isRevealed ? <p className="font-display text-3xl">{fee}</p> : <p className="font-display text-3xl blur-sm select-none">₹XX–YYL</p>}
-          <p className="text-[10px] opacity-50 mt-1">Confirm per booking</p>
-        </div>
-      )}
-      <div className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-display text-base uppercase text-ink">Book {artist.name}</h3>
-          {artist.open_to_bookings
-            ? <span className="font-display text-[9px] uppercase bg-acid-yellow text-ink px-2 py-0.5 border border-ink">Open</span>
-            : <span className="font-display text-[9px] uppercase bg-ink/10 text-ink/40 px-2 py-0.5 border border-ink/20">Enquiry</span>}
-        </div>
-        {!isRevealed && (
-          <>
-            <p className="text-sm text-ink/60">Sign in to reveal booking contact and fee details.</p>
-            <button onClick={()=>openSignIn()} className="w-full bg-ink text-cream font-display text-xs uppercase px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">Sign In to Reveal</button>
-            <div className="flex items-center gap-2 text-ink/20 text-xs"><div className="flex-1 h-px bg-ink/20"/><span>or</span><div className="flex-1 h-px bg-ink/20"/></div>
-            <label className="block">
-              <span className="font-display text-[10px] uppercase text-ink block mb-1">Your Email</span>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none"/>
-            </label>
-            <button onClick={()=>{if(email.includes("@"))setVerified(true);else toast.error("Valid email needed");}} className="w-full bg-acid-yellow text-ink font-display text-xs uppercase px-4 py-3 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">Continue as Guest →</button>
-          </>
-        )}
-        {isRevealed && !sent && (
-          <>
-            {artist.booking_email && <div className="bg-acid-yellow border-4 border-ink p-3"><p className="font-display text-[9px] uppercase text-ink/50 mb-1">Direct Booking</p><a href={`mailto:${artist.booking_email}`} className="font-display text-sm text-ink hover:text-magenta break-all">✉ {artist.booking_email}</a></div>}
-            {!artist.booking_email && <p className="text-sm text-ink/50 bg-ink/5 border-2 border-ink/10 p-3">CCD will forward your enquiry.</p>}
-            <textarea value={enquiry} onChange={e=>setEnquiry(e.target.value)} rows={3} placeholder="Date, city, event type, budget…" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none resize-none"/>
-            {!user && <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none"/>}
-            <button onClick={send} disabled={busy} className="w-full bg-magenta text-cream font-display text-xs uppercase px-4 py-3 border-4 border-ink disabled:opacity-50 hover:bg-ink transition-colors">{busy?"Sending…":"Send Enquiry"}</button>
-          </>
-        )}
-        {sent && <div className="text-center py-4"><p className="font-display text-2xl text-ink">✓ Sent</p><p className="text-ink/50 text-sm">We'll be in touch.</p></div>}
-      </div>
-    </div>
-  );
+interface Milestone {
+  id: string;
+  date: string;
+  year: number | null;
+  type: string;
+  title: string;
+  description: string | null;
+  venue: string | null;
+  city: string | null;
+  event_name: string | null;
+  related_artist_slug: string | null;
+  related_artist_name: string | null;
+  importance: number;
+  is_featured: boolean;
 }
 
-/* ── Main Page ────────────────────────────────────────────────────────────── */
-const ArtistDetail = () => {
-  const router = useRouter();
-  const slug = router.query.slug as string|undefined;
-  const { user } = useUser();
-  const roleInfo = useUserRole();
+interface SocialStats {
+  instagram_followers: number | null;
+  soundcloud_followers: number | null;
+  soundcloud_plays: number | null;
+  spotify_monthly_listeners: number | null;
+}
 
-  const [a, setA] = useState<Artist|null>(null);
-  const [dates, setDates] = useState<ArtistDate[]>([]);
-  const [appearances, setAppearances] = useState<Appearance[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [allArtists, setAllArtists] = useState<OtherArtist[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [lightbox, setLightbox] = useState<string|null>(null);
-  const [scrolled, setScrolled] = useState(false);
+interface CoolFact {
+  icon: string;
+  label: string;
+  value: string;
+  detail: string;
+}
 
-  const isOwnProfile = !!(user && a && (a.claimed_by === user.id || (roleInfo.isArtist && roleInfo.entitySlug === a.slug)));
+interface ArtistStats {
+  total_gigs: number;
+  total_cities: number;
+  total_venues: number;
+  total_connections: number;
+  years_active: number;
+  b2b_count: number;
+  festival_count: number;
+}
 
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 60);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
+type SectionType = 
+  | "overview" 
+  | "connections" 
+  | "gigography" 
+  | "journey" 
+  | "press" 
+  | "epk" 
+  | "stats";
+
+const sectionTabs: { id: SectionType; label: string; icon: any }[] = [
+  { id: "overview", label: "Overview", icon: Star },
+  { id: "connections", label: "Connections", icon: Link2 },
+  { id: "gigography", label: "Gigography", icon: Route },
+  { id: "journey", label: "Journey", icon: Milestone },
+  { id: "stats", label: "Stats", icon: BarChart3 },
+  { id: "press", label: "Press", icon: Newspaper },
+  { id: "epk", label: "EPK", icon: FileText },
+];
+
+const milestoneIcons: Record<string, any> = {
+  first_gig: Play,
+  festival_debut: PartyPopper,
+  label_signing: Disc,
+  release: Disc,
+  milestone_followers: TrendingUp,
+  tour: Route,
+  b2b: Users,
+  residency: Building2,
+  award: Award,
+  radio_show: Radio,
+};
+
+const roleColors: Record<string, string> = {
+  headliner: "bg-amber-500/20 text-amber-300",
+  performer: "bg-blue-500/20 text-blue-300",
+  b2b: "bg-purple-500/20 text-purple-300",
+  support: "bg-gray-500/20 text-gray-300",
+};
+
+export default function ArtistDetailPage() {
+  const params = useParams();
+  const slug = params?.slug as string;
+
+  const [data, setData] = useState<{
+    artist: Artist | null;
+    connections: Connection[];
+    appearances: Appearance[];
+    milestones: Milestone[];
+    socialStats: SocialStats | null;
+    stats: ArtistStats;
+    facts: CoolFact[];
+  } | null>(null);
+
+  const [activeSection, setActiveSection] = useState<SectionType>("overview");
+  const [isLoading, setIsLoading] = useState(true);
+  const [expandedBio, setExpandedBio] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number | "all">("all");
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
-    setLoading(true); setNotFound(false);
-    (async () => {
-      const res = await fetch(`/api/artists/${encodeURIComponent(slug)}`);
-      if (!res.ok) { setNotFound(true); setLoading(false); return; }
-      const raw = await res.json();
-      const norm: Artist = {
-        ...raw,
-        gallery: Array.isArray(raw.gallery)?raw.gallery:[],
-        videos: Array.isArray(raw.videos)?raw.videos:[],
-        genres: Array.isArray(raw.genres)?raw.genres:[],
-        festivals: Array.isArray(raw.festivals)?raw.festivals:[],
-        available_cities: Array.isArray(raw.available_cities)?raw.available_cities:[],
-        open_to_bookings: raw.open_to_bookings!==false,
-        fee_currency: raw.fee_currency||"INR",
-        featured: raw.featured??false,
-      };
-      setA(norm);
-      const [dr, ar, appr, conns] = await Promise.all([
-        fetch(`/api/artist-dates?artist_id=${raw.id}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch(`/api/artists`).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch(`/api/event-appearances?artist_slug=${slug}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch(`/api/artist-connections?slug=${slug}`).then(r=>r.ok?r.json():[]).catch(()=>[]),
-      ]);
-      setDates(Array.isArray(dr)?dr:[]);
-      setAllArtists(Array.isArray(ar)?ar:[]);
-      setAppearances(Array.isArray(appr)?appr:[]);
-      setConnections(Array.isArray(conns)?conns:[]);
-      setLoading(false);
-    })();
+
+    fetch(`/api/artists/${slug}/full`)
+      .then(r => r.json())
+      .then(data => {
+        setData(data);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setIsLoading(false);
+      });
   }, [slug]);
 
-  const upcoming = useMemo(() => dates.filter(d=>new Date(d.event_date+"T00:00:00")>=new Date()).sort((x,y)=>x.event_date.localeCompare(y.event_date)), [dates]);
-  const past     = useMemo(() => dates.filter(d=>new Date(d.event_date+"T00:00:00")<new Date()).sort((x,y)=>y.event_date.localeCompare(x.event_date)), [dates]);
-  const related  = useMemo(() => allArtists.filter(x=>x.slug!==slug).sort(()=>Math.random()-0.5).slice(0,5), [allArtists, slug]);
-  const ytVideos = useMemo(() => (a?.videos??[]).filter(v=>v.youtube_id), [a]);
+  const handleCopy = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
-  if (loading) return (
-    <div className="min-h-screen bg-cream"><Nav/>
-      <div className="flex items-center justify-center min-h-[80vh] pt-20 gap-4 flex-col">
-        <div className="w-20 h-20 bg-ink/5 border-4 border-ink/10 animate-pulse"/>
-        <div className="h-5 w-40 bg-ink/10 animate-pulse"/>
+  const handleShare = async () => {
+    if (!data?.artist) return;
+    const url = `${window.location.origin}/artists/${slug}`;
+    if (navigator.share) {
+      await navigator.share({ title: data.artist.name, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white rounded-full" />
       </div>
-    </div>
-  );
+    );
+  }
 
-  if (notFound||!a) return (
-    <div className="min-h-screen bg-cream"><Nav/>
-      <div className="container py-32 text-center">
-        <p className="font-display text-4xl text-ink uppercase mb-4">Artist not found.</p>
-        <a href="/artists" className="font-display underline text-magenta">← All artists</a>
+  if (!data?.artist) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white/40">
+        Artist not found
       </div>
-    </div>
-  );
+    );
+  }
 
-  const city = cityOf(a);
-  const sc = ensUrl(a.soundcloud); const ig = igUrl(a.instagram);
-  const coverImg = a.photo_url||(ytVideos[0]?`https://img.youtube.com/vi/${ytVideos[0].youtube_id}/maxresdefault.jpg`:null)||(a.gallery[0]?.url??null);
-  const emerging = isEmerging(a, appearances);
-  const totalShows = dates.length + appearances.length;
-  const allCities = [...new Set([...dates.map(d=>d.city), ...appearances.map(ap=>ap.city)].filter(Boolean))];
-  const statItems = [
-    a.festivals.length>0 && { n: a.festivals.length, label: "stage credits" },
-    totalShows>0 && { n: totalShows, label: "shows recorded" },
-    allCities.length>1 && { n: allCities.length, label: "cities played" },
-    connections.length>0 && { n: connections.length, label: "connections" },
-    ytVideos.length>0 && { n: ytVideos.length, label: "videos" },
-    a.gallery.length>0 && { n: a.gallery.length, label: "photos" },
-  ].filter(Boolean) as { n:number; label:string }[];
+  const { artist, connections, appearances, milestones, socialStats, stats, facts } = data;
+  const years = [...new Set(appearances.map(a => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
+  const filteredAppearances = selectedYear === "all" 
+    ? appearances 
+    : appearances.filter(a => a.year === selectedYear);
 
   return (
-    <div className="min-h-screen bg-cream">
-      <SEO
-        title={`${a.name} — ${a.genres[0]??"Electronic"} · ${city||"India"} | Cats Can Dance`}
-        description={a.bio?.slice(0,155)??`${a.name} — Book via Cats Can Dance.`}
-        path={`/artists/${a.slug}`}
-        jsonLd={{"@context":"https://schema.org","@type":"MusicGroup",name:a.name,genre:a.genres.join(", "),description:a.bio?.slice(0,155),image:coverImg??undefined}}
-      />
-      <Nav/>
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* ─── Hero Section ───────────────────────────────────────────────────── */}
+      <div className="relative">
+        {/* Background */}
+        <div className="absolute inset-0 overflow-hidden">
+          {artist.photo_url ? (
+            <Image
+              src={artist.photo_url}
+              alt={artist.name}
+              fill
+              className="object-cover opacity-30 blur-sm scale-110"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-white/5 to-transparent" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/80 to-[#0a0a0a]" />
+        </div>
 
-      {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <div className="pt-[60px] md:pt-[72px]">
-        <div className="relative w-full overflow-hidden border-b-4 border-ink" style={{height:"min(70vh, 580px)"}}>
-          {coverImg
-            ? <img src={coverImg} alt={a.name} className="absolute inset-0 w-full h-full object-cover"/>
-            : <div className="absolute inset-0" style={{background:nameBg(a.name)}}/>}
-          <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink"/>
+        <div className="relative max-w-7xl mx-auto px-4 pt-12 pb-8">
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            {/* Photo */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative w-40 h-40 md:w-52 md:h-52 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-white/10"
+            >
+              {artist.photo_url ? (
+                <Image src={artist.photo_url} alt={artist.name} fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                  <Music className="w-12 h-12 text-white/20" />
+                </div>
+              )}
+              {artist.featured && (
+                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-medium backdrop-blur-sm">
+                  Featured
+                </div>
+              )}
+            </motion.div>
 
-          {/* Back */}
-          <div className="absolute top-5 left-5">
-            <a href="/artists" className="font-display text-[10px] uppercase text-cream/50 hover:text-cream bg-ink/40 px-3 py-1.5 border border-cream/20 backdrop-blur-sm">← All artists</a>
-          </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{artist.name}</h1>
+                  {artist.claimed_by && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-medium">
+                      Verified
+                    </span>
+                  )}
+                </div>
 
-          {/* Badges top right */}
-          <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
-            {a.featured && <span className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-3 py-1.5 border-2 border-ink">⭐ CCD Featured</span>}
-            {emerging && <span className="font-display text-[10px] uppercase bg-electric-blue text-cream px-3 py-1.5 border-2 border-cream/30">✦ Emerging</span>}
-            {isOwnProfile && <span className="font-display text-[10px] uppercase bg-magenta text-cream px-3 py-1.5 border-2 border-cream/30">Your Profile</span>}
-          </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-white/50 mb-4">
+                  {artist.based_city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {artist.based_city}
+                    </span>
+                  )}
+                  {artist.from_city && artist.from_city !== artist.based_city && (
+                    <span className="text-white/30">Originally from {artist.from_city}</span>
+                  )}
+                  {stats.years_active > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {stats.years_active} years active
+                    </span>
+                  )}
+                </div>
 
-          {/* Hero content */}
-          <div className="absolute bottom-0 inset-x-0 p-6 md:p-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {a.genres.map(g => <span key={g} className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-2 py-1 border-2 border-ink">{g}</span>)}
-                {city && <span className="font-display text-[10px] uppercase bg-cream/10 border border-cream/20 text-cream px-2 py-1">📍 {city}</span>}
-                {a.labels && <span className="font-display text-[10px] text-cream/50 border border-cream/20 px-2 py-1">{a.labels}</span>}
-              </div>
-              <h1 className="font-display text-5xl sm:text-7xl md:text-8xl lg:text-9xl text-cream uppercase leading-none tracking-tight"
-                style={{textShadow:"3px 3px 0 rgba(0,0,0,0.3)"}}>{a.name}</h1>
-              {a.members && <p className="text-cream/50 text-sm mt-2">{a.members}</p>}
-            </div>
+                {/* Genres */}
+                {artist.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {artist.genres.map(g => (
+                      <span key={g} className="px-2.5 py-1 rounded-full text-xs bg-white/5 text-white/60 border border-white/5">
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
-            {/* Social links */}
-            <div className="flex flex-wrap gap-2 shrink-0">
-              {ig && <a href={ig} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 border-2 border-cream/40 text-cream hover:border-cream hover:bg-cream hover:text-ink transition-all">IG ↗</a>}
-              {sc && <a href={sc} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#ff5500] text-cream border-2 border-[#ff5500]">SC ↗</a>}
-              {ensUrl(a.spotify) && <a href={ensUrl(a.spotify)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#1db954] text-cream border-2 border-[#1db954]">SP ↗</a>}
-              {ensUrl(a.bandcamp) && <a href={ensUrl(a.bandcamp)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 bg-[#1da0c3] text-cream border-2 border-[#1da0c3]">BC ↗</a>}
-              {ensUrl(a.website) && <a href={ensUrl(a.website)!} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase px-3 py-2 border-2 border-cream/40 text-cream hover:border-cream">WEB ↗</a>}
-              <a href="#epk" className="font-display text-[10px] uppercase px-3 py-2 bg-cream text-ink border-2 border-cream hover:bg-acid-yellow transition-colors">EPK ↓</a>
+                {/* Social links */}
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {artist.instagram && (
+                    <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
+                      <Instagram className="w-3.5 h-3.5" /> Instagram
+                    </a>
+                  )}
+                  {artist.soundcloud && (
+                    <a href={artist.soundcloud} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
+                      <Headphones className="w-3.5 h-3.5" /> SoundCloud
+                    </a>
+                  )}
+                  {artist.spotify && (
+                    <a href={artist.spotify} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
+                      <Disc className="w-3.5 h-3.5" /> Spotify
+                    </a>
+                  )}
+                  {artist.bandcamp && (
+                    <a href={artist.bandcamp} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
+                      <Music className="w-3.5 h-3.5" /> Bandcamp
+                    </a>
+                  )}
+                  {artist.website && (
+                    <a href={artist.website} target="_blank" rel="noopener noreferrer"
+                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs transition-colors">
+                      <Globe className="w-3.5 h-3.5" /> Website
+                    </a>
+                  )}
+                </div>
+
+                {/* Quick stats row */}
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <StatBadge icon={Route} value={stats.total_gigs} label="Gigs" />
+                  <StatBadge icon={MapPin} value={stats.total_cities} label="Cities" />
+                  <StatBadge icon={Link2} value={stats.total_connections} label="Connections" />
+                  <StatBadge icon={Users} value={stats.b2b_count} label="B2Bs" />
+                  {socialStats?.instagram_followers && (
+                    <StatBadge 
+                      icon={TrendingUp} 
+                      value={formatNumber(socialStats.instagram_followers)} 
+                      label="Followers" 
+                    />
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-wrap gap-3">
+                  {artist.open_to_bookings && (
+                    <button
+                      onClick={() => setShowBookingModal(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
+                    >
+                      <Mail className="w-4 h-4" />
+                      Book This Artist
+                    </button>
+                  )}
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 text-sm hover:bg-white/10 transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                  <Link
+                    href={`/artists/${slug}/epk`}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/5 text-sm hover:bg-white/10 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download EPK
+                  </Link>
+                </div>
+              </motion.div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* ── STATS RIBBON ─────────────────────────────────────────────── */}
-        {statItems.length > 0 && (
-          <div className="bg-ink border-b-4 border-ink overflow-hidden">
-            <div className="flex overflow-x-auto">
-              {statItems.map(({n,label}) => (
-                <div key={label} className="shrink-0 px-8 py-5 text-center border-r border-cream/10 last:border-r-0">
-                  <p className="font-display text-3xl text-cream">{n}</p>
-                  <p className="font-display text-[10px] uppercase text-cream/40 mt-0.5 whitespace-nowrap">{label}</p>
-                </div>
-              ))}
-              {a.available_cities.length>0 && (
-                <div className="shrink-0 px-8 py-5 text-center border-r border-cream/10">
-                  <p className="font-display text-xs uppercase text-cream/40 mb-1">Available in</p>
-                  <p className="font-display text-sm text-cream">{a.available_cities.slice(0,4).join(" · ")}</p>
-                </div>
-              )}
-            </div>
+      {/* ─── Navigation Tabs ────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1 overflow-x-auto py-2 scrollbar-hide">
+            {sectionTabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeSection === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSection(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                    isActive 
+                      ? "bg-white/10 text-white" 
+                      : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* ── MAIN BODY (2-col) ─────────────────────────────────────────── */}
-        <div className="container py-10 grid grid-cols-1 lg:grid-cols-3 gap-10">
+      {/* ─── Content Sections ───────────────────────────────────────────────── */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeSection === "overview" && (
+              <OverviewSection 
+                artist={artist} 
+                facts={facts} 
+                stats={stats}
+                appearances={appearances.slice(0, 5)}
+                connections={connections.slice(0, 6)}
+                milestones={milestones.filter(m => m.is_featured).slice(0, 4)}
+                expandedBio={expandedBio}
+                setExpandedBio={setExpandedBio}
+              />
+            )}
 
-          {/* CONTENT (left 2/3) */}
-          <div className="lg:col-span-2 space-y-16">
+            {activeSection === "connections" && (
+              <ConnectionsSection connections={connections} artistSlug={slug} />
+            )}
 
-            {/* BIO + WHY BOOK */}
-            {(a.bio || a.why) && (
-              <div>
-                {a.why && (
-                  <div className="bg-acid-yellow border-4 border-ink p-6 mb-6">
-                    <p className="font-display text-[10px] uppercase text-ink/50 mb-2">Why Book</p>
-                    <p className="font-display text-2xl md:text-3xl text-ink leading-tight">"{a.why}"</p>
+            {activeSection === "gigography" && (
+              <GigographySection 
+                appearances={appearances}
+                filteredAppearances={filteredAppearances}
+                years={years}
+                selectedYear={selectedYear}
+                setSelectedYear={setSelectedYear}
+              />
+            )}
+
+            {activeSection === "journey" && (
+              <JourneySection milestones={milestones} />
+            )}
+
+            {activeSection === "stats" && (
+              <StatsSection stats={stats} appearances={appearances} socialStats={socialStats} />
+            )}
+
+            {activeSection === "press" && (
+              <PressSection artist={artist} />
+            )}
+
+            {activeSection === "epk" && (
+              <EPKSection artist={artist} stats={stats} facts={facts} appearances={appearances} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatBadge({ icon: Icon, value, label }: { icon: any; value: string | number; label: string }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5">
+      <Icon className="w-3.5 h-3.5 text-white/40" />
+      <span className="text-sm font-semibold">{value}</span>
+      <span className="text-xs text-white/40">{label}</span>
+    </div>
+  );
+}
+
+function OverviewSection({ 
+  artist, facts, stats, appearances, connections, milestones, expandedBio, setExpandedBio 
+}: any) {
+  return (
+    <div className="space-y-8">
+      {/* Bio */}
+      {artist.bio && (
+        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3">About</h3>
+          <p className={`text-sm leading-relaxed text-white/70 ${expandedBio ? "" : "line-clamp-4"}`}>
+            {artist.bio}
+          </p>
+          {artist.bio.length > 300 && (
+            <button
+              onClick={() => setExpandedBio(!expandedBio)}
+              className="flex items-center gap-1 mt-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+            >
+              {expandedBio ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {expandedBio ? "Show less" : "Read more"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Cool Facts */}
+      {facts.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Cool Facts</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {facts.map((fact: CoolFact, i: number) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.05 }}
+                className="rounded-xl bg-white/[0.03] border border-white/5 p-4 hover:bg-white/[0.06] transition-colors"
+              >
+                <div className="text-2xl mb-2">{fact.icon}</div>
+                <div className="text-xs text-white/40 mb-1">{fact.label}</div>
+                <div className="text-lg font-bold mb-1">{fact.value}</div>
+                <div className="text-xs text-white/30">{fact.detail}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Gigs */}
+      {appearances.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">Recent Gigs</h3>
+            <button className="text-xs text-white/40 hover:text-white/60 flex items-center gap-1">
+              View all <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {appearances.map((gig: Appearance, i: number) => (
+              <motion.div
+                key={gig.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors"
+              >
+                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-5 h-5 text-white/20" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{gig.event_name}</div>
+                  <div className="text-xs text-white/40">
+                    {gig.venue} {gig.city && `· ${gig.city}`}
                   </div>
-                )}
-                {a.bio && (
-                  <p className="text-ink/80 leading-relaxed text-base whitespace-pre-line">{a.bio}</p>
-                )}
-              </div>
-            )}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${roleColors[gig.role] || roleColors.performer}`}>
+                  {gig.role}
+                </span>
+                <div className="text-xs text-white/30">{gig.year}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {/* MUSIC */}
-            {sc && (
-              <div>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex-1 h-px bg-ink/10"/>
-                  <p className="font-display text-xs uppercase text-ink/40 shrink-0">Listen</p>
-                  <div className="flex-1 h-px bg-ink/10"/>
-                </div>
-                <iframe className="w-full border-4 border-ink" height="180" scrolling="no" frameBorder="no" allow="autoplay"
-                  src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(sc)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`}
-                  title={`${a.name} on SoundCloud`}/>
-              </div>
-            )}
-
-            {/* UPCOMING SHOWS */}
-            {upcoming.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1">Upcoming Shows</p>
-                  <span className="font-display text-xs text-ink/30">{upcoming.length}</span>
-                </div>
-                <div className="space-y-2">
-                  {upcoming.map(d => {
-                    const dt = new Date(d.event_date+"T00:00:00");
-                    const isClose = (dt.getTime()-Date.now()) < 7*86400000;
-                    return (
-                      <div key={d.id} className={`flex items-center gap-4 border-4 p-4 ${isClose ? "border-magenta bg-magenta/5" : "border-ink bg-cream"}`}>
-                        <div className="text-center min-w-[48px]">
-                          <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
-                          <p className="font-display text-[10px] text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
-                          <p className="font-display text-[9px] text-ink/30">{dt.getFullYear()}</p>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-display text-base text-ink uppercase">{d.city}</p>
-                          {d.venue && <p className="text-sm text-ink/50">{d.venue}</p>}
-                          <span className={`text-[9px] font-display uppercase px-1.5 py-0.5 border mt-1 inline-block ${d.status==="confirmed"?"bg-acid-yellow text-ink border-acid-yellow":"border-ink/20 text-ink/40"}`}>{d.status}</span>
-                        </div>
-                        {isClose && <span className="font-display text-[9px] uppercase bg-magenta text-cream px-2 py-1 animate-pulse">SOON</span>}
-                        {d.ticket_url && <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer" className="font-display text-[10px] uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0 hover:bg-ink transition-colors">Tickets →</a>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* PAST SHOWS / TIMELINE */}
-            {past.length > 0 && (
-              <div>
-                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Show History</p>
-                <div className="space-y-2">
-                  {past.slice(0,8).map(d => {
-                    const dt = new Date(d.event_date+"T00:00:00");
-                    return (
-                      <div key={d.id} className="flex items-center gap-4 border-2 border-ink/10 p-3 opacity-70 hover:opacity-100 transition-opacity">
-                        <div className="text-center min-w-[44px]">
-                          <p className="font-display text-lg text-ink leading-none">{dt.getDate()}</p>
-                          <p className="font-display text-[9px] text-ink/40 uppercase">{dt.toLocaleString("en",{month:"short"})} {dt.getFullYear()}</p>
-                        </div>
-                        <div>
-                          <p className="font-display text-sm text-ink">{d.city}</p>
-                          {d.venue && <p className="text-xs text-ink/40">{d.venue}</p>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {past.length > 8 && <p className="text-xs text-ink/30 font-display uppercase text-center pt-2">+{past.length-8} more shows</p>}
-                </div>
-              </div>
-            )}
-
-            {/* STAGE CREDITS */}
-            {a.festivals.length > 0 && (
-              <div>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex-1 h-px bg-ink/10"/>
-                  <p className="font-display text-xs uppercase text-ink/40 shrink-0">Stage Credits</p>
-                  <div className="flex-1 h-px bg-ink/10"/>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {a.festivals.map(f => (
-                    <span key={f} className="font-display text-xs px-3 py-1.5 border-4 border-ink chunk-shadow bg-cream text-ink hover:bg-acid-yellow transition-colors cursor-default">
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* CONNECTION GRAPH */}
-            {connections.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1">The Network</p>
-                  <span className="font-display text-xs text-ink/30">{connections.length} connections</span>
-                </div>
-                <ConnectionGraph artist={a} connections={connections} allArtists={allArtists}/>
-              </div>
-            )}
-
-            {/* VENUE AFFINITY */}
-            {(appearances.length > 0 || a.festivals.length > 1) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <VenueAffinity appearances={appearances} festivals={a.festivals}/>
-                {allCities.length > 1 && (
+      {/* Connections Preview */}
+      {connections.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider">Connections</h3>
+            <span className="text-xs text-white/30">{stats.total_connections} total</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {connections.map((conn: Connection, i: number) => {
+              const partnerSlug = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
+              return (
+                <Link
+                  key={i}
+                  href={`/artists/${partnerSlug}`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium">
+                    {partnerSlug.charAt(0).toUpperCase()}
+                  </div>
                   <div>
-                    <p className="font-display text-xs uppercase text-ink/40 mb-4">Cities Played</p>
-                    <div className="flex flex-wrap gap-2">
-                      {allCities.map(c => c && (
-                        <span key={c} className="font-display text-xs uppercase bg-ink text-cream px-3 py-1.5 border-2 border-ink">📍 {c}</span>
+                    <div className="text-xs font-medium">{partnerSlug}</div>
+                    <div className="text-[10px] text-white/30">
+                      {conn.connection_type} · {conn.shared_events.length} events
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Milestones Preview */}
+      {milestones.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Journey Highlights</h3>
+          <div className="space-y-3">
+            {milestones.map((m: Milestone, i: number) => {
+              const Icon = milestoneIcons[m.type] || Star;
+              return (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4 text-white/40" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{m.title}</div>
+                    {m.description && (
+                      <div className="text-xs text-white/40 mt-0.5">{m.description}</div>
+                    )}
+                    <div className="text-[10px] text-white/30 mt-1">
+                      {m.year} {m.city && `· ${m.city}`}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConnectionsSection({ connections, artistSlug }: { connections: Connection[]; artistSlug: string }) {
+  const [filterType, setFilterType] = useState<string>("all");
+
+  const filtered = filterType === "all" 
+    ? connections 
+    : connections.filter(c => c.connection_type === filterType);
+
+  const types = [...new Set(connections.map(c => c.connection_type))];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setFilterType("all")}
+          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+            filterType === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+          }`}
+        >
+          All ({connections.length})
+        </button>
+        {types.map(type => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className={`px-3 py-1.5 rounded-full text-xs transition-colors capitalize ${
+              filterType === type ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            {type} ({connections.filter(c => c.connection_type === type).length})
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {filtered.map((conn, i) => {
+          const partnerSlug = conn.artist_a_slug === artistSlug ? conn.artist_b_slug : conn.artist_a_slug;
+          return (
+            <motion.div
+              key={`${conn.artist_a_slug}-${conn.artist_b_slug}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="rounded-xl bg-white/[0.03] border border-white/5 p-4 hover:bg-white/[0.06] transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <Link href={`/artists/${partnerSlug}`}>
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-lg font-bold hover:bg-white/15 transition-colors">
+                    {partnerSlug.charAt(0).toUpperCase()}
+                  </div>
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <Link href={`/artists/${partnerSlug}`} className="text-sm font-semibold hover:text-white/80 transition-colors">
+                    {partnerSlug}
+                  </Link>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${
+                      conn.connection_type === 'b2b' ? 'bg-purple-500/20 text-purple-300' :
+                      conn.connection_type === 'collab' ? 'bg-blue-500/20 text-blue-300' :
+                      conn.connection_type === 'label' ? 'bg-amber-500/20 text-amber-300' :
+                      'bg-gray-500/20 text-gray-300'
+                    }`}>
+                      {conn.connection_type}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      {[...Array(10)].map((_, j) => (
+                        <div
+                          key={j}
+                          className={`w-1 h-3 rounded-full ${
+                            j < conn.strength ? 'bg-white/40' : 'bg-white/10'
+                          }`}
+                        />
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* VIDEOS */}
-            {ytVideos.length > 0 && (
-              <div>
-                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Videos</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {ytVideos.map(v => (
-                    <div key={v.youtube_id} className="border-4 border-ink bg-ink overflow-hidden">
-                      <div className="aspect-video"><iframe className="w-full h-full" src={`https://www.youtube.com/embed/${v.youtube_id}`} title={v.title??"Video"} allowFullScreen/></div>
-                      {v.title && <p className="font-display text-xs text-cream p-2 truncate">{v.title}</p>}
+                  {conn.shared_events.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] text-white/30 mb-1">Shared events:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {conn.shared_events.slice(0, 3).map(e => (
+                          <span key={e} className="px-1.5 py-0.5 rounded text-[10px] bg-white/5 text-white/40">
+                            {e}
+                          </span>
+                        ))}
+                        {conn.shared_events.length > 3 && (
+                          <span className="text-[10px] text-white/30">+{conn.shared_events.length - 3} more</span>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {conn.shared_venues.length > 0 && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/30">
+                      <MapPin className="w-3 h-3" />
+                      {conn.shared_venues.slice(0, 3).join(", ")}
+                    </div>
+                  )}
+
+                  {conn.notes && (
+                    <p className="mt-2 text-xs text-white/30 italic">{conn.notes}</p>
+                  )}
                 </div>
               </div>
-            )}
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-            {/* GALLERY */}
-            {a.gallery.length > 0 && (
-              <div>
-                <p className="font-display text-sm uppercase text-ink border-b-2 border-ink pb-1 mb-4">Gallery</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {a.gallery.map((g,i) => (
-                    <figure key={i} className="border-4 border-ink overflow-hidden cursor-zoom-in" onClick={()=>setLightbox(g.url)}>
-                      <img src={g.url} alt={g.caption??a.name} className="w-full h-40 object-cover hover:scale-105 transition-transform"/>
-                      {g.caption && <figcaption className="p-2 font-display text-[10px] text-ink/50">{g.caption}</figcaption>}
-                    </figure>
-                  ))}
-                </div>
-              </div>
-            )}
+function GigographySection({ 
+  appearances, filteredAppearances, years, selectedYear, setSelectedYear 
+}: any) {
+  const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
 
-            {/* EPK */}
-            <EPKCard artist={a} dates={dates} appearances={appearances} isOwnProfile={isOwnProfile}
-              onEdit={isOwnProfile ? () => router.push(`/artist/dashboard`) : undefined}/>
-          </div>
-
-          {/* SIDEBAR (right 1/3) */}
-          <div className="space-y-4">
-            <BookingGate artist={a}/>
-
-            {!a.claimed_by && (
-              <div className="border-4 border-ink bg-ink text-cream p-4">
-                <p className="font-display text-sm uppercase mb-2">Are you {a.name}?</p>
-                <p className="text-xs text-cream/50 mb-3">Claim this profile to edit your bio, add links, manage bookings, and download your EPK.</p>
-                <a href={`/sign-in?redirect_url=/artist/dashboard?claim=${a.id}`}
-                  className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-cream inline-block hover:bg-cream transition-colors">
-                  Claim this profile →
-                </a>
-              </div>
-            )}
-
-            {isOwnProfile && (
-              <div className="border-4 border-acid-yellow bg-acid-yellow p-4">
-                <p className="font-display text-sm uppercase text-ink mb-2">✦ Artist Profile</p>
-                <p className="text-xs text-ink/60 mb-3">Edit your bio, links, gallery, and download your press kit.</p>
-                <a href="/artist/dashboard" className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-2 border-ink inline-block hover:bg-magenta transition-colors">Edit Profile →</a>
-              </div>
-            )}
-          </div>
+  return (
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
+              viewMode === "list" ? "bg-white/10 text-white" : "text-white/40"
+            }`}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setViewMode("timeline")}
+            className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
+              viewMode === "timeline" ? "bg-white/10 text-white" : "text-white/40"
+            }`}
+          >
+            Timeline
+          </button>
         </div>
 
-        {/* RELATED */}
-        {related.length > 0 && (
-          <section className="border-t-4 border-ink bg-ink text-cream py-12">
-            <div className="container">
-              <p className="font-display text-2xl uppercase text-cream mb-6">More From The Scene</p>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {related.map(r => (
-                  <a key={r.id} href={`/artists/${r.slug}`} className="block border-4 border-cream/20 hover:border-cream transition-colors overflow-hidden group">
-                    {r.photo_url
-                      ? <img src={r.photo_url} alt={r.name} className="w-full h-28 object-cover group-hover:scale-105 transition-transform duration-300"/>
-                      : <div className="w-full h-28 flex items-center justify-center font-display text-3xl text-cream/20" style={{background:nameBg(r.name)}}>{r.name[0]}</div>}
-                    <div className="p-2">
-                      <p className="font-display text-cream uppercase text-xs truncate">{r.name}</p>
-                      <p className="text-cream/30 text-[10px] mt-0.5">{r.based_city||""}</p>
-                    </div>
-                  </a>
-                ))}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setSelectedYear("all")}
+            className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+              selectedYear === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            All Years
+          </button>
+          {years.map((year: number) => (
+            <button
+              key={year}
+              onClick={() => setSelectedYear(year === selectedYear ? "all" : year)}
+              className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+                selectedYear === year ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div className="flex gap-4 text-xs text-white/40">
+        <span>{filteredAppearances.length} gigs shown</span>
+        <span>{new Set(filteredAppearances.map((a: any) => a.city).filter(Boolean)).size} cities</span>
+        <span>{new Set(filteredAppearances.map((a: any) => a.venue).filter(Boolean)).size} venues</span>
+      </div>
+
+      {viewMode === "list" ? (
+        <div className="space-y-2">
+          {filteredAppearances.map((gig: Appearance, i: number) => (
+            <motion.div
+              key={gig.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.03 }}
+              className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors group"
+            >
+              <div className="w-14 text-center flex-shrink-0">
+                <div className="text-lg font-bold">{gig.year || "?"}</div>
+                <div className="text-[10px] text-white/30">
+                  {gig.event_date ? new Date(gig.event_date).toLocaleDateString("en-IN", { month: "short" }) : ""}
+                </div>
               </div>
-            </div>
-          </section>
+
+              <div className="w-px h-10 bg-white/10" />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium truncate">{gig.event_name}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${roleColors[gig.role] || roleColors.performer}`}>
+                    {gig.role}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
+                  {gig.venue && (
+                    <span className="flex items-center gap-1">
+                      <Building2 className="w-3 h-3" /> {gig.venue}
+                    </span>
+                  )}
+                  {gig.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {gig.city}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="w-4 h-4 text-white/20" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="relative pl-8">
+          <div className="absolute left-3 top-0 bottom-0 w-px bg-white/10" />
+          {filteredAppearances.map((gig: Appearance, i: number) => (
+            <motion.div
+              key={gig.id}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="relative mb-6"
+            >
+              <div className="absolute -left-5 top-1 w-2.5 h-2.5 rounded-full bg-white/20 border-2 border-[#0a0a0a]" />
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="text-xs text-white/30 mb-1">{gig.year}</div>
+                <div className="text-sm font-medium">{gig.event_name}</div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
+                  {gig.venue && <span>{gig.venue}</span>}
+                  {gig.city && <span>{gig.city}</span>}
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${roleColors[gig.role] || roleColors.performer}`}>
+                    {gig.role}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JourneySection({ milestones }: { milestones: Milestone[] }) {
+  const [filterType, setFilterType] = useState<string>("all");
+  const types = [...new Set(milestones.map(m => m.type))];
+  const filtered = filterType === "all" ? milestones : milestones.filter(m => m.type === filterType);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setFilterType("all")}
+          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+            filterType === "all" ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+          }`}
+        >
+          All ({milestones.length})
+        </button>
+        {types.map(type => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className={`px-3 py-1.5 rounded-full text-xs transition-colors capitalize ${
+              filterType === type ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            {type.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      <div className="relative pl-8">
+        <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-white/20 via-white/10 to-transparent" />
+
+        {filtered.map((milestone, i) => {
+          const Icon = milestoneIcons[milestone.type] || Star;
+          return (
+            <motion.div
+              key={milestone.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className="relative mb-8 group"
+            >
+              <div className={`absolute -left-5 top-2 w-4 h-4 rounded-full border-2 border-[#0a0a0a] flex items-center justify-center ${
+                milestone.is_featured ? 'bg-amber-500/30' : 'bg-white/10'
+              }`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  milestone.is_featured ? 'bg-amber-400' : 'bg-white/40'
+                }`} />
+              </div>
+
+              <div className={`p-5 rounded-xl border transition-all ${
+                milestone.is_featured 
+                  ? 'bg-amber-500/[0.03] border-amber-500/20' 
+                  : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06]'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    milestone.is_featured ? 'bg-amber-500/10' : 'bg-white/5'
+                  }`}>
+                    <Icon className={`w-5 h-5 ${milestone.is_featured ? 'text-amber-300' : 'text-white/40'}`} />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold">{milestone.title}</span>
+                      {milestone.is_featured && (
+                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                      )}
+                    </div>
+
+                    {milestone.description && (
+                      <p className="text-xs text-white/50 mb-2">{milestone.description}</p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/30">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {milestone.year || milestone.date.split('-')[0]}
+                      </span>
+                      {milestone.city && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {milestone.city}
+                        </span>
+                      )}
+                      {milestone.venue && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3 h-3" /> {milestone.venue}
+                        </span>
+                      )}
+                      {milestone.related_artist_slug && (
+                        <Link 
+                          href={`/artists/${milestone.related_artist_slug}`}
+                          className="flex items-center gap-1 text-white/40 hover:text-white/60"
+                        >
+                          <Users className="w-3 h-3" /> {milestone.related_artist_name || milestone.related_artist_slug}
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatsSection({ stats, appearances, socialStats }: any) {
+  // Compute yearly breakdown
+  const byYear = appearances.reduce((acc: any, gig: Appearance) => {
+    const y = gig.year || 0;
+    if (!acc[y]) acc[y] = { count: 0, cities: new Set(), venues: new Set() };
+    acc[y].count++;
+    if (gig.city) acc[y].cities.add(gig.city);
+    if (gig.venue) acc[y].venues.add(gig.venue);
+    return acc;
+  }, {});
+
+  const yearData = Object.entries(byYear)
+    .map(([year, data]: [string, any]) => ({
+      year: parseInt(year),
+      gigs: data.count,
+      cities: data.cities.size,
+      venues: data.venues.size,
+    }))
+    .sort((a, b) => a.year - b.year);
+
+  // City breakdown
+  const cityData = appearances.reduce((acc: Record<string, number>, gig: Appearance) => {
+    if (gig.city) acc[gig.city] = (acc[gig.city] || 0) + 1;
+    return acc;
+  }, {});
+  const topCities = Object.entries(cityData)
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // Venue breakdown
+  const venueData = appearances.reduce((acc: Record<string, { count: number; city: string }>, gig: Appearance) => {
+    if (gig.venue) {
+      if (!acc[gig.venue]) acc[gig.venue] = { count: 0, city: gig.city || "Unknown" };
+      acc[gig.venue].count++;
+    }
+    return acc;
+  }, {});
+  const topVenues = Object.entries(venueData)
+    .map(([venue, data]) => ({ venue, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  const maxGigs = Math.max(...yearData.map(d => d.gigs), 1);
+  const maxCityCount = Math.max(...topCities.map(c => c.count), 1);
+  const maxVenueCount = Math.max(...topVenues.map(v => v.count), 1);
+
+  return (
+    <div className="space-y-8">
+      {/* Key metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard label="Total Gigs" value={stats.total_gigs} icon={Route} />
+        <MetricCard label="Cities Played" value={stats.total_cities} icon={MapPin} />
+        <MetricCard label="Venues" value={stats.total_venues} icon={Building2} />
+        <MetricCard label="Connections" value={stats.total_connections} icon={Link2} />
+        <MetricCard label="B2B Partners" value={stats.b2b_count} icon={Users} />
+        <MetricCard label="Festivals" value={stats.festival_count} icon={PartyPopper} />
+        <MetricCard label="Years Active" value={stats.years_active} icon={Clock} />
+        {socialStats?.instagram_followers && (
+          <MetricCard label="IG Followers" value={formatNumber(socialStats.instagram_followers)} icon={TrendingUp} />
         )}
       </div>
 
-      {lightbox && (
-        <div className="fixed inset-0 bg-ink/95 z-50 flex items-center justify-center p-4 cursor-zoom-out" onClick={()=>setLightbox(null)}>
-          <img src={lightbox} alt="Gallery" className="max-w-full max-h-full object-contain border-4 border-cream"/>
+      {/* Yearly chart */}
+      {yearData.length > 0 && (
+        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Gigs Per Year</h3>
+          <div className="flex items-end gap-2 h-40">
+            {yearData.map(d => (
+              <div key={d.year} className="flex-1 flex flex-col items-center gap-1">
+                <div className="text-[10px] text-white/30">{d.gigs}</div>
+                <div 
+                  className="w-full rounded-t-md bg-white/10 hover:bg-white/20 transition-colors relative group"
+                  style={{ height: `${(d.gigs / maxGigs) * 100}%`, minHeight: '4px' }}
+                >
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-black/80 text-[10px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">
+                    {d.gigs} gigs · {d.cities} cities · {d.venues} venues
+                  </div>
+                </div>
+                <div className="text-[10px] text-white/40">{d.year}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
-      <Footer/>
+
+      {/* Top cities */}
+      {topCities.length > 0 && (
+        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Top Cities</h3>
+          <div className="space-y-3">
+            {topCities.map(c => (
+              <div key={c.city} className="flex items-center gap-3">
+                <div className="w-24 text-xs text-white/40">{c.city}</div>
+                <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full bg-white/15 transition-all"
+                    style={{ width: `${(c.count / maxCityCount) * 100}%` }}
+                  />
+                </div>
+                <div className="w-8 text-xs text-white/60 text-right">{c.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top venues */}
+      {topVenues.length > 0 && (
+        <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+          <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Top Venues</h3>
+          <div className="space-y-3">
+            {topVenues.map(v => (
+              <div key={v.venue} className="flex items-center gap-3">
+                <div className="w-32">
+                  <div className="text-xs text-white/40 truncate">{v.venue}</div>
+                  <div className="text-[10px] text-white/20">{v.city}</div>
+                </div>
+                <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full bg-white/15 transition-all"
+                    style={{ width: `${(v.count / maxVenueCount) * 100}%` }}
+                  />
+                </div>
+                <div className="w-8 text-xs text-white/60 text-right">{v.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}
 
-export default ArtistDetail;
+function MetricCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: any }) {
+  return (
+    <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4">
+      <Icon className="w-4 h-4 text-white/20 mb-2" />
+      <div className="text-xl font-bold">{value}</div>
+      <div className="text-xs text-white/30">{label}</div>
+    </div>
+  );
+}
+
+function PressSection({ artist }: { artist: Artist }) {
+  // Placeholder — would fetch from artist_press table
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-8 text-center">
+        <Newspaper className="w-10 h-10 text-white/10 mx-auto mb-4" />
+        <h3 className="text-lg font-medium mb-2">Press & Media</h3>
+        <p className="text-sm text-white/40 max-w-md mx-auto mb-4">
+          Press mentions, reviews, and interviews for {artist.name}. 
+          This section is populated from the artist_press table.
+        </p>
+        <div className="flex items-center justify-center gap-2 text-xs text-white/30">
+          <span className="px-2 py-1 rounded bg-white/5">Reviews</span>
+          <span className="px-2 py-1 rounded bg-white/5">Interviews</span>
+          <span className="px-2 py-1 rounded bg-white/5">Premieres</span>
+          <span className="px-2 py-1 rounded bg-white/5">Features</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EPKSection({ artist, stats, facts, appearances }: any) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadEPK = async () => {
+    setDownloading(true);
+    // In production, this would generate a PDF
+    setTimeout(() => setDownloading(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* EPK Header */}
+      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+        <div className="flex items-start gap-4">
+          {artist.photo_url && (
+            <Image 
+              src={artist.photo_url} 
+              alt={artist.name} 
+              width={120} 
+              height={120} 
+              className="rounded-xl object-cover"
+            />
+          )}
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold mb-1">{artist.name}</h2>
+            <p className="text-sm text-white/50 mb-3">
+              {artist.genres.join(" · ")} · {artist.based_city}
+            </p>
+            <p className="text-sm text-white/40 leading-relaxed mb-4">
+              {artist.bio?.slice(0, 200)}...
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-white/30">
+              <span>{stats.total_gigs}+ gigs</span>
+              <span>·</span>
+              <span>{stats.total_cities} cities</span>
+              <span>·</span>
+              <span>{stats.years_active} years active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Facts for Press */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {facts.slice(0, 6).map((fact: CoolFact, i: number) => (
+          <div key={i} className="rounded-xl bg-white/[0.03] border border-white/5 p-4">
+            <div className="text-lg mb-1">{fact.icon}</div>
+            <div className="text-xs text-white/30">{fact.label}</div>
+            <div className="text-sm font-semibold">{fact.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Contact */}
+      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Contact</h3>
+        <div className="space-y-3">
+          {artist.booking_email && (
+            <div className="flex items-center gap-3">
+              <Mail className="w-4 h-4 text-white/30" />
+              <span className="text-sm">{artist.booking_email}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(artist.booking_email)}
+                className="text-white/20 hover:text-white/40"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+          {artist.manager_email && (
+            <div className="flex items-center gap-3">
+              <Users className="w-4 h-4 text-white/30" />
+              <span className="text-sm">{artist.manager_email}</span>
+              <span className="text-[10px] text-white/20">(Management)</span>
+            </div>
+          )}
+          {artist.website && (
+            <div className="flex items-center gap-3">
+              <Globe className="w-4 h-4 text-white/30" />
+              <a href={artist.website} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-white/80">
+                {artist.website}
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Social Links */}
+      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Social & Streaming</h3>
+        <div className="flex flex-wrap gap-2">
+          {artist.instagram && (
+            <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noopener noreferrer"
+               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
+              <Instagram className="w-4 h-4" /> Instagram
+            </a>
+          )}
+          {artist.soundcloud && (
+            <a href={artist.soundcloud} target="_blank" rel="noopener noreferrer"
+               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
+              <Headphones className="w-4 h-4" /> SoundCloud
+            </a>
+          )}
+          {artist.spotify && (
+            <a href={artist.spotify} target="_blank" rel="noopener noreferrer"
+               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
+              <Disc className="w-4 h-4" /> Spotify
+            </a>
+          )}
+          {artist.bandcamp && (
+            <a href={artist.bandcamp} target="_blank" rel="noopener noreferrer"
+               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm transition-colors">
+              <Music className="w-4 h-4" /> Bandcamp
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Tech Specs */}
+      <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-6">
+        <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-4">Technical</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div className="text-white/30 text-xs mb-1">Available for</div>
+            <div>{artist.available_cities.length > 0 ? artist.available_cities.join(", ") : "All cities"}</div>
+          </div>
+          <div>
+            <div className="text-white/30 text-xs mb-1">Fee Range</div>
+            <div>
+              {artist.fee_min_inr && artist.fee_max_inr 
+                ? `₹${artist.fee_min_inr.toLocaleString()} - ₹${artist.fee_max_inr.toLocaleString()}`
+                : "Contact for rates"
+              }
+            </div>
+          </div>
+          <div>
+            <div className="text-white/30 text-xs mb-1">Status</div>
+            <div className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full ${artist.open_to_bookings ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              {artist.open_to_bookings ? "Open for bookings" : "Not taking bookings"}
+            </div>
+          </div>
+          <div>
+            <div className="text-white/30 text-xs mb-1">Genres</div>
+            <div>{artist.genres.join(", ")}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Download CTA */}
+      <button
+        onClick={handleDownloadEPK}
+        disabled={downloading}
+        className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
+      >
+        {downloading ? (
+          <>
+            <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+            Generating EPK...
+          </>
+        ) : (
+          <>
+            <Download className="w-4 h-4" />
+            Download Press Kit (PDF)
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatNumber(num: number): string {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+  if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+  return num.toString();
+}
