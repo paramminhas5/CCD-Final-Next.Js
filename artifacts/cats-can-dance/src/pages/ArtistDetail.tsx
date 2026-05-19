@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useUser, useClerk } from "@clerk/react";
 import Nav from "@/components/Nav";
@@ -20,12 +20,15 @@ type Artist = {
   gallery: { url: string; caption?: string }[];
   videos: { youtube_id?: string; title?: string }[];
   open_to_bookings: boolean; available_cities: string[];
-  claimed_by: string | null;
+  claimed_by: string | null; featured: boolean;
+  enrichment_log?: Record<string, unknown>;
+  created_at?: string;
 };
 type ArtistDate = {
   id: string; city: string; venue: string | null; event_date: string;
   event_time: string | null; status: string; ticket_url: string | null;
 };
+type OtherArtist = Pick<Artist, "id" | "slug" | "name" | "based_city" | "genres" | "photo_url" | "festivals">;
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
 const ensUrl = (s: string | null) => s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
@@ -40,10 +43,35 @@ const fmtFee = (a: Artist) => {
   return `${sym}${f(a.fee_min_inr ?? a.fee_max_inr!)}`;
 };
 
+function getYearsActive(a: Artist, dates: ArtistDate[]): number | null {
+  const allDates: string[] = [];
+  if (a.created_at) allDates.push(a.created_at);
+  dates.forEach(d => allDates.push(d.event_date));
+  if (allDates.length === 0) return null;
+  const earliest = Math.min(...allDates.map(d => new Date(d).getFullYear()));
+  return new Date().getFullYear() - earliest + 1;
+}
+
+function getConnections(a: Artist, others: OtherArtist[]): OtherArtist[] {
+  if (!a.festivals.length) return [];
+  return others
+    .filter(o => o.slug !== a.slug && o.festivals.some(f => a.festivals.includes(f)))
+    .sort((x, y) => {
+      const xShared = y.festivals.filter(f => a.festivals.includes(f)).length;
+      const yShared = x.festivals.filter(f => a.festivals.includes(f)).length;
+      return xShared - yShared;
+    })
+    .slice(0, 8);
+}
+
+function getSharedStages(a: Artist, other: OtherArtist): string[] {
+  return a.festivals.filter(f => other.festivals.includes(f));
+}
+
 /* ── Sub-components ─────────────────────────────────────────────────────────── */
 function SCEmbed({ url, name }: { url: string; name: string }) {
   const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23E91E8C&auto_play=false&hide_related=true&show_comments=false&show_user=true&visual=true`;
-  return <iframe className="w-full rounded-none border-4 border-ink" height="200" scrolling="no" frameBorder="no" allow="autoplay" src={src} title={`${name} on SoundCloud`} />;
+  return <iframe className="w-full border-4 border-ink" height="200" scrolling="no" frameBorder="no" allow="autoplay" src={src} title={`${name} on SoundCloud`} />;
 }
 
 function YTEmbed({ id, title }: { id: string; title?: string }) {
@@ -55,6 +83,278 @@ function YTEmbed({ id, title }: { id: string; title?: string }) {
   );
 }
 
+/* ── Stats Bar ─────────────────────────────────────────────────────────────── */
+function StatsBar({ artist, dates, connections }: { artist: Artist; dates: ArtistDate[]; connections: OtherArtist[] }) {
+  const yearsActive = getYearsActive(artist, dates);
+  const allCities = [...new Set(dates.map(d => d.city).filter(Boolean))];
+  const pastShows = dates.filter(d => new Date(d.event_date) < new Date()).length;
+  const items = [
+    artist.festivals.length > 0 && { n: artist.festivals.length, label: "Stage credits" },
+    pastShows > 0 && { n: pastShows, label: "Shows played" },
+    allCities.length > 0 && { n: allCities.length, label: "Cities" },
+    connections.length > 0 && { n: connections.length, label: "Known connections" },
+    yearsActive && { n: yearsActive, label: "Years active" },
+    artist.videos.length > 0 && { n: artist.videos.length, label: "Videos" },
+  ].filter(Boolean) as { n: number; label: string }[];
+
+  if (items.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-px bg-ink border-4 border-ink mb-8">
+      {items.slice(0, 6).map(({ n, label }) => (
+        <div key={label} className="bg-cream p-4 text-center">
+          <p className="font-display text-3xl text-ink">{n}</p>
+          <p className="font-display text-[10px] uppercase text-ink/50 mt-0.5">{label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Career Timeline ────────────────────────────────────────────────────────── */
+function CareerTimeline({ dates }: { dates: ArtistDate[] }) {
+  if (dates.length === 0) return null;
+  const sorted = [...dates].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  const byYear: Record<string, ArtistDate[]> = {};
+  sorted.forEach(d => {
+    const yr = d.event_date.slice(0, 4);
+    (byYear[yr] = byYear[yr] ?? []).push(d);
+  });
+  const years = Object.keys(byYear).sort();
+
+  return (
+    <div>
+      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-6">Journey</h2>
+      <div className="relative">
+        {/* Vertical line */}
+        <div className="absolute left-[72px] top-0 bottom-0 w-0.5 bg-ink/10" />
+        <div className="space-y-6">
+          {years.map(yr => (
+            <div key={yr} className="flex gap-4">
+              <div className="w-[68px] shrink-0 text-right">
+                <span className="font-display text-xs text-ink/40 uppercase">{yr}</span>
+              </div>
+              <div className="relative pl-6 flex-1 space-y-2">
+                {/* Year dot */}
+                <div className="absolute left-0 top-1 w-3 h-3 bg-magenta border-2 border-ink -translate-x-[6px]" />
+                {byYear[yr].map(d => {
+                  const dt = new Date(d.event_date + "T00:00:00");
+                  const isPast = dt < new Date();
+                  return (
+                    <div key={d.id} className={`flex items-start gap-3 p-3 border-2 ${isPast ? "border-ink/10 bg-ink/3" : "border-magenta/40 bg-magenta/5"}`}>
+                      <div className="text-center min-w-[36px]">
+                        <p className="font-display text-lg text-ink leading-none">{dt.getDate()}</p>
+                        <p className="font-display text-[9px] text-ink/40 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-display text-sm text-ink uppercase">{d.city}</p>
+                        {d.venue && <p className="text-xs text-ink/50">{d.venue}</p>}
+                      </div>
+                      <span className={`text-[9px] font-display uppercase px-2 py-0.5 border shrink-0 ${
+                        d.status === "confirmed" ? "bg-acid-yellow text-ink border-acid-yellow" :
+                        d.status === "tentative" ? "bg-cream text-ink/50 border-ink/20" : "bg-ink text-cream border-ink"
+                      }`}>{d.status}</span>
+                      {d.ticket_url && (
+                        <a href={d.ticket_url.startsWith("http") ? d.ticket_url : `https://${d.ticket_url}`}
+                          target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                          className="font-display text-[9px] uppercase bg-magenta text-cream px-2 py-1 border border-ink shrink-0 hover:bg-ink transition-colors">
+                          Tix
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Network / Connections ──────────────────────────────────────────────────── */
+function NetworkSection({ artist, connections }: { artist: Artist; connections: OtherArtist[] }) {
+  if (connections.length === 0) return null;
+  return (
+    <div>
+      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">
+        The Network — Shared Stages
+      </h2>
+      <p className="text-xs text-ink/40 mb-4">
+        Artists who have appeared on the same lineup as {artist.name}
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {connections.map(c => {
+          const shared = getSharedStages(artist, c);
+          const img = c.photo_url;
+          return (
+            <a key={c.id} href={`/artists/${c.slug}`}
+              className="block border-4 border-ink bg-cream hover:bg-acid-yellow transition-colors group overflow-hidden">
+              <div className="relative">
+                {img
+                  ? <img src={img} alt={c.name} className="w-full h-24 object-cover group-hover:scale-105 transition-transform duration-300" />
+                  : <div className="w-full h-24 flex items-center justify-center font-display text-3xl text-cream" style={{ background: nameBg(c.name) }}>
+                      {c.name[0]}
+                    </div>
+                }
+                {shared.length > 1 && (
+                  <div className="absolute bottom-0 right-0 bg-magenta text-cream font-display text-[9px] px-1.5 py-0.5 border-t-2 border-l-2 border-ink">
+                    {shared.length}× together
+                  </div>
+                )}
+              </div>
+              <div className="p-2">
+                <p className="font-display text-xs text-ink uppercase truncate">{c.name}</p>
+                <p className="text-[9px] text-ink/40 truncate">{shared[0]}</p>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Festival / Stage Credits ───────────────────────────────────────────────── */
+function StageCredits({ festivals }: { festivals: string[] }) {
+  if (festivals.length === 0) return null;
+  // Try to identify tier / prestige
+  const bigFests = ["sunburn", "vh1 supersonic", "magnetic fields", "enchanted valley", "one stage", "lollapalooza", "bacardi nh7", "nh7", "antiheroes", "unbox"];
+  const isBig = (f: string) => bigFests.some(b => f.toLowerCase().includes(b));
+  const sorted = [...festivals].sort((a, b) => (isBig(b) ? 1 : 0) - (isBig(a) ? 1 : 0));
+
+  return (
+    <div>
+      <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">
+        Stage Credits ({festivals.length})
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        {sorted.map(f => (
+          <span key={f} className={`font-display text-xs px-3 py-1.5 border-4 border-ink chunk-shadow ${
+            isBig(f) ? "bg-acid-yellow text-ink" : "bg-cream text-ink"
+          }`}>
+            {isBig(f) && "★ "}{f}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── EPK Panel ──────────────────────────────────────────────────────────────── */
+function EPKPanel({ artist, dates }: { artist: Artist; dates: ArtistDate[] }) {
+  const [open, setOpen] = useState(false);
+  const upcoming = dates.filter(d => new Date(d.event_date + "T00:00:00") >= new Date()).slice(0, 5);
+  const fee = fmtFee(artist);
+  const city = cityOf(artist);
+  const sc = ensUrl(artist.soundcloud);
+  const ig = igUrl(artist.instagram);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="border-4 border-ink bg-cream mt-4">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between p-4 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors">
+        <span>📄 Press Kit / EPK</span>
+        <span className="text-ink/40">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t-4 border-ink p-5 space-y-4">
+          <p className="text-xs text-ink/50">
+            Use this information for press, booking, and promotional purposes.
+          </p>
+
+          {/* EPK fields */}
+          <div className="space-y-3">
+            <div className="bg-ink/5 border-2 border-ink/10 p-3">
+              <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Artist Name</p>
+              <p className="font-display text-sm text-ink">{artist.name}</p>
+            </div>
+            {artist.members && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Members</p>
+                <p className="text-sm text-ink">{artist.members}</p>
+              </div>
+            )}
+            {city && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Based In</p>
+                <p className="text-sm text-ink">{city}</p>
+              </div>
+            )}
+            {artist.genres.length > 0 && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Genre(s)</p>
+                <p className="text-sm text-ink">{artist.genres.join(", ")}</p>
+              </div>
+            )}
+            {artist.labels && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Label(s)</p>
+                <p className="text-sm text-ink">{artist.labels}</p>
+              </div>
+            )}
+            {artist.bio && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Bio (Short)</p>
+                <p className="text-sm text-ink/80 line-clamp-4">{artist.bio}</p>
+              </div>
+            )}
+            {artist.festivals.length > 0 && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Notable Stages</p>
+                <p className="text-sm text-ink">{artist.festivals.slice(0, 8).join(" · ")}</p>
+              </div>
+            )}
+            <div className="bg-ink/5 border-2 border-ink/10 p-3">
+              <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Links</p>
+              <div className="space-y-1">
+                {ig && <p className="text-xs text-ink/70">Instagram: {ig}</p>}
+                {sc && <p className="text-xs text-ink/70">SoundCloud: {sc}</p>}
+                {ensUrl(artist.spotify) && <p className="text-xs text-ink/70">Spotify: {ensUrl(artist.spotify)}</p>}
+                {ensUrl(artist.website) && <p className="text-xs text-ink/70">Website: {ensUrl(artist.website)}</p>}
+                <p className="text-xs text-ink/70">Profile: {typeof window !== "undefined" ? window.location.href : ""}</p>
+              </div>
+            </div>
+            {upcoming.length > 0 && (
+              <div className="bg-ink/5 border-2 border-ink/10 p-3">
+                <p className="font-display text-[9px] uppercase text-ink/40 mb-1">Upcoming Shows</p>
+                {upcoming.map(d => (
+                  <p key={d.id} className="text-xs text-ink/70">{d.event_date} — {d.city}{d.venue ? `, ${d.venue}` : ""}</p>
+                ))}
+              </div>
+            )}
+            {fee && (
+              <div className="bg-acid-yellow border-2 border-ink p-3">
+                <p className="font-display text-[9px] uppercase text-ink/60 mb-1">Fee Range (Indicative)</p>
+                <p className="font-display text-xl text-ink">{fee}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={handlePrint}
+              className="flex-1 font-display text-xs uppercase bg-ink text-cream px-4 py-2.5 border-2 border-ink hover:bg-magenta transition-colors">
+              🖨 Print / PDF
+            </button>
+            <button onClick={() => {
+              const text = `${artist.name} — ${artist.genres.join(", ")} — Based in ${city}\n\n${artist.bio ?? ""}\n\nStages: ${artist.festivals.slice(0,5).join(", ")}\n\nBook: ${artist.booking_email ?? "via CCD"}\nIG: ${ig ?? ""}\nSC: ${sc ?? ""}`;
+              navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard!")).catch(() => toast.error("Copy failed"));
+            }}
+              className="flex-1 font-display text-xs uppercase bg-cream text-ink px-4 py-2.5 border-2 border-ink hover:bg-acid-yellow transition-colors">
+              📋 Copy Text
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Contact Gate ───────────────────────────────────────────────────────────── */
 function ContactGate({ artist }: { artist: Artist }) {
   const { user } = useUser();
   const { openSignIn } = useClerk();
@@ -64,6 +364,7 @@ function ContactGate({ artist }: { artist: Artist }) {
   const [enquiry, setEnquiry] = useState("");
   const [sent, setSent] = useState(false);
   const fee = fmtFee(artist);
+  const isRevealed = user || verified;
 
   const sendEnquiry = async () => {
     if (!email.trim()) { toast.error("Email required"); return; }
@@ -77,8 +378,6 @@ function ContactGate({ artist }: { artist: Artist }) {
     } catch { toast.error("Failed"); } finally { setBusy(false); }
   };
 
-  const isRevealed = user || verified;
-
   return (
     <div className="border-4 border-ink bg-cream">
       {fee && (
@@ -86,8 +385,7 @@ function ContactGate({ artist }: { artist: Artist }) {
           <p className="font-display text-xs uppercase opacity-70 mb-1">Estimated Fee</p>
           {isRevealed
             ? <p className="font-display text-3xl">{fee}</p>
-            : <p className="font-display text-3xl blur-sm select-none">₹XXk–YYL</p>
-          }
+            : <p className="font-display text-3xl blur-sm select-none">₹XXk–YYL</p>}
           <p className="text-xs opacity-60 mt-1">Indicative — confirm per booking</p>
         </div>
       )}
@@ -96,13 +394,12 @@ function ContactGate({ artist }: { artist: Artist }) {
         {!artist.open_to_bookings && (
           <p className="text-xs bg-ink/5 border-2 border-ink/20 p-3 text-ink/60">Not actively taking bookings — enquiries still welcome.</p>
         )}
-
         {!isRevealed && (
           <>
-            <p className="text-sm text-ink/70">Sign in or verify your email to reveal the booking contact and fee.</p>
+            <p className="text-sm text-ink/70">Sign in or enter your email to reveal the booking contact and fee.</p>
             <button onClick={() => openSignIn()}
               className="w-full bg-ink text-cream font-display text-sm uppercase px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">
-              Sign In to Reveal Contact
+              Sign In to Reveal
             </button>
             <div className="relative flex items-center gap-2 text-ink/30 text-xs font-display uppercase">
               <div className="flex-1 h-px bg-ink/20" /><span>or</span><div className="flex-1 h-px bg-ink/20" />
@@ -118,7 +415,6 @@ function ContactGate({ artist }: { artist: Artist }) {
             </button>
           </>
         )}
-
         {isRevealed && !sent && (
           <>
             {artist.booking_email && (
@@ -134,7 +430,7 @@ function ContactGate({ artist }: { artist: Artist }) {
               <p className="text-sm text-ink/60 bg-ink/5 border-2 border-ink/20 p-3">No direct contact on file — CCD will forward your enquiry.</p>
             )}
             <label className="block">
-              <span className="font-display text-xs uppercase text-ink block mb-1">Send a Booking Enquiry</span>
+              <span className="font-display text-xs uppercase text-ink block mb-1">Booking Enquiry</span>
               <textarea value={enquiry} onChange={e => setEnquiry(e.target.value)} rows={3}
                 placeholder="Date, city, event type, budget…"
                 className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none resize-none" />
@@ -152,7 +448,6 @@ function ContactGate({ artist }: { artist: Artist }) {
             </button>
           </>
         )}
-
         {sent && (
           <div className="text-center py-4">
             <p className="font-display text-2xl text-ink mb-1">✓ Sent</p>
@@ -164,16 +459,47 @@ function ContactGate({ artist }: { artist: Artist }) {
   );
 }
 
-/* ── Main page ────────────────────────────────────────────────────────────── */
+/* ── "Fun Facts" pull quote bar ─────────────────────────────────────────────── */
+function FactsBar({ artist, dates, connections }: { artist: Artist; dates: ArtistDate[]; connections: OtherArtist[] }) {
+  const facts: string[] = [];
+  const city = cityOf(artist);
+  if (city) facts.push(`Based in ${city}`);
+  if (artist.from_city && artist.from_city !== artist.based_city) facts.push(`Originally from ${artist.from_city}`);
+  if (artist.labels) facts.push(`On ${artist.labels}`);
+  const allCities = [...new Set(dates.map(d => d.city).filter(Boolean))];
+  if (allCities.length > 1) facts.push(`Played across ${allCities.length} cities`);
+  if (connections.length > 0) facts.push(`Connected to ${connections.length} artists in the CCD network`);
+  if (artist.festivals.length >= 5) facts.push(`${artist.festivals.length} festival & club credits`);
+  if (artist.open_to_bookings) facts.push("Open to bookings");
+  if (artist.available_cities.length > 0) facts.push(`Available in ${artist.available_cities.slice(0,3).join(", ")}`);
+
+  if (facts.length === 0) return null;
+  return (
+    <div className="bg-ink border-4 border-ink my-8 overflow-hidden">
+      <div className="flex overflow-x-auto gap-px">
+        {facts.map((f, i) => (
+          <div key={i} className="bg-ink px-6 py-3 text-center shrink-0">
+            <p className="font-display text-xs text-cream/50 uppercase whitespace-nowrap">
+              <span className="text-acid-yellow mr-2">✦</span>{f}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Page ────────────────────────────────────────────────────────────── */
 const ArtistDetail = () => {
   const router = useRouter();
   const slug = router.query.slug as string | undefined;
   const [a, setA] = useState<Artist | null>(null);
   const [dates, setDates] = useState<ArtistDate[]>([]);
-  const [related, setRelated] = useState<Pick<Artist,"id"|"slug"|"name"|"based_city"|"genres"|"photo_url">[]>([]);
+  const [allArtists, setAllArtists] = useState<OtherArtist[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "journey" | "network" | "epk">("overview");
 
   useEffect(() => {
     if (!slug) return;
@@ -191,25 +517,28 @@ const ArtistDetail = () => {
         available_cities: Array.isArray(raw.available_cities) ? raw.available_cities : [],
         open_to_bookings: raw.open_to_bookings !== false,
         fee_currency: raw.fee_currency || "INR",
+        featured: raw.featured ?? false,
       };
       setA(norm);
-      const [dr, rr] = await Promise.all([
+      const [dr, ar] = await Promise.all([
         fetch(`/api/artist-dates?artist_id=${raw.id}`).then(r => r.ok ? r.json() : []),
-        fetch(`/api/artists`).then(r => r.ok ? r.json() : []).then((all: any[]) => all.filter(x => x.slug !== slug).sort(() => Math.random()-0.5).slice(0,4)),
+        fetch(`/api/artists`).then(r => r.ok ? r.json() : []),
       ]);
       setDates(Array.isArray(dr) ? dr : []);
-      setRelated(rr);
+      setAllArtists(Array.isArray(ar) ? ar : []);
       setLoading(false);
     })();
   }, [slug]);
+
+  const connections = useMemo(() => a ? getConnections(a, allArtists) : [], [a, allArtists]);
+  const related = useMemo(() => allArtists.filter(x => x.slug !== slug).sort(() => Math.random()-0.5).slice(0, 4), [allArtists, slug]);
 
   if (loading) return (
     <div className="min-h-screen bg-cream"><Nav />
       <div className="flex items-center justify-center min-h-[80vh] pt-20">
         <div className="space-y-4 text-center">
-          <div className="w-24 h-24 rounded-none bg-ink/5 border-4 border-ink/10 mx-auto animate-pulse" />
+          <div className="w-24 h-24 bg-ink/5 border-4 border-ink/10 mx-auto animate-pulse" />
           <div className="h-6 w-48 bg-ink/10 mx-auto animate-pulse" />
-          <div className="h-4 w-32 bg-ink/5 mx-auto animate-pulse" />
         </div>
       </div>
     </div>
@@ -228,8 +557,16 @@ const ArtistDetail = () => {
   const sc   = ensUrl(a.soundcloud);
   const ig   = igUrl(a.instagram);
   const ytVideos = a.videos.filter(v => v.youtube_id);
-  const upcoming = dates.filter(d => new Date(d.event_date+"T00:00:00") >= new Date(new Date().toDateString())).sort((x,y) => x.event_date.localeCompare(y.event_date));
+  const upcoming = dates.filter(d => new Date(d.event_date+"T00:00:00") >= new Date()).sort((x,y) => x.event_date.localeCompare(y.event_date));
+  const past = dates.filter(d => new Date(d.event_date+"T00:00:00") < new Date()).sort((x,y) => y.event_date.localeCompare(x.event_date));
   const coverImg = a.photo_url || (ytVideos[0] ? `https://img.youtube.com/vi/${ytVideos[0].youtube_id}/maxresdefault.jpg` : null) || (a.gallery[0]?.url ?? null);
+
+  const TABS = [
+    { key: "overview", label: "Overview" },
+    { key: "journey",  label: `Journey ${dates.length > 0 ? `(${dates.length})` : ""}` },
+    { key: "network",  label: `Network ${connections.length > 0 ? `(${connections.length})` : ""}` },
+    { key: "epk",      label: "EPK / Press" },
+  ] as const;
 
   return (
     <div className="min-h-screen bg-cream">
@@ -241,165 +578,264 @@ const ArtistDetail = () => {
       />
       <Nav />
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="pt-[60px] md:pt-[72px]">
-        {/* Full-width cover */}
-        <div className="relative w-full h-[40vh] md:h-[55vh] overflow-hidden border-b-4 border-ink">
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <div className="relative w-full h-[45vh] md:h-[60vh] overflow-hidden border-b-4 border-ink">
           {coverImg
             ? <img src={coverImg} alt={a.name} className="absolute inset-0 w-full h-full object-cover" />
-            : <div className="absolute inset-0" style={{ background: nameBg(a.name) }} />
-          }
-          <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-transparent to-ink/80" />
-          {/* Name overlay */}
+            : <div className="absolute inset-0" style={{ background: nameBg(a.name) }} />}
+          <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-transparent to-ink/90" />
+
+          {/* Featured badge */}
+          {a.featured && (
+            <div className="absolute top-0 right-0 bg-acid-yellow text-ink font-display text-xs px-4 py-2 border-b-4 border-l-4 border-ink uppercase">
+              ⭐ CCD Featured
+            </div>
+          )}
+
           <div className="absolute bottom-0 inset-x-0 p-6 md:p-10">
-            <a href="/artists" className="font-display text-xs uppercase text-cream/50 hover:text-cream mb-2 inline-block">← All artists</a>
-            <h1 className="font-display text-4xl sm:text-6xl md:text-8xl text-cream uppercase leading-none"
+            <a href="/artists" className="font-display text-xs uppercase text-cream/40 hover:text-cream mb-3 inline-block">← All artists</a>
+            {a.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {a.genres.map(g => (
+                  <span key={g} className="font-display text-[10px] uppercase bg-acid-yellow text-ink px-2 py-1 border-2 border-ink">{g}</span>
+                ))}
+                {city && <span className="font-display text-[10px] uppercase bg-cream/10 border border-cream/30 text-cream px-2 py-1">📍 {city}</span>}
+              </div>
+            )}
+            <h1 className="font-display text-5xl sm:text-7xl md:text-8xl text-cream uppercase leading-none"
               style={{ textShadow: "4px 4px 0 rgba(0,0,0,0.4)" }}>{a.name}</h1>
-            {a.members && <p className="text-cream/60 text-base mt-1">{a.members}</p>}
+            {a.members && <p className="text-cream/50 text-sm mt-2">{a.members}</p>}
           </div>
         </div>
 
         {/* ── Meta strip ──────────────────────────────────────────────────── */}
         <div className="bg-ink text-cream border-b-4 border-cream/10">
-          <div className="container py-4 flex flex-wrap items-center gap-3 justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              {city && <span className="font-display text-xs uppercase bg-cream/10 text-cream px-3 py-1.5 border border-cream/20">📍 {city}</span>}
-              {a.genres.map(g => <span key={g} className="font-display text-xs uppercase bg-acid-yellow text-ink px-2 py-1.5 border-2 border-acid-yellow">{g}</span>)}
-              {a.labels && <span className="font-display text-xs text-cream/50 px-2 py-1.5 border border-cream/20">{a.labels}</span>}
+          <div className="container py-3 flex flex-wrap items-center gap-3 justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              {a.labels && <span className="font-display text-xs text-cream/40 border border-cream/20 px-2 py-1">{a.labels}</span>}
+              {a.festivals.length > 0 && (
+                <span className="font-display text-xs text-cream/40">
+                  {a.festivals.length} stage credits
+                </span>
+              )}
+              {connections.length > 0 && (
+                <span className="font-display text-xs text-cream/40">
+                  · {connections.length} known connections
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              {ig && <a href={ig} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-2 border-2 border-cream/30 text-cream hover:border-cream transition-colors">Instagram ↗</a>}
-              {sc && <a href={sc} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-2 bg-[#ff5500] text-cream border-2 border-[#ff5500] hover:opacity-80">SoundCloud ↗</a>}
-              {ensUrl(a.spotify) && <a href={ensUrl(a.spotify)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-2 bg-[#1db954] text-cream border-2 border-[#1db954]">Spotify ↗</a>}
-              {ensUrl(a.bandcamp) && <a href={ensUrl(a.bandcamp)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-2 bg-[#1da0c3] text-cream border-2 border-[#1da0c3]">Bandcamp ↗</a>}
-              {ensUrl(a.website) && <a href={ensUrl(a.website)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-2 border-2 border-cream/30 text-cream hover:border-cream">Website ↗</a>}
+            <div className="flex items-center gap-2 flex-wrap">
+              {ig && <a href={ig} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 border-2 border-cream/30 text-cream hover:border-cream transition-colors">Instagram ↗</a>}
+              {sc && <a href={sc} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#ff5500] text-cream border-2 border-[#ff5500] hover:opacity-80">SoundCloud ↗</a>}
+              {ensUrl(a.spotify) && <a href={ensUrl(a.spotify)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#1db954] text-cream border-2 border-[#1db954]">Spotify ↗</a>}
+              {ensUrl(a.bandcamp) && <a href={ensUrl(a.bandcamp)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 bg-[#1da0c3] text-cream border-2 border-[#1da0c3]">Bandcamp ↗</a>}
+              {ensUrl(a.website) && <a href={ensUrl(a.website)!} target="_blank" rel="noreferrer" className="font-display text-xs uppercase px-3 py-1.5 border-2 border-cream/30 text-cream hover:border-cream">Website ↗</a>}
             </div>
           </div>
         </div>
 
-        {/* ── Body: 2-col on desktop ───────────────────────────────────────── */}
+        {/* ── Facts bar ───────────────────────────────────────────────────── */}
+        <FactsBar artist={a} dates={dates} connections={connections} />
+
+        {/* ── Stats bar ───────────────────────────────────────────────────── */}
+        <div className="container">
+          <StatsBar artist={a} dates={dates} connections={connections} />
+        </div>
+
+        {/* ── Tab nav ─────────────────────────────────────────────────────── */}
+        <div className="border-b-4 border-ink bg-cream sticky top-[60px] md:top-[72px] z-20">
+          <div className="container">
+            <div className="flex gap-0 overflow-x-auto">
+              {TABS.map(tab => (
+                <button key={tab.key} onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                  className={`font-display text-xs uppercase px-5 py-4 border-r-4 border-ink whitespace-nowrap transition-colors ${
+                    activeTab === tab.key ? "bg-ink text-cream" : "text-ink/50 hover:text-ink hover:bg-acid-yellow/30"}`}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Tab content ─────────────────────────────────────────────────── */}
         <div className="container py-10 grid grid-cols-1 lg:grid-cols-3 gap-10">
-
-          {/* LEFT: all content */}
+          {/* LEFT: main content */}
           <div className="lg:col-span-2 space-y-10">
-
-            {/* Why book */}
-            {a.why && (
-              <div className="bg-acid-yellow border-4 border-ink p-6">
-                <p className="font-display text-xs uppercase text-ink/60 mb-2">Why book them</p>
-                <p className="font-display text-2xl text-ink leading-tight">{a.why}</p>
-              </div>
+            {activeTab === "overview" && (
+              <>
+                {a.why && (
+                  <div className="bg-acid-yellow border-4 border-ink p-6">
+                    <p className="font-display text-xs uppercase text-ink/60 mb-2">Why book them</p>
+                    <p className="font-display text-2xl text-ink leading-tight">{a.why}</p>
+                  </div>
+                )}
+                {a.bio && (
+                  <div>
+                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Bio</h2>
+                    <p className="text-ink/90 leading-relaxed whitespace-pre-line text-base">{a.bio}</p>
+                  </div>
+                )}
+                {sc && (
+                  <div>
+                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Listen</h2>
+                    <SCEmbed url={sc} name={a.name} />
+                  </div>
+                )}
+                {ytVideos.length > 0 && (
+                  <div>
+                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Videos ({ytVideos.length})</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {ytVideos.map(v => <YTEmbed key={v.youtube_id} id={v.youtube_id!} title={v.title} />)}
+                    </div>
+                  </div>
+                )}
+                {upcoming.length > 0 && (
+                  <div>
+                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Upcoming Shows ({upcoming.length})</h2>
+                    <div className="space-y-3">
+                      {upcoming.map(d => {
+                        const dt = new Date(d.event_date+"T00:00:00");
+                        return (
+                          <div key={d.id} className="flex items-center gap-4 border-4 border-ink p-4 bg-cream hover:bg-acid-yellow/10 transition-colors">
+                            <div className="text-center min-w-[52px]">
+                              <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
+                              <p className="font-display text-xs text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
+                              <p className="font-display text-xs text-ink/30">{dt.getFullYear()}</p>
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-display text-lg text-ink uppercase">{d.city}</p>
+                              {d.venue && <p className="text-sm text-ink/60">{d.venue}</p>}
+                              <span className={`text-xs font-display uppercase px-2 py-0.5 border-2 border-ink mt-1 inline-block ${
+                                d.status==="confirmed"?"bg-acid-yellow text-ink":d.status==="tentative"?"bg-cream text-ink/50":"bg-ink text-cream"}`}>{d.status}</span>
+                            </div>
+                            {d.ticket_url && <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer" className="font-display text-xs uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0 hover:bg-ink transition-colors">Tickets →</a>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <StageCredits festivals={a.festivals} />
+                {a.gallery.length > 0 && (
+                  <div>
+                    <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Gallery</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {a.gallery.map((g, i) => (
+                        <figure key={i} className="border-4 border-ink overflow-hidden cursor-zoom-in" onClick={() => setLightbox(g.url)}>
+                          <img src={g.url} alt={g.caption ?? a.name} className="w-full h-40 object-cover hover:scale-105 transition-transform" />
+                          {g.caption && <figcaption className="p-2 font-display text-xs text-ink/60">{g.caption}</figcaption>}
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* Bio */}
-            {a.bio && (
-              <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Bio</h2>
-                <p className="text-ink/90 leading-relaxed whitespace-pre-line text-base">{a.bio}</p>
-              </div>
+            {activeTab === "journey" && (
+              <CareerTimeline dates={[...upcoming, ...past]} />
             )}
 
-            {/* SoundCloud */}
-            {sc && (
-              <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Listen</h2>
-                <SCEmbed url={sc} name={a.name} />
-              </div>
+            {activeTab === "network" && (
+              <NetworkSection artist={a} connections={connections} />
             )}
 
-            {/* YouTube videos — all of them */}
-            {ytVideos.length > 0 && (
+            {activeTab === "epk" && (
               <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">
-                  Videos ({ytVideos.length})
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {ytVideos.map(v => <YTEmbed key={v.youtube_id} id={v.youtube_id!} title={v.title} />)}
-                </div>
-              </div>
-            )}
-
-            {/* Upcoming shows */}
-            {upcoming.length > 0 && (
-              <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">
-                  Upcoming Shows ({upcoming.length})
-                </h2>
-                <div className="space-y-3">
-                  {upcoming.map(d => {
-                    const dt = new Date(d.event_date+"T00:00:00");
-                    return (
-                      <div key={d.id} className="flex items-center gap-4 border-4 border-ink p-4 bg-cream">
-                        <div className="text-center min-w-[52px]">
-                          <p className="font-display text-2xl text-ink leading-none">{dt.getDate()}</p>
-                          <p className="font-display text-xs text-ink/50 uppercase">{dt.toLocaleString("en",{month:"short"})}</p>
-                          <p className="font-display text-xs text-ink/30">{dt.getFullYear()}</p>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-display text-lg text-ink uppercase">{d.city}</p>
-                          {d.venue && <p className="text-sm text-ink/60">{d.venue}</p>}
-                          <span className={`text-xs font-display uppercase px-2 py-0.5 border-2 border-ink mt-1 inline-block ${d.status==="confirmed"?"bg-acid-yellow text-ink":d.status==="tentative"?"bg-cream text-ink/50":"bg-ink text-cream"}`}>{d.status}</span>
-                        </div>
-                        {d.ticket_url && <a href={d.ticket_url.startsWith("http")?d.ticket_url:`https://${d.ticket_url}`} target="_blank" rel="noreferrer" className="font-display text-xs uppercase bg-magenta text-cream px-3 py-2 border-2 border-ink shrink-0">Tickets →</a>}
+                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Press Kit</h2>
+                <p className="text-ink/60 text-sm mb-6">
+                  Everything a booker, journalist, or venue needs — in one place.
+                </p>
+                {/* Full EPK display inline */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                      <p className="font-display text-[10px] uppercase text-ink/40 mb-1">Artist Name</p>
+                      <p className="font-display text-xl text-ink">{a.name}</p>
+                    </div>
+                    <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                      <p className="font-display text-[10px] uppercase text-ink/40 mb-1">Based In</p>
+                      <p className="font-display text-xl text-ink">{city || "India"}</p>
+                    </div>
+                    {a.genres.length > 0 && (
+                      <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                        <p className="font-display text-[10px] uppercase text-ink/40 mb-1">Genre(s)</p>
+                        <p className="font-display text-base text-ink">{a.genres.join(", ")}</p>
                       </div>
-                    );
-                  })}
+                    )}
+                    {a.labels && (
+                      <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                        <p className="font-display text-[10px] uppercase text-ink/40 mb-1">Label(s)</p>
+                        <p className="font-display text-base text-ink">{a.labels}</p>
+                      </div>
+                    )}
+                  </div>
+                  {a.bio && (
+                    <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                      <p className="font-display text-[10px] uppercase text-ink/40 mb-2">Bio</p>
+                      <p className="text-ink/80 leading-relaxed text-sm">{a.bio}</p>
+                    </div>
+                  )}
+                  {a.festivals.length > 0 && (
+                    <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                      <p className="font-display text-[10px] uppercase text-ink/40 mb-2">Stage Credits</p>
+                      <p className="text-ink/80 text-sm">{a.festivals.join(", ")}</p>
+                    </div>
+                  )}
+                  {/* Links */}
+                  <div className="bg-ink/5 border-4 border-ink/10 p-4">
+                    <p className="font-display text-[10px] uppercase text-ink/40 mb-2">Links</p>
+                    <div className="space-y-1 text-sm text-ink/70">
+                      {ig && <p>Instagram: <a href={ig} className="underline">{ig}</a></p>}
+                      {sc && <p>SoundCloud: <a href={sc} className="underline">{sc}</a></p>}
+                      {ensUrl(a.spotify) && <p>Spotify: <a href={ensUrl(a.spotify)!} className="underline">{ensUrl(a.spotify)}</a></p>}
+                      {ensUrl(a.website) && <p>Website: <a href={ensUrl(a.website)!} className="underline">{ensUrl(a.website)}</a></p>}
+                    </div>
+                  </div>
+                  {/* Press photos */}
+                  {a.gallery.length > 0 && (
+                    <div>
+                      <p className="font-display text-[10px] uppercase text-ink/40 mb-2">Press Photos</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {a.gallery.slice(0,6).map((g,i) => (
+                          <a key={i} href={g.url} target="_blank" rel="noreferrer" className="block border-4 border-ink overflow-hidden hover:opacity-80">
+                            <img src={g.url} alt={g.caption ?? a.name} className="w-full h-24 object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Print / Copy buttons */}
+                  <div className="flex gap-3 pt-2">
+                    <button onClick={() => window.print()}
+                      className="flex-1 font-display text-sm uppercase bg-ink text-cream px-4 py-3 border-4 border-ink hover:bg-magenta transition-colors">
+                      🖨 Print / Save PDF
+                    </button>
+                    <button onClick={() => {
+                      const text = `${a.name}\n${a.genres.join(", ")} — ${city}\n\n${a.bio ?? ""}\n\nStages: ${a.festivals.join(", ")}\n\nIG: ${ig ?? ""}\nSC: ${sc ?? ""}\nBooking: ${a.booking_email ?? "via CCD"}\nProfile: ${typeof window !== "undefined" ? window.location.href : ""}`;
+                      navigator.clipboard.writeText(text).then(() => toast.success("Copied!")).catch(() => toast.error("Copy failed"));
+                    }}
+                      className="flex-1 font-display text-sm uppercase bg-cream text-ink px-4 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
+                      📋 Copy EPK Text
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
-
-            {/* Festival credits */}
-            {a.festivals.length > 0 && (
-              <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">
-                  Stage Credits ({a.festivals.length})
-                </h2>
-                <div className="flex flex-wrap gap-2">
-                  {a.festivals.map(f => <span key={f} className="font-display text-sm bg-cream border-4 border-ink px-3 py-1.5 chunk-shadow">{f}</span>)}
-                </div>
-              </div>
-            )}
-
-            {/* Gallery */}
-            {a.gallery.length > 0 && (
-              <div>
-                <h2 className="font-display text-sm uppercase text-ink/50 border-b-2 border-ink/20 pb-2 mb-4">Gallery</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {a.gallery.map((g,i) => (
-                    <figure key={i} className="border-4 border-ink overflow-hidden cursor-zoom-in" onClick={() => setLightbox(g.url)}>
-                      <img src={g.url} alt={g.caption ?? a.name} className="w-full h-40 object-cover hover:scale-105 transition-transform" />
-                      {g.caption && <figcaption className="p-2 font-display text-xs text-ink/60">{g.caption}</figcaption>}
-                    </figure>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Available in */}
-            {a.available_cities.length > 0 && (
-              <p className="font-display text-sm text-ink/50">Available in: {a.available_cities.join(" · ")}</p>
             )}
           </div>
 
-          {/* RIGHT: booking sidebar (sticky) */}
-          <div className="space-y-5">
-            <div className="lg:sticky lg:top-24">
+          {/* RIGHT: sticky sidebar */}
+          <div className="space-y-4">
+            <div className="lg:sticky lg:top-[140px]">
               <ContactGate artist={a} />
+              <EPKPanel artist={a} dates={dates} />
 
-              {/* Quick stats */}
-              <div className="border-4 border-ink p-4 mt-4 grid grid-cols-2 gap-4 bg-cream">
-                {a.festivals.length > 0 && <div><p className="font-display text-2xl text-ink">{a.festivals.length}</p><p className="text-xs text-ink/50">Festival credits</p></div>}
-                {ytVideos.length > 0 && <div><p className="font-display text-2xl text-ink">{ytVideos.length}</p><p className="text-xs text-ink/50">Videos</p></div>}
-                {upcoming.length > 0 && <div><p className="font-display text-2xl text-ink">{upcoming.length}</p><p className="text-xs text-ink/50">Upcoming shows</p></div>}
-                {a.genres.length > 0 && <div><p className="font-display text-2xl text-ink">{a.genres.length}</p><p className="text-xs text-ink/50">Genres</p></div>}
-              </div>
-
-              {/* Claim banner */}
               {!a.claimed_by && (
                 <div className="border-4 border-ink bg-ink text-cream p-4 mt-4">
                   <p className="font-display text-sm uppercase mb-2">Are you {a.name}?</p>
                   <a href={`/sign-in?redirect_url=/artist/dashboard?claim=${a.id}`}
-                    className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-cream inline-block">
+                    className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-cream inline-block hover:bg-cream transition-colors">
                     Claim this profile →
                   </a>
                 </div>
@@ -412,24 +848,22 @@ const ArtistDetail = () => {
         {related.length > 0 && (
           <section className="border-t-4 border-ink bg-ink text-cream py-12">
             <div className="container">
-              <h2 className="font-display text-2xl uppercase text-cream mb-6">More Artists</h2>
+              <h2 className="font-display text-2xl uppercase text-cream mb-6">
+                {connections.length > 0 ? "More From The Scene" : "More Artists"}
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {related.map(r => {
-                  const rCover = r.photo_url;
-                  return (
-                    <a key={r.id} href={`/artists/${r.slug}`}
-                      className="block border-4 border-cream/20 hover:border-cream transition-colors overflow-hidden">
-                      {rCover
-                        ? <img src={rCover} alt={r.name} className="w-full h-32 object-cover" />
-                        : <div className="w-full h-32 flex items-center justify-center font-display text-4xl text-cream/20" style={{ background: nameBg(r.name) }}>{r.name[0]}</div>
-                      }
-                      <div className="p-3">
-                        <p className="font-display text-cream uppercase text-sm">{r.name}</p>
-                        <p className="text-cream/40 text-xs mt-0.5">{r.based_city || ""}</p>
-                      </div>
-                    </a>
-                  );
-                })}
+                {related.map(r => (
+                  <a key={r.id} href={`/artists/${r.slug}`}
+                    className="block border-4 border-cream/20 hover:border-cream transition-colors overflow-hidden group">
+                    {r.photo_url
+                      ? <img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300" />
+                      : <div className="w-full h-32 flex items-center justify-center font-display text-4xl text-cream/20" style={{ background: nameBg(r.name) }}>{r.name[0]}</div>}
+                    <div className="p-3">
+                      <p className="font-display text-cream uppercase text-sm">{r.name}</p>
+                      <p className="text-cream/40 text-xs mt-0.5">{r.based_city || ""}</p>
+                    </div>
+                  </a>
+                ))}
               </div>
             </div>
           </section>
