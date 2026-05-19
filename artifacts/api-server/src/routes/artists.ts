@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { 
-  artistsTable, 
+import {
+  artistsTable,
   artistConnectionsTable,
   artistDatesTable,
   eventAppearancesTable,
@@ -27,6 +27,7 @@ router.get("/", async (req, res) => {
       .where(eq(artistsTable.status, "approved"));
     res.json(rows);
   } catch (e: any) {
+    console.error("[GET /api/artists] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -53,6 +54,7 @@ router.get("/by-user", async (req, res) => {
     }
     res.json(rows[0]);
   } catch (e: any) {
+    console.error("[GET /api/artists/by-user] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -70,12 +72,78 @@ router.get("/:slug", async (req, res) => {
     }
     res.json(rows[0]);
   } catch (e: any) {
+    console.error("[GET /api/artists/:slug] error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── GET /api/artists/:slug/basic ─────────────────────────────────────────────
+// Simplified endpoint: artist + events only. Resilient to missing related tables.
+router.get("/:slug/basic", async (req, res) => {
+  try {
+    const slug = req.params.slug;
+
+    // Get artist
+    const artistRows = await db
+      .select()
+      .from(artistsTable)
+      .where(eq(artistsTable.slug, slug));
+    if (!artistRows.length) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const artist = artistRows[0];
+
+    // Get event appearances (gig history) — wrapped in try/catch for resilience
+    let appearances: any[] = [];
+    try {
+      appearances = await db
+        .select()
+        .from(eventAppearancesTable)
+        .where(eq(eventAppearancesTable.artist_slug, slug))
+        .orderBy(desc(eventAppearancesTable.event_date))
+        .limit(50);
+    } catch (err) {
+      console.error("[basic] eventAppearances query failed:", err);
+    }
+
+    // Get upcoming dates
+    let upcomingDates: any[] = [];
+    try {
+      upcomingDates = await db
+        .select()
+        .from(artistDatesTable)
+        .where(
+          and(
+            eq(artistDatesTable.artist_id, artist.id),
+            gte(artistDatesTable.event_date, new Date().toISOString().split('T')[0])
+          )
+        )
+        .orderBy(asc(artistDatesTable.event_date))
+        .limit(10);
+    } catch (err) {
+      console.error("[basic] artistDates query failed:", err);
+    }
+
+    // Simple stats
+    const stats = {
+      total_gigs: appearances.length,
+      total_cities: new Set(appearances.map(a => a.city).filter(Boolean)).size,
+      total_venues: new Set(appearances.map(a => a.venue).filter(Boolean)).size,
+      years_active: appearances.length > 0
+        ? Math.max(...appearances.map(a => a.year || 0)) - Math.min(...appearances.map(a => a.year || 9999)) + 1
+        : 0,
+    };
+
+    res.json({ artist, appearances, upcomingDates, stats });
+  } catch (e: any) {
+    console.error("[GET /api/artists/:slug/basic] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─── GET /api/artists/:slug/full ──────────────────────────────────────────────
-// Returns artist + all enriched data in one request
+// Returns artist + all enriched data in one request. Now resilient to partial failures.
 router.get("/:slug/full", async (req, res) => {
   try {
     const slug = req.params.slug;
@@ -91,68 +159,98 @@ router.get("/:slug/full", async (req, res) => {
     }
     const artist = artistRows[0];
 
-    // Get connections (who they played with)
-    const connections = await db
-      .select()
-      .from(artistConnectionsTable)
-      .where(
-        sql`${artistConnectionsTable.artist_a_slug} = ${slug} OR ${artistConnectionsTable.artist_b_slug} = ${slug}`
-      )
-      .orderBy(desc(artistConnectionsTable.strength))
-      .limit(20);
-
-    // Get gig history (event appearances)
-    const appearances = await db
-      .select()
-      .from(eventAppearancesTable)
-      .where(eq(eventAppearancesTable.artist_slug, slug))
-      .orderBy(desc(eventAppearancesTable.event_date))
-      .limit(50);
-
-    // Get upcoming dates
-    const upcomingDates = await db
-      .select()
-      .from(artistDatesTable)
-      .where(
-        and(
-          eq(artistDatesTable.artist_id, artist.id),
-          gte(artistDatesTable.event_date, new Date().toISOString().split('T')[0])
+    // Query all related tables with individual try/catch so one failure doesn't kill everything
+    let connections: any[] = [];
+    try {
+      connections = await db
+        .select()
+        .from(artistConnectionsTable)
+        .where(
+          sql`${artistConnectionsTable.artist_a_slug} = ${slug} OR ${artistConnectionsTable.artist_b_slug} = ${slug}`
         )
-      )
-      .orderBy(asc(artistDatesTable.event_date))
-      .limit(10);
+        .orderBy(desc(artistConnectionsTable.strength))
+        .limit(20);
+    } catch (err) {
+      console.error("[full] connections query failed:", err);
+    }
 
-    // Get milestones
-    const milestones = await db
-      .select()
-      .from(artistMilestonesTable)
-      .where(eq(artistMilestonesTable.artist_slug, slug))
-      .orderBy(asc(artistMilestonesTable.date))
-      .limit(30);
+    let appearances: any[] = [];
+    try {
+      appearances = await db
+        .select()
+        .from(eventAppearancesTable)
+        .where(eq(eventAppearancesTable.artist_slug, slug))
+        .orderBy(desc(eventAppearancesTable.event_date))
+        .limit(50);
+    } catch (err) {
+      console.error("[full] appearances query failed:", err);
+    }
 
-    // Get latest social stats
-    const socialStats = await db
-      .select()
-      .from(artistSocialStatsTable)
-      .where(eq(artistSocialStatsTable.artist_slug, slug))
-      .orderBy(desc(artistSocialStatsTable.captured_at))
-      .limit(1);
+    let upcomingDates: any[] = [];
+    try {
+      upcomingDates = await db
+        .select()
+        .from(artistDatesTable)
+        .where(
+          and(
+            eq(artistDatesTable.artist_id, artist.id),
+            gte(artistDatesTable.event_date, new Date().toISOString().split('T')[0])
+          )
+        )
+        .orderBy(asc(artistDatesTable.event_date))
+        .limit(10);
+    } catch (err) {
+      console.error("[full] upcomingDates query failed:", err);
+    }
 
-    // Get discography
-    const discography = await db
-      .select()
-      .from(artistDiscographyTable)
-      .where(eq(artistDiscographyTable.artist_slug, slug))
-      .orderBy(desc(artistDiscographyTable.release_date))
-      .limit(20);
+    let milestones: any[] = [];
+    try {
+      milestones = await db
+        .select()
+        .from(artistMilestonesTable)
+        .where(eq(artistMilestonesTable.artist_slug, slug))
+        .orderBy(asc(artistMilestonesTable.date))
+        .limit(30);
+    } catch (err) {
+      console.error("[full] milestones query failed:", err);
+    }
 
-    // Get press
-    const press = await db
-      .select()
-      .from(artistPressTable)
-      .where(eq(artistPressTable.artist_slug, slug))
-      .orderBy(desc(artistPressTable.date_published))
-      .limit(10);
+    let socialStats: any = null;
+    try {
+      const ss = await db
+        .select()
+        .from(artistSocialStatsTable)
+        .where(eq(artistSocialStatsTable.artist_slug, slug))
+        .orderBy(desc(artistSocialStatsTable.captured_at))
+        .limit(1);
+      socialStats = ss[0] || null;
+    } catch (err) {
+      console.error("[full] socialStats query failed:", err);
+    }
+
+    let discography: any[] = [];
+    try {
+      discography = await db
+        .select()
+        .from(artistDiscographyTable)
+        .where(eq(artistDiscographyTable.artist_slug, slug))
+        .orderBy(desc(artistDiscographyTable.release_date))
+        .limit(20);
+    } catch (err) {
+      console.error("[full] discography query failed:", err);
+    }
+
+    let press: any[] = [];
+    try {
+      press = await db
+        .select()
+        .from(artistPressTable)
+        .where(eq(artistPressTable.artist_slug, slug))
+        .orderBy(desc(artistPressTable.date_published))
+        .limit(10);
+    } catch (err) {
+      console.error("[full] press query failed:", err);
+    }
 
     // Compute stats
     const stats = {
@@ -160,7 +258,7 @@ router.get("/:slug/full", async (req, res) => {
       total_cities: new Set(appearances.map(a => a.city).filter(Boolean)).size,
       total_venues: new Set(appearances.map(a => a.venue).filter(Boolean)).size,
       total_connections: connections.length,
-      years_active: appearances.length > 0 
+      years_active: appearances.length > 0
         ? Math.max(...appearances.map(a => a.year || 0)) - Math.min(...appearances.map(a => a.year || 9999)) + 1
         : 0,
       b2b_count: connections.filter(c => c.connection_type === 'b2b').length,
@@ -176,13 +274,14 @@ router.get("/:slug/full", async (req, res) => {
       appearances,
       upcomingDates,
       milestones,
-      socialStats: socialStats[0] || null,
+      socialStats,
       discography,
       press,
       stats,
       facts,
     });
   } catch (e: any) {
+    console.error("[GET /api/artists/:slug/full] fatal error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -200,6 +299,7 @@ router.get("/:slug/connections", async (req, res) => {
       .orderBy(desc(artistConnectionsTable.strength));
     res.json(connections);
   } catch (e: any) {
+    console.error("[GET connections] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -227,10 +327,11 @@ router.get("/:slug/gigography", async (req, res) => {
       if (!acc[y]) acc[y] = [];
       acc[y].push(gig);
       return acc;
-    }, {} as Record<string, typeof appearances>);
+    }, {} as Record<string, any[]>);
 
     res.json({ appearances, byYear, total: appearances.length });
   } catch (e: any) {
+    console.error("[GET gigography] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -246,6 +347,7 @@ router.get("/:slug/milestones", async (req, res) => {
       .orderBy(asc(artistMilestonesTable.date));
     res.json(milestones);
   } catch (e: any) {
+    console.error("[GET milestones] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -310,6 +412,7 @@ router.get("/:slug/stats", async (req, res) => {
       byVenue: Object.entries(byVenue).map(([venue, data]) => ({ venue, count: data.count, city: data.city })).sort((a, b) => b.count - a.count),
     });
   } catch (e: any) {
+    console.error("[GET stats] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -436,6 +539,7 @@ router.post("/:slug/generate-milestones", requireAdmin, async (req, res) => {
 
     res.json({ generated: milestones.length, milestones });
   } catch (e: any) {
+    console.error("[POST generate-milestones] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -532,6 +636,7 @@ router.post("/:slug/generate-connections", requireAdmin, async (req, res) => {
 
     res.json({ generated: connections.length, connections });
   } catch (e: any) {
+    console.error("[POST generate-connections] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -665,6 +770,7 @@ async function handleProfileUpdate(req: any, res: any): Promise<void> {
     }
     res.json(rows[0]);
   } catch (e: any) {
+    console.error("[PATCH profile] error:", e);
     res.status(500).json({ error: e.message });
   }
 }
@@ -700,6 +806,7 @@ router.post("/:id/claim", async (req, res) => {
       .returning();
     res.json(rows[0]);
   } catch (e: any) {
+    console.error("[POST claim] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -718,6 +825,7 @@ router.patch("/admin/:id", requireAdmin, async (req, res) => {
     }
     res.json(rows[0]);
   } catch (e: any) {
+    console.error("[PATCH admin] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -763,6 +871,7 @@ router.post("/seed", requireAdmin, async (req, res) => {
     }
     res.json({ ok: true, ...results, total: artists.length });
   } catch (e: any) {
+    console.error("[POST seed] error:", e);
     res.status(500).json({ error: e.message });
   }
 });
