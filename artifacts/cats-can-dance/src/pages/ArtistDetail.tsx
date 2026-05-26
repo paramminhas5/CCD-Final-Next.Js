@@ -544,7 +544,6 @@ export default function ArtistDetailPage() {
                   <div className="max-w-2xl">
                     <ArtistGigChart appearances={appearances} />
                   </div>
-                  </div>
 
                   {/* Top cities */}
                   {(() => {
