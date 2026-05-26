@@ -1,0 +1,1084 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Cats Can Dance API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: artists
+    description: Artist directory
+  - name: events
+    description: Event listings
+  - name: content
+    description: Site content & settings
+  - name: forms
+    description: Form submissions
+  - name: portal
+    description: Artist portal
+  - name: admin
+    description: Admin operations
+  - name: integrations
+    description: Third-party integrations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Artists ────────────────────────────────────────────────────────────────
+  /artists:
+    get:
+      operationId: listArtists
+      tags: [artists]
+      summary: List approved artists
+      parameters:
+        - name: genre
+          in: query
+          schema: { type: string }
+        - name: city
+          in: query
+          schema: { type: string }
+        - name: featured
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of artists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Artist"
+
+  /artists/{slug}:
+    get:
+      operationId: getArtist
+      tags: [artists]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Artist detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+        "404":
+          description: Not found
+
+  /artists/{id}/profile:
+    patch:
+      operationId: updateArtistProfile
+      tags: [portal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistProfileUpdate"
+      responses:
+        "200":
+          description: Updated artist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+
+  /artists/by-user:
+    get:
+      operationId: getArtistByUser
+      tags: [portal]
+      summary: Get artist profile claimed by the current user (via x-user-id header)
+      responses:
+        "200":
+          description: Artist for this user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+        "404":
+          description: No artist linked to this user
+
+  /artists/{id}/claim:
+    post:
+      operationId: claimArtistProfile
+      tags: [portal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistClaimInput"
+      responses:
+        "200":
+          description: Claimed successfully
+        "409":
+          description: Already claimed
+
+  # ── Artist Dates ───────────────────────────────────────────────────────────
+  /artist-dates/{artistId}:
+    get:
+      operationId: listArtistDates
+      tags: [portal]
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Artist dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArtistDate"
+    post:
+      operationId: createArtistDate
+      tags: [portal]
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistDateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistDate"
+
+  /artist-dates/entry/{id}:
+    patch:
+      operationId: updateArtistDate
+      tags: [portal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistDateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistDate"
+    delete:
+      operationId: deleteArtistDate
+      tags: [portal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Booking Requests ───────────────────────────────────────────────────────
+  /booking-requests/{artistId}:
+    get:
+      operationId: listBookingRequests
+      tags: [portal]
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Booking requests for artist
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookingRequest"
+
+  /booking-otp/start:
+    post:
+      operationId: startBookingOtp
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingOtpStartInput"
+      responses:
+        "200":
+          description: OTP sent
+        "400":
+          description: Invalid request
+
+  /booking-otp/verify:
+    post:
+      operationId: verifyBookingOtp
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingOtpVerifyInput"
+      responses:
+        "200":
+          description: Verified, booking request created
+        "400":
+          description: Invalid OTP
+
+  # ── Events ─────────────────────────────────────────────────────────────────
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      responses:
+        "200":
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+
+  /events/{slug}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: Not found
+
+  /curated-events:
+    get:
+      operationId: listCuratedEvents
+      tags: [events]
+      parameters:
+        - name: city
+          in: query
+          schema: { type: string }
+        - name: featured
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Curated events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CuratedEvent"
+
+  # ── Event RSVP ─────────────────────────────────────────────────────────────
+  /event-rsvp:
+    post:
+      operationId: submitEventRsvp
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRsvpInput"
+      responses:
+        "201":
+          description: RSVP accepted
+
+  # ── Content & Settings ─────────────────────────────────────────────────────
+  /site-settings:
+    get:
+      operationId: getSiteSettings
+      tags: [content]
+      responses:
+        "200":
+          description: Site settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSettings"
+
+  /videos:
+    get:
+      operationId: listVideos
+      tags: [content]
+      responses:
+        "200":
+          description: Videos list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SiteVideo"
+
+  /promoters:
+    get:
+      operationId: listPromoters
+      tags: [content]
+      responses:
+        "200":
+          description: Promoters list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Promoter"
+
+  /artist-submissions:
+    post:
+      operationId: submitArtist
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistSubmissionInput"
+      responses:
+        "201":
+          description: Submission received
+
+  # ── Contact & Signups ──────────────────────────────────────────────────────
+  /contact:
+    post:
+      operationId: submitContact
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Message received
+
+  /early-access:
+    post:
+      operationId: submitEarlyAccess
+      tags: [forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EarlyAccessInput"
+      responses:
+        "201":
+          description: Signup received
+        "409":
+          description: Already signed up
+
+  # ── Integrations ───────────────────────────────────────────────────────────
+  /instagram-feed:
+    get:
+      operationId: getInstagramFeed
+      tags: [integrations]
+      responses:
+        "200":
+          description: Instagram feed posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InstagramPost"
+
+  /youtube-videos:
+    get:
+      operationId: getYoutubeVideos
+      tags: [integrations]
+      parameters:
+        - name: channelId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: YouTube video list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/YoutubeVideo"
+
+  /cat-generate:
+    post:
+      operationId: generateCat
+      tags: [integrations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatGenerateInput"
+      responses:
+        "200":
+          description: Generated cat image URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatGenerateResult"
+
+  # ── Admin ──────────────────────────────────────────────────────────────────
+  /admin/signups:
+    get:
+      operationId: adminGetSignups
+      tags: [admin]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: Early access signups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EarlyAccessSignup"
+
+  /admin/contact-messages:
+    get:
+      operationId: adminGetContactMessages
+      tags: [admin]
+      responses:
+        "200":
+          description: Contact messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactMessage"
+
+  /admin/events:
+    get:
+      operationId: adminListEvents
+      tags: [admin]
+      responses:
+        "200":
+          description: All events for admin
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: adminCreateEvent
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+
+  /admin/events/{id}:
+    patch:
+      operationId: adminUpdateEvent
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+    delete:
+      operationId: adminDeleteEvent
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/site-settings:
+    patch:
+      operationId: adminUpdateSiteSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteSettings"
+
+  /admin/artists/{id}:
+    patch:
+      operationId: adminUpdateArtist
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistProfileUpdate"
+      responses:
+        "200":
+          description: Updated artist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artist"
+
+  /admin/rsvps:
+    get:
+      operationId: adminGetRsvps
+      tags: [admin]
+      responses:
+        "200":
+          description: All RSVPs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventRsvp"
+
+  /admin/curated-events:
+    post:
+      operationId: adminCreateCuratedEvent
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CuratedEventInput"
+      responses:
+        "201":
+          description: Created
+
+  /admin/curated-events/{id}:
+    patch:
+      operationId: adminUpdateCuratedEvent
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CuratedEventInput"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      operationId: adminDeleteCuratedEvent
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /event-poster-url:
+    get:
+      operationId: getEventPosterUrl
+      tags: [content]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Public URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+                required: [url]
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+
+    Artist:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        based_city: { type: ["string", "null"] }
+        from_city: { type: ["string", "null"] }
+        bio: { type: ["string", "null"] }
+        why: { type: ["string", "null"] }
+        genres: { type: array, items: { type: string } }
+        festivals: { type: array, items: { type: string } }
+        instagram: { type: ["string", "null"] }
+        soundcloud: { type: ["string", "null"] }
+        bandcamp: { type: ["string", "null"] }
+        spotify: { type: ["string", "null"] }
+        website: { type: ["string", "null"] }
+        booking_email: { type: ["string", "null"] }
+        manager_email: { type: ["string", "null"] }
+        labels: { type: ["string", "null"] }
+        members: { type: ["string", "null"] }
+        photo_url: { type: ["string", "null"] }
+        fee_min_inr: { type: ["integer", "null"] }
+        fee_max_inr: { type: ["integer", "null"] }
+        fee_currency: { type: string }
+        open_to_bookings: { type: boolean }
+        available_cities: { type: array, items: { type: string } }
+        featured: { type: boolean }
+        status: { type: string }
+        source: { type: string }
+        claimed_by: { type: ["string", "null"] }
+        gallery: {}
+        videos: {}
+        enrichment_log: {}
+        enrichment_status: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, slug, name, status]
+
+    ArtistProfileUpdate:
+      type: object
+      properties:
+        bio: { type: ["string", "null"] }
+        why: { type: ["string", "null"] }
+        instagram: { type: ["string", "null"] }
+        soundcloud: { type: ["string", "null"] }
+        bandcamp: { type: ["string", "null"] }
+        spotify: { type: ["string", "null"] }
+        website: { type: ["string", "null"] }
+        booking_email: { type: ["string", "null"] }
+        manager_email: { type: ["string", "null"] }
+        labels: { type: ["string", "null"] }
+        open_to_bookings: { type: boolean }
+        available_cities: { type: array, items: { type: string } }
+
+    ArtistClaimInput:
+      type: object
+      properties:
+        userId: { type: string }
+      required: [userId]
+
+    ArtistDate:
+      type: object
+      properties:
+        id: { type: string }
+        artist_id: { type: string }
+        city: { type: string }
+        venue: { type: ["string", "null"] }
+        event_date: { type: string }
+        event_time: { type: ["string", "null"] }
+        status: { type: string }
+        ticket_url: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        is_public: { type: boolean }
+        created_by: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, artist_id, city, event_date, status]
+
+    ArtistDateInput:
+      type: object
+      properties:
+        city: { type: string }
+        venue: { type: ["string", "null"] }
+        event_date: { type: string }
+        event_time: { type: ["string", "null"] }
+        status: { type: string }
+        ticket_url: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        is_public: { type: boolean }
+      required: [city, event_date]
+
+    BookingRequest:
+      type: object
+      properties:
+        id: { type: string }
+        artist_id: { type: ["string", "null"] }
+        artist_name: { type: string }
+        requester_email: { type: string }
+        requester_phone: { type: ["string", "null"] }
+        purpose: { type: ["string", "null"] }
+        forward_requested: { type: boolean }
+        verified_at: { type: ["string", "null"] }
+        revealed_at: { type: ["string", "null"] }
+        created_at: { type: string }
+      required: [id, artist_name, requester_email]
+
+    BookingOtpStartInput:
+      type: object
+      properties:
+        artistId: { type: string }
+        artistName: { type: string }
+        requesterEmail: { type: string }
+        requesterPhone: { type: ["string", "null"] }
+        purpose: { type: ["string", "null"] }
+      required: [artistId, artistName, requesterEmail]
+
+    BookingOtpVerifyInput:
+      type: object
+      properties:
+        requestId: { type: string }
+        code: { type: string }
+      required: [requestId, code]
+
+    Event:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        date: { type: string }
+        city: { type: string }
+        venue: { type: string }
+        blurb: { type: string }
+        lineup: {}
+        media: {}
+        poster_url: { type: ["string", "null"] }
+        sort_order: { type: integer }
+        status: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, slug, title, date, city, venue, status]
+
+    EventInput:
+      type: object
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        date: { type: string }
+        city: { type: string }
+        venue: { type: string }
+        blurb: { type: string }
+        lineup: {}
+        media: {}
+        poster_url: { type: ["string", "null"] }
+        sort_order: { type: integer }
+        status: { type: string }
+      required: [slug, title, date, city, venue]
+
+    CuratedEvent:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        url: { type: string }
+        source: { type: string }
+        city: { type: ["string", "null"] }
+        venue: { type: ["string", "null"] }
+        event_date: { type: ["string", "null"] }
+        event_time: { type: ["string", "null"] }
+        blurb: { type: ["string", "null"] }
+        genre: {}
+        image_url: { type: ["string", "null"] }
+        is_featured: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, title, url, source]
+
+    CuratedEventInput:
+      type: object
+      properties:
+        title: { type: string }
+        url: { type: string }
+        source: { type: string }
+        city: { type: ["string", "null"] }
+        venue: { type: ["string", "null"] }
+        event_date: { type: ["string", "null"] }
+        event_time: { type: ["string", "null"] }
+        blurb: { type: ["string", "null"] }
+        genre: {}
+        image_url: { type: ["string", "null"] }
+        is_featured: { type: boolean }
+      required: [title, url, source]
+
+    EventRsvpInput:
+      type: object
+      properties:
+        eventSlug: { type: string }
+        name: { type: string }
+        email: { type: string }
+        plusOnes: { type: integer }
+      required: [eventSlug, name, email]
+
+    EventRsvp:
+      type: object
+      properties:
+        id: { type: string }
+        event_slug: { type: string }
+        name: { type: string }
+        email: { type: string }
+        plus_ones: { type: integer }
+        created_at: { type: string }
+      required: [id, event_slug, name, email]
+
+    SiteSettings:
+      type: object
+      properties:
+        id: { type: string }
+        playlists: {}
+        featured_playlist_id: { type: ["string", "null"] }
+        seo_verifications: {}
+        marquees: {}
+        theme: {}
+        home_content: {}
+        blog_posts: {}
+        backlinks: {}
+        updated_at: { type: string }
+      required: [id]
+
+    SiteSettingsUpdate:
+      type: object
+      properties:
+        playlists: {}
+        featured_playlist_id: { type: ["string", "null"] }
+        seo_verifications: {}
+        marquees: {}
+        theme: {}
+        home_content: {}
+        blog_posts: {}
+        backlinks: {}
+
+    SiteVideo:
+      type: object
+      properties:
+        id: { type: string }
+        youtube_id: { type: string }
+        title: { type: string }
+        thumbnail_url: { type: ["string", "null"] }
+        is_featured: { type: boolean }
+        sort_order: { type: integer }
+        published_at: { type: ["string", "null"] }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, youtube_id, title]
+
+    Promoter:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        city: { type: ["string", "null"] }
+        cities: { type: array, items: { type: string } }
+        genres: { type: array, items: { type: string } }
+        blurb: { type: ["string", "null"] }
+        logo_url: { type: ["string", "null"] }
+        instagram: { type: ["string", "null"] }
+        website: { type: ["string", "null"] }
+        booking_email: { type: ["string", "null"] }
+        trusted: { type: boolean }
+        status: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+      required: [id, slug, name, status]
+
+    ArtistSubmissionInput:
+      type: object
+      properties:
+        name: { type: string }
+        submitter_email: { type: string }
+        submitter_role: { type: ["string", "null"] }
+        bio: { type: ["string", "null"] }
+        from_city: { type: ["string", "null"] }
+        based_city: { type: ["string", "null"] }
+        genres: { type: array, items: { type: string } }
+        festivals: { type: array, items: { type: string } }
+        instagram: { type: ["string", "null"] }
+        soundcloud: { type: ["string", "null"] }
+        bandcamp: { type: ["string", "null"] }
+        spotify: { type: ["string", "null"] }
+        website: { type: ["string", "null"] }
+        booking_email: { type: ["string", "null"] }
+        manager_email: { type: ["string", "null"] }
+        labels: { type: ["string", "null"] }
+        members: { type: ["string", "null"] }
+        photo_url: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+      required: [name, submitter_email]
+
+    ContactInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        message: { type: string }
+        type: { type: string }
+        company: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        budget: { type: ["string", "null"] }
+      required: [name, email, message]
+
+    ContactMessage:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        message: { type: string }
+        created_at: { type: string }
+      required: [id, name, email, message]
+
+    EarlyAccessInput:
+      type: object
+      properties:
+        email: { type: string }
+        source: { type: ["string", "null"] }
+      required: [email]
+
+    EarlyAccessSignup:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        source: { type: ["string", "null"] }
+        created_at: { type: string }
+      required: [id, email]
+
+    InstagramPost:
+      type: object
+      properties:
+        id: { type: string }
+        url: { type: string }
+        image_url: { type: string }
+        caption: { type: ["string", "null"] }
+        timestamp: { type: ["string", "null"] }
+      required: [id, url, image_url]
+
+    YoutubeVideo:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        thumbnail: { type: string }
+        url: { type: string }
+        published_at: { type: ["string", "null"] }
+      required: [id, title, thumbnail, url]
+
+    CatGenerateInput:
+      type: object
+      properties:
+        prompt: { type: string }
+        style: { type: ["string", "null"] }
+      required: [prompt]
+
+    CatGenerateResult:
+      type: object
+      properties:
+        image_url: { type: string }
+        prompt_used: { type: string }
+      required: [image_url, prompt_used]
