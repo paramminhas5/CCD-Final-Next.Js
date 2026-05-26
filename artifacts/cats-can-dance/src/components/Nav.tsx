@@ -22,6 +22,7 @@ const partnersLinks = [
   { to: "/for-venues", label: "For Venues" },
   { to: "/for-artists", label: "For Artists" },
   { to: "/for-investors", label: "For Investors" },
+  { to: "/ccdxsocial/sponsor", label: "Sponsor a Show 🐾" },
 ];
 
 const moreLinks: { to: string; label: string; external?: boolean }[] = [
