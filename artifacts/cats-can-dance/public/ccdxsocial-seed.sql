@@ -4,12 +4,11 @@
 -- and the grand finale teaser into the events table.
 --
 -- Fields used:
---   slug, title, date, city, venue, blurb, lineup, status,
---   poster_url, sort_order, series, series_label, event_type,
---   pet_friendly, series_tagline, is_finale
+--   slug, title, date, city, venue, blurb, lineup (jsonb),
+--   status, poster_url, sort_order, series, series_label,
+--   event_type, pet_friendly, series_tagline, is_finale
 --
--- If your events table doesn't yet have the series columns,
--- run the ALTER TABLE block at the bottom first.
+-- lineup is stored as jsonb — values are cast with ::jsonb
 -- ============================================================
 
 -- ── 0. Add series columns if they don't exist ───────────────
@@ -32,7 +31,7 @@ INSERT INTO events (
   'Bangalore',
   'Social, Indiranagar',
   'India''s first curated pet lifestyle festival meets underground dance music. The Debut is the first chapter — outdoor pet zone from 4PM with activities, vendor market, agility tasters and portrait booth. Then Startdawg and Merman take over for the night.',
-  ARRAY['Startdawg', 'Merman', 'TBA', 'TBA', 'TBA'],
+  '["Startdawg", "Merman", "TBA", "TBA", "TBA"]'::jsonb,
   'upcoming',
   NULL,
   1,
@@ -71,7 +70,7 @@ INSERT INTO events (
   'Bangalore',
   'Social, Church Street',
   'All about looking good — pets and parents alike. Fashion, grooming, accessories. Live grooming demo on stage, best dressed contest, dedicated style photography corner. Plus Startdawg and Merman keeping the floor moving.',
-  ARRAY['Startdawg', 'Merman', 'TBA', 'TBA', 'TBA'],
+  '["Startdawg", "Merman", "TBA", "TBA", "TBA"]'::jsonb,
   'upcoming',
   NULL,
   2,
@@ -110,7 +109,7 @@ INSERT INTO events (
   'Bangalore',
   'Social, Koramangala',
   'Dogs doing what dogs do best. The most physical show of the series — two agility courses, a timed speed run, performance contest. Raw energy, outdoor action, then Startdawg and Merman bringing the bass. Any breed, any age, any skill level welcome.',
-  ARRAY['Startdawg', 'Merman', 'TBA', 'TBA', 'TBA'],
+  '["Startdawg", "Merman", "TBA", "TBA", "TBA"]'::jsonb,
   'upcoming',
   NULL,
   3,
@@ -138,8 +137,6 @@ ON CONFLICT (slug) DO UPDATE SET
   is_finale      = EXCLUDED.is_finale;
 
 -- ── 4. Grand Format Show — Finale Teaser ───────────────────
--- status = 'upcoming', date = 'TBA', is_finale = true
--- This shows up as the finale teaser card across the site.
 INSERT INTO events (
   slug, title, date, city, venue, blurb, lineup, status,
   poster_url, sort_order,
@@ -151,7 +148,7 @@ INSERT INTO events (
   'Bangalore',
   'Venue TBA',
   'The season finale. Everything the series has been building to. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we''ve ever done. Sponsorship enquiries open now.',
-  ARRAY['Startdawg', 'Merman', 'Full lineup TBA'],
+  '["Startdawg", "Merman", "Full lineup TBA"]'::jsonb,
   'upcoming',
   NULL,
   4,
