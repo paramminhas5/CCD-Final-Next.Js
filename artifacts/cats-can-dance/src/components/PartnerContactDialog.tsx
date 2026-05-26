@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase-shim";
 
-export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general";
+export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general" | "sponsors";
 
 type KindConfig = {
   title: string;
@@ -59,6 +59,20 @@ const KIND_CONFIG: Record<PartnerKind, KindConfig> = {
     eyebrow: "/ DROP US A LINE",
     reasons: ["General", "Brand collab", "Other"],
     fallbackEmail: "hello@catscandance.com",
+  },
+  sponsors: {
+    title: "SPONSOR A SHOW",
+    eyebrow: "/ CCDXSOCIAL SPONSORSHIP",
+    reasons: [
+      "Series Partner — all 3 shows + finale",
+      "Show Sponsor — one show",
+      "Community Supporter — all shows, light touch",
+      "Grand Finale — season finale only",
+      "Custom / let's talk",
+    ],
+    fallbackEmail: "hello@catscandance.com",
+    fallbackSubject: "CCDxSocial Sponsorship Enquiry",
+    defaultMessage: "Hi, I'm interested in sponsoring the CCDxSocial series. Please send me the full sponsorship pack.",
   },
 };
 

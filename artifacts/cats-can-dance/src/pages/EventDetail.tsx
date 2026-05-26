@@ -11,21 +11,7 @@ import { supabase } from "@/lib/supabase-shim";
 import { getAllPosts } from "@/content/posts";
 import episode1Poster from "@/assets/episode-1-poster.png";
 import { imgUrl } from "@/lib/img";
-
-type MediaItem = { type: "image" | "video"; url: string; caption?: string };
-
-type EventRow = {
-  slug: string;
-  title: string;
-  date: string;
-  city: string;
-  venue: string;
-  blurb: string;
-  lineup: string[];
-  status: "upcoming" | "past";
-  poster_url: string | null;
-  media?: MediaItem[];
-};
+import type { EventRow, MediaItem } from "@/types/events";
 
 const resolveStorageUrl = (raw: string): string => {
   const v = raw.trim();
@@ -34,10 +20,111 @@ const resolveStorageUrl = (raw: string): string => {
   try {
     const { data } = supabase.storage.from("event-posters").getPublicUrl(v);
     return data?.publicUrl ?? `/${v}`;
-  } catch {
-    return `/${v}`;
-  }
+  } catch { return `/${v}`; }
 };
+
+
+// Pet-friendly schedule for CCDxSocial-type events
+const PetFriendlySchedule = () => (
+  <section className="bg-lime border-y-4 border-ink py-10 md:py-14">
+    <div className="container max-w-5xl">
+      <p className="font-display text-magenta text-lg mb-3">/ THE PET ZONE</p>
+      <h2 className="font-display text-ink text-3xl md:text-5xl mb-6 leading-[0.9]">
+        OUTDOOR PET ZONE<br />4PM — 8PM
+      </h2>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {[
+          { icon: "🐾", title: "DOORS OPEN", time: "4:00 PM", desc: "Arrive early, get the best spot. Vendor market + pet zone fully open." },
+          { icon: "🎨", title: "ACTIVITIES", time: "4:30 PM", desc: "Portrait booth, agility taster, lookalike contest, grooming demos. Drop-in, no slots needed." },
+          { icon: "🏆", title: "PEAK MOMENT", time: "6:00 PM", desc: "Contest winners announced. Sponsor moments. DJ moves to full foreground." },
+          { icon: "🎧", title: "EVENING MODE", time: "7:00 PM", desc: "Pet zone winds down. DJ full foreground. Music till close." },
+        ].map((item) => (
+          <div key={item.title} className="bg-cream border-4 border-ink chunk-shadow p-5">
+            <div className="text-2xl mb-2">{item.icon}</div>
+            <p className="font-display text-ink text-xs uppercase tracking-widest mb-1 text-magenta">{item.time}</p>
+            <p className="font-display text-ink text-lg mb-2">{item.title}</p>
+            <p className="text-ink/70 text-sm font-medium">{item.desc}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-acid-yellow border-4 border-ink p-5 flex flex-wrap gap-3">
+        {["Dogs welcome 🐕", "Cats welcome 🐈", "Water stations provided", "Pee/poo corner on-site", "Shaded area available", "Vendor market open all evening"].map((item) => (
+          <span key={item} className="font-display text-ink text-xs border-2 border-ink px-3 py-1.5 bg-cream">{item}</span>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+
+// Also In This Series — cross-link to sibling events
+const SeriesSiblings = ({ current, seriesSlug, seriesLabel }: { current: string; seriesSlug: string; seriesLabel: string }) => {
+  const [siblings, setSiblings] = useState<EventRow[]>([]);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("events").select("slug,title,date,venue,city,status,series,series_label,pet_friendly,lineup").order("sort_order", { ascending: true });
+      if (data) setSiblings((data as EventRow[]).filter((e) => e.series === seriesSlug && e.slug !== current));
+    })();
+  }, [seriesSlug, current]);
+
+  if (siblings.length === 0) return null;
+
+  return (
+    <section className="bg-cream border-t-4 border-ink py-12 md:py-16">
+      <div className="container max-w-5xl">
+        <p className="font-display text-magenta text-base mb-2">/ {seriesLabel} SERIES</p>
+        <h2 className="font-display text-ink text-3xl md:text-4xl mb-6 leading-[0.9]">ALSO IN THIS SERIES</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {siblings.map((e, i) => {
+            const palette = [
+              { bg: "bg-electric-blue", text: "text-cream", btn: "bg-acid-yellow text-ink" },
+              { bg: "bg-magenta", text: "text-cream", btn: "bg-cream text-ink" },
+              { bg: "bg-ink", text: "text-cream", btn: "bg-acid-yellow text-ink" },
+            ];
+            const p = palette[i % palette.length];
+            return (
+              <div key={e.slug} className={`${p.bg} ${p.text} border-4 border-ink chunk-shadow flex flex-col`}>
+                <div className="p-5 flex-1">
+                  <span className="font-display text-xs opacity-60 uppercase tracking-widest block mb-2">SHOW 0{i + 1}</span>
+                  <h3 className="font-display text-2xl mb-1">{e.title.toUpperCase()}</h3>
+                  <p className="font-display text-sm opacity-70 mb-1">{e.date}</p>
+                  <p className="font-display text-sm opacity-60">{e.venue} · {e.city}</p>
+                  {e.pet_friendly && <p className="font-display text-xs opacity-75 mt-2">🐾 PET FRIENDLY</p>}
+                </div>
+                <div className="px-5 pb-5">
+                  <Link
+                    to={`/events/${e.slug}`}
+                    className={`block w-full ${p.btn} font-display text-sm px-4 py-3 border-4 border-ink text-center hover:opacity-90 transition-opacity`}
+                  >
+                    VIEW DETAILS →
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+          {/* Finale teaser */}
+          <div className="bg-cream text-ink border-4 border-ink chunk-shadow flex flex-col">
+            <div className="p-5 flex-1">
+              <span className="inline-block bg-magenta text-cream font-display text-xs px-2 py-1 border-2 border-ink mb-3">COMING SOON</span>
+              <h3 className="font-display text-2xl mb-1">GRAND FORMAT SHOW</h3>
+              <p className="font-display text-sm text-ink/60 mb-2">Date TBA · Season Finale</p>
+              <p className="text-ink/70 text-sm font-medium">2,000+ people. Full outdoor stage. Pet runway. Everything.</p>
+            </div>
+            <div className="px-5 pb-5">
+              <Link
+                to="/ccdxsocial/sponsor"
+                className="block w-full bg-magenta text-cream font-display text-sm px-4 py-3 border-4 border-ink text-center hover:opacity-90"
+              >
+                SPONSOR IT →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 
 const EventDetail = () => {
   const { slug = "" } = useParams();
@@ -66,143 +153,65 @@ const EventDetail = () => {
       </main>
     );
   }
-
-  if (!event) {
-    return (
-      <main className="bg-background text-foreground min-h-screen">
-        <Nav />
-        <section className="container pt-32 pb-16" />
-      </main>
-    );
-  }
+  if (!event) return <main className="bg-background text-foreground min-h-screen"><Nav /><section className="container pt-32 pb-16" /></main>;
 
   const isUpcoming = event.status === "upcoming";
-  const headingShadow = isUpcoming
-    ? "drop-shadow-[6px_6px_0_hsl(var(--ink))]"
-    : "drop-shadow-[6px_6px_0_hsl(var(--magenta))]";
-
+  const isPetFriendly = !!event.pet_friendly;
+  const isSeries = !!event.series;
+  const headingShadow = isUpcoming ? "drop-shadow-[6px_6px_0_hsl(var(--ink))]" : "drop-shadow-[6px_6px_0_hsl(var(--magenta))]";
   const media = (event.media ?? []).filter((m) => m && m.url);
 
   const eventLd = {
-    "@context": "https://schema.org",
-    "@type": "MusicEvent",
-    name: `Cats Can Dance — ${event.title}`,
-    description: event.blurb,
-    startDate: event.date,
-    eventStatus:
-      event.status === "upcoming"
-        ? "https://schema.org/EventScheduled"
-        : "https://schema.org/EventMovedOnline",
+    "@context": "https://schema.org", "@type": "MusicEvent",
+    name: `Cats Can Dance — ${event.title}`, description: event.blurb, startDate: event.date,
+    eventStatus: event.status === "upcoming" ? "https://schema.org/EventScheduled" : "https://schema.org/EventMovedOnline",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    location: {
-      "@type": "Place",
-      name: event.venue,
-      address: {
-        "@type": "PostalAddress",
-        streetAddress: event.venue,
-        addressLocality: event.city || "Bangalore",
-        addressRegion: "Karnataka",
-        addressCountry: "IN",
-      },
-    },
+    location: { "@type": "Place", name: event.venue, address: { "@type": "PostalAddress", streetAddress: event.venue, addressLocality: event.city || "Bangalore", addressRegion: "Karnataka", addressCountry: "IN" } },
     image: event.poster_url ? [event.poster_url] : undefined,
     performer: (event.lineup ?? []).map((p) => ({ "@type": "PerformingGroup", name: p })),
-    organizer: {
-      "@type": "Organization",
-      name: "Cats Can Dance",
-      url: "https://catscandance.com",
-    },
-    offers: {
-      "@type": "Offer",
-      url: `https://catscandance.com/events/${slug}`,
-      price: "0",
-      priceCurrency: "INR",
-      availability: "https://schema.org/InStock",
-      validFrom: new Date().toISOString(),
-    },
+    organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
+    offers: { "@type": "Offer", url: `https://catscandance.com/events/${slug}`, price: "0", priceCurrency: "INR", availability: "https://schema.org/InStock", validFrom: new Date().toISOString() },
     url: `https://catscandance.com/events/${slug}`,
-  };
-
-  const eventFaqLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: [
-      {
-        "@type": "Question",
-        name: `When is the Cats Can Dance ${event.title} event?`,
-        acceptedAnswer: { "@type": "Answer", text: `Cats Can Dance ${event.title} takes place on ${event.date} at ${event.venue}, Bengaluru.` },
-      },
-      {
-        "@type": "Question",
-        name: "What music does Cats Can Dance play?",
-        acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance events feature House, Disco, Jungle, Garage, and Drum & Bass — underground dance music curated by resident and guest selectors in Bengaluru." },
-      },
-      {
-        "@type": "Question",
-        name: "How do I RSVP to a Cats Can Dance event?",
-        acceptedAnswer: { "@type": "Answer", text: `RSVP for this event at catscandance.com/events/${slug}. Capacity is limited — RSVP early. Most episodes are free entry with name on the door.` },
-      },
-      {
-        "@type": "Question",
-        name: "Who organises Cats Can Dance events in Bangalore?",
-        acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance is a Bengaluru-based underground dance music collective and event organiser, running RSVP-only Episodes with curated lineups at intimate venues across the city." },
-      },
-    ],
   };
 
   return (
     <>
-      <SEO
-        title={`${event.title} — Cats Can Dance`}
-        description={event.blurb}
-        path={`/events/${slug}`}
-        image={event.poster_url ?? undefined}
-        type="event"
-        jsonLd={[eventLd, eventFaqLd]}
-      />
+      <SEO title={`${event.title} — Cats Can Dance`} description={event.blurb} path={`/events/${slug}`} image={event.poster_url ?? undefined} type="event" jsonLd={[eventLd]} />
       <main className="bg-background text-foreground min-h-screen">
         <Nav />
-        <section className={`pt-32 pb-16 border-b-4 border-ink ${isUpcoming ? "bg-magenta text-cream" : "bg-cream text-ink"}`}>
+
+        {/* Series banner */}
+        {isSeries && (
+          <div className="bg-acid-yellow border-b-4 border-ink pt-20 pb-0">
+            <div className="container py-3 flex items-center justify-between gap-4 flex-wrap">
+              <span className="font-display text-ink text-sm flex items-center gap-2">
+                🐾 Part of the <strong>{event.series_label ?? event.series}</strong> series
+              </span>
+              <Link to="/events" className="font-display text-ink text-xs underline decoration-2 decoration-magenta underline-offset-4 hover:text-magenta transition-colors">
+                See all shows →
+              </Link>
+            </div>
+          </div>
+        )}
+
+
+        {/* Hero */}
+        <section className={`${isSeries ? "pt-6" : "pt-32"} pb-16 border-b-4 border-ink ${isUpcoming ? "bg-magenta text-cream" : "bg-cream text-ink"}`}>
           <div className="container">
-            <Breadcrumbs
-              light={isUpcoming}
-              items={[
-                { label: "Home", to: "/" },
-                { label: "Events", to: "/events" },
-                { label: event.title },
-              ]}
-            />
+            <Breadcrumbs light={isUpcoming} items={[{ label: "Home", to: "/" }, { label: "Events", to: "/events" }, { label: event.title }]} />
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="min-w-0 flex-1">
-                <span className={`inline-block text-xs font-bold px-3 py-1 border-2 border-ink uppercase mb-4 ${
-                  isUpcoming ? "bg-acid-yellow text-ink" : "bg-ink text-cream"
-                }`}>
+                <span className={`inline-block text-xs font-bold px-3 py-1 border-2 border-ink uppercase mb-4 ${isUpcoming ? "bg-acid-yellow text-ink" : "bg-ink text-cream"}`}>
                   {isUpcoming ? `${event.title.toUpperCase()} · UPCOMING` : "PAST EPISODE"}
                 </span>
-                <h1 className={`font-display text-6xl md:text-7xl mb-6 leading-[0.9] ${headingShadow}`}>
-                  {event.title.toUpperCase()}
-                </h1>
+                <h1 className={`font-display text-6xl md:text-7xl mb-6 leading-[0.9] ${headingShadow}`}>{event.title.toUpperCase()}</h1>
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  const url = `${window.location.origin}/events/${slug}`;
-                  const shareData = { title: `Cats Can Dance — ${event.title}`, text: event.blurb || "Bangalore underground", url };
-                  if (typeof navigator.share === "function") {
-                    try { await navigator.share(shareData); return; } catch { /* user cancel */ }
-                  }
-                  try {
-                    await navigator.clipboard.writeText(url);
-                    toast.success("Link copied to clipboard");
-                  } catch {
-                    toast.error("Couldn't copy link");
-                  }
-                }}
-                className={`shrink-0 inline-flex items-center gap-2 font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform ${
-                  isUpcoming ? "bg-acid-yellow text-ink" : "bg-ink text-cream"
-                }`}
-                aria-label="Share event"
-              >
+              <button type="button" onClick={async () => {
+                const url = `${window.location.origin}/events/${slug}`;
+                const shareData = { title: `Cats Can Dance — ${event.title}`, text: event.blurb || "Bangalore underground", url };
+                if (typeof navigator.share === "function") { try { await navigator.share(shareData); return; } catch { /* cancel */ } }
+                try { await navigator.clipboard.writeText(url); toast.success("Link copied to clipboard"); } catch { toast.error("Couldn't copy link"); }
+              }} className={`shrink-0 inline-flex items-center gap-2 font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform ${isUpcoming ? "bg-acid-yellow text-ink" : "bg-ink text-cream"}`} aria-label="Share event">
                 ↗ SHARE
               </button>
             </div>
@@ -211,32 +220,28 @@ const EventDetail = () => {
               <Field label="CITY" value={event.city} accent={isUpcoming} />
               <Field label="VENUE" value={event.venue} accent={isUpcoming} />
             </div>
+            {isPetFriendly && isUpcoming && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="bg-lime text-ink font-display text-xs px-3 py-1.5 border-2 border-ink">🐾 PET FRIENDLY</span>
+                <span className="bg-lime text-ink font-display text-xs px-3 py-1.5 border-2 border-ink">🌿 OUTDOOR ZONE 4PM–8PM</span>
+                <span className="bg-lime text-ink font-display text-xs px-3 py-1.5 border-2 border-ink">🎧 DANCE MUSIC TILL CLOSE</span>
+              </div>
+            )}
           </div>
         </section>
 
+        {/* Poster */}
         {event.poster_url && (() => {
           const src = resolveStorageUrl(event.poster_url);
           return (
             <div className="container pt-12">
-              <img
-                src={src}
-                alt={`${event.title} — Cats Can Dance dance music event in ${event.city || "Bangalore"}`}
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
+              <img src={src} alt={`${event.title} — Cats Can Dance event in ${event.city || "Bangalore"}`} loading="lazy" decoding="async" referrerPolicy="no-referrer"
                 className="w-full max-h-[600px] object-cover border-4 border-ink chunk-shadow-lg"
                 data-fallback-step="0"
                 onError={(ev) => {
                   const img = ev.currentTarget as HTMLImageElement;
                   const step = Number(img.dataset.fallbackStep ?? "0");
-                  // Step 0 → try the static episode-1 PNG (only relevant for episode-1)
-                  if (step === 0 && slug === "episode-1" && img.src !== imgUrl(episode1Poster)) {
-                    img.dataset.fallbackStep = "1";
-                    img.src = imgUrl(episode1Poster);
-                    return;
-                  }
-                  // Final fallback: lime tile with title
-                  if (process.env.NODE_ENV === "development") console.warn("[poster] failed", img.src);
+                  if (step === 0 && slug === "episode-1" && img.src !== imgUrl(episode1Poster)) { img.dataset.fallbackStep = "1"; img.src = imgUrl(episode1Poster); return; }
                   img.style.display = "none";
                   const parent = img.parentElement;
                   if (parent && !parent.querySelector("[data-poster-fallback]")) {
@@ -252,6 +257,8 @@ const EventDetail = () => {
           );
         })()}
 
+
+        {/* Media gallery */}
         {media.length > 0 && (
           <section className="container pt-12">
             <h2 className="font-display text-3xl md:text-4xl text-ink mb-6">/ THE NIGHT, IN MOTION</h2>
@@ -261,37 +268,13 @@ const EventDetail = () => {
                 return (
                   <figure key={`${item.url}-${i}`} className="bg-ink border-4 border-ink chunk-shadow">
                     {item.type === "video" ? (
-                      <video
-                        src={url}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        className="w-full aspect-video object-cover bg-ink"
-                      />
+                      <video src={url} controls playsInline preload="metadata" className="w-full aspect-video object-cover bg-ink" />
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setLightbox({ ...item, url })}
-                        className="block w-full"
-                        aria-label={item.caption || `Open photo ${i + 1}`}
-                      >
-                        <img
-                          src={url}
-                          alt={item.caption || `${event.title} photo ${i + 1}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full aspect-video object-cover hover:opacity-90 transition-opacity"
-                          onError={(ev) => {
-                            (ev.currentTarget as HTMLImageElement).style.opacity = "0.4";
-                          }}
-                        />
+                      <button type="button" onClick={() => setLightbox({ ...item, url })} className="block w-full" aria-label={item.caption || `Open photo ${i + 1}`}>
+                        <img src={url} alt={item.caption || `${event.title} photo ${i + 1}`} loading="lazy" decoding="async" className="w-full aspect-video object-cover hover:opacity-90 transition-opacity" onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.opacity = "0.4"; }} />
                       </button>
                     )}
-                    {item.caption && (
-                      <figcaption className="bg-cream text-ink px-3 py-2 text-sm font-medium border-t-4 border-ink">
-                        {item.caption}
-                      </figcaption>
-                    )}
+                    {item.caption && <figcaption className="bg-cream text-ink px-3 py-2 text-sm font-medium border-t-4 border-ink">{item.caption}</figcaption>}
                   </figure>
                 );
               })}
@@ -299,6 +282,7 @@ const EventDetail = () => {
           </section>
         )}
 
+        {/* Night + Lineup */}
         <section className="container py-16 md:py-20 grid md:grid-cols-2 gap-10 max-w-5xl">
           <div>
             <h2 className="font-display text-3xl text-ink mb-4">/ THE NIGHT</h2>
@@ -312,44 +296,39 @@ const EventDetail = () => {
               ))}
             </ul>
             {isUpcoming && (
-              <button
-                onClick={() => setOpen(true)}
-                className="mt-6 w-full bg-magenta text-cream font-display text-xl px-6 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-              >
+              <button onClick={() => setOpen(true)} className="mt-6 w-full bg-magenta text-cream font-display text-xl px-6 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform">
                 RSVP NOW →
               </button>
             )}
           </div>
         </section>
 
+        {/* Pet zone schedule — only for pet-friendly events */}
+        {isPetFriendly && <PetFriendlySchedule />}
+
+        {/* Series siblings — only if part of a series */}
+        {isSeries && event.series && (
+          <SeriesSiblings current={slug} seriesSlug={event.series} seriesLabel={event.series_label ?? event.series} />
+        )}
+
+        {/* Journal */}
         {(() => {
-          const journal = getAllPosts()
-            .filter((p) => p.category === "GUIDES" || p.category === "CULTURE" || p.category === "JOURNAL")
-            .slice(0, 2);
-          if (journal.length === 0) return null;
+          const journal = getAllPosts().filter((p) => p.category === "GUIDES" || p.category === "CULTURE" || p.category === "JOURNAL").slice(0, 2);
+          if (!journal.length) return null;
           return (
             <section className="bg-cream border-t-4 border-ink py-12 md:py-16">
               <div className="container max-w-5xl">
                 <p className="font-display text-magenta text-base md:text-lg mb-4">/ READ MORE FROM THE JOURNAL</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {journal.map((p) => (
-                    <Link
-                      key={p.slug}
-                      to={`/blog/${p.slug}`}
-                      className="block bg-acid-yellow border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform"
-                    >
+                    <Link key={p.slug} to={`/blog/${p.slug}`} className="block bg-acid-yellow border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
                       <span className="inline-block bg-ink text-cream text-[10px] font-bold px-2 py-0.5 mb-2">{p.category || p.tag}</span>
                       <p className="font-display text-ink text-xl md:text-2xl leading-tight mb-1">{p.title}</p>
                       <p className="text-ink/70 text-sm font-medium line-clamp-2">{p.excerpt}</p>
                     </Link>
                   ))}
                 </div>
-                <Link
-                  to="/blog"
-                  className="inline-block mt-6 font-display text-ink text-lg underline decoration-4 decoration-magenta underline-offset-4 hover:text-magenta transition"
-                >
-                  All journal posts →
-                </Link>
+                <Link to="/blog" className="inline-block mt-6 font-display text-ink text-lg underline decoration-4 decoration-magenta underline-offset-4 hover:text-magenta transition">All journal posts →</Link>
               </div>
             </section>
           );
@@ -357,6 +336,7 @@ const EventDetail = () => {
 
         <Footer />
       </main>
+
       <RsvpDialog open={open} onOpenChange={setOpen} eventSlug={slug} eventTitle={`Cats Can Dance ${event.title}`} />
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
@@ -364,9 +344,7 @@ const EventDetail = () => {
           {lightbox && (
             <figure>
               <img src={lightbox.url} alt={lightbox.caption || "Photo"} className="w-full max-h-[80vh] object-contain bg-ink" />
-              {lightbox.caption && (
-                <figcaption className="text-cream text-center font-medium py-2">{lightbox.caption}</figcaption>
-              )}
+              {lightbox.caption && <figcaption className="text-cream text-center font-medium py-2">{lightbox.caption}</figcaption>}
             </figure>
           )}
         </DialogContent>

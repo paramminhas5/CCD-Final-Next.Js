@@ -10,6 +10,7 @@ const groups = [
       { to: "/", label: "Home" },
       { to: "/about", label: "About" },
       { to: "/events", label: "Events" },
+      { to: "/events", label: "CCDxSocial Shows" },
       { to: "/shop", label: "Shop" },
     ],
   },
@@ -41,6 +42,7 @@ const groups = [
       { to: "/for-venues", label: "Venue Partners" },
       { to: "/for-artists", label: "For Artists" },
       { to: "/for-investors", label: "For Investors" },
+      { to: "/ccdxsocial/sponsor", label: "Sponsor a Show" },
     ],
   },
   {
