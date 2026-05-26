@@ -1,9 +1,16 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { CITY_SCENES, GLOBAL_SCENES, GENRE_PAGES } from "@/content/scenes";
-import { MapPin, Globe, Music2, Compass, ArrowRight, Play } from "lucide-react";
+import {
+  MapPin, Globe, Music2, Compass, ArrowRight, Play,
+  Search, X, Calendar, Music, Zap, ChevronRight,
+} from "lucide-react";
 
 // ─── Section header ──────────────────────────────────────────────────────────
 function SectionHeader({
@@ -96,6 +103,348 @@ function GenreTile({ genre }: { genre: (typeof GENRE_PAGES)[0] }) {
   );
 }
 
+// ─── "What's On This Weekend" strip ─────────────────────────────────────────
+interface CityCount { city: string; count: number; }
+
+function WhatsOnStrip() {
+  const [cityCounts, setCityCounts] = useState<CityCount[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Get upcoming events, group by city, count per city
+    fetch("/api/curated-events?limit=50")
+      .then(r => r.json())
+      .then((events: any[]) => {
+        if (!Array.isArray(events)) return;
+        const now = new Date();
+        const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        // Filter to events happening within the next 7 days
+        const upcoming = events.filter(e => {
+          if (!e.event_date) return false;
+          const d = new Date(e.event_date);
+          return d >= now && d <= weekFromNow;
+        });
+
+        // Count by city
+        const counts: Record<string, number> = {};
+        for (const e of upcoming) {
+          if (e.city) counts[e.city] = (counts[e.city] || 0) + 1;
+        }
+
+        // Sort by count desc, take top 6
+        const sorted = Object.entries(counts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([city, count]) => ({ city, count }));
+
+        setCityCounts(sorted);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Don't render if no upcoming events found
+  if (!loading && cityCounts.length === 0) return null;
+
+  return (
+    <div className="bg-acid-yellow border-b-4 border-ink">
+      <div className="container py-4">
+        <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide">
+          <div className="shrink-0 flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-ink animate-pulse" />
+            <span className="font-display text-xs uppercase tracking-widest text-ink whitespace-nowrap">
+              This Weekend
+            </span>
+          </div>
+          <div className="w-px h-4 bg-ink/30 shrink-0" />
+
+          {loading ? (
+            // Skeleton
+            Array(4).fill(null).map((_, i) => (
+              <div key={i} className="h-7 w-28 bg-ink/10 animate-pulse shrink-0" />
+            ))
+          ) : (
+            cityCounts.map(({ city, count }) => {
+              const citySlug = CITY_SCENES.find(c =>
+                c.name.toLowerCase() === city.toLowerCase()
+              )?.slug;
+              const pill = (
+                <span className="font-display text-sm text-ink whitespace-nowrap">
+                  {city}
+                  <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 bg-ink text-acid-yellow text-[10px] font-display rounded-none">
+                    {count}
+                  </span>
+                </span>
+              );
+
+              return citySlug ? (
+                <Link
+                  key={city}
+                  href={`/scene/${citySlug}`}
+                  className="shrink-0 border-2 border-ink px-3 py-1 hover:bg-ink hover:text-acid-yellow transition-colors flex items-center gap-1 group"
+                >
+                  {pill}
+                  <ChevronRight className="w-3 h-3 text-ink group-hover:text-acid-yellow opacity-0 group-hover:opacity-100 transition-all" />
+                </Link>
+              ) : (
+                <span key={city} className="shrink-0 border-2 border-ink px-3 py-1 flex items-center">
+                  {pill}
+                </span>
+              );
+            })
+          )}
+
+          {!loading && cityCounts.length > 0 && (
+            <>
+              <div className="w-px h-4 bg-ink/30 shrink-0" />
+              <Link
+                href="/events"
+                className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap"
+              >
+                All events →
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Universal Search ─────────────────────────────────────────────────────────
+interface SearchResult {
+  type: "artist" | "city" | "genre" | "scene";
+  label: string;
+  sublabel?: string;
+  href: string;
+  accent?: string;
+  textColor?: string;
+}
+
+function UniversalSearch() {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [artistResults, setArtistResults] = useState<SearchResult[]>([]);
+  const [loadingArtists, setLoadingArtists] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // Build static results from scenes data
+  const staticResults: SearchResult[] = [
+    ...CITY_SCENES.map(c => ({
+      type: "city" as const,
+      label: c.name,
+      sublabel: c.tagline,
+      href: `/scene/${c.slug}`,
+      accent: c.accentColor,
+      textColor: c.textColor,
+    })),
+    ...GENRE_PAGES.map(g => ({
+      type: "genre" as const,
+      label: g.name,
+      sublabel: `${g.bpm} BPM · ${g.origin}`,
+      href: `/genres/${g.slug}`,
+      accent: g.accentColor,
+      textColor: g.textColor,
+    })),
+    ...GLOBAL_SCENES.map(s => ({
+      type: "scene" as const,
+      label: s.name,
+      sublabel: `${s.city} · ${s.decade}`,
+      href: `/scenes/${s.slug}`,
+      accent: s.accentColor,
+      textColor: s.textColor,
+    })),
+  ];
+
+  const q = query.trim().toLowerCase();
+
+  // Filter static results
+  const filteredStatic = q.length >= 2
+    ? staticResults.filter(r =>
+        r.label.toLowerCase().includes(q) ||
+        (r.sublabel?.toLowerCase().includes(q) ?? false)
+      ).slice(0, 6)
+    : [];
+
+  // Fetch artist results when query changes
+  useEffect(() => {
+    if (q.length < 2) { setArtistResults([]); return; }
+    setLoadingArtists(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/artists?limit=5`);
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+        const filtered = data
+          .filter((a: any) =>
+            a.name?.toLowerCase().includes(q) ||
+            a.based_city?.toLowerCase().includes(q) ||
+            (a.genres ?? []).join(" ").toLowerCase().includes(q)
+          )
+          .slice(0, 4)
+          .map((a: any) => ({
+            type: "artist" as const,
+            label: a.name,
+            sublabel: [a.based_city, (a.genres ?? [])[0]].filter(Boolean).join(" · "),
+            href: `/artists/${a.slug}`,
+          }));
+        setArtistResults(filtered);
+      } catch { /* skip */ }
+      finally { setLoadingArtists(false); }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  const allResults: SearchResult[] = [
+    ...artistResults,
+    ...filteredStatic,
+  ];
+
+  // Group results by type
+  const grouped = allResults.reduce<Record<string, SearchResult[]>>((acc, r) => {
+    if (!acc[r.type]) acc[r.type] = [];
+    acc[r.type].push(r);
+    return acc;
+  }, {});
+
+  const typeLabels: Record<string, string> = {
+    artist: "Artists",
+    city: "Cities",
+    genre: "Genres",
+    scene: "Global Scenes",
+  };
+  const typeIcons: Record<string, React.ReactNode> = {
+    artist: <Music className="w-3 h-3" />,
+    city: <MapPin className="w-3 h-3" />,
+    genre: <Zap className="w-3 h-3" />,
+    scene: <Globe className="w-3 h-3" />,
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  // Keyboard: Escape to close
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  function handleSelect(href: string) {
+    setOpen(false);
+    setQuery("");
+    router.push(href);
+  }
+
+  const showDropdown = open && q.length >= 2;
+
+  return (
+    <div ref={containerRef} className="relative max-w-2xl mx-auto">
+      {/* Input */}
+      <div className={`flex items-center border-4 border-ink bg-cream transition-colors ${open ? "border-magenta" : ""}`}>
+        <Search className="w-5 h-5 text-ink/40 ml-4 shrink-0" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search artists, cities, genres, scenes…"
+          className="flex-1 px-4 py-4 bg-transparent font-display text-sm text-ink placeholder:text-ink/40 focus:outline-none"
+          aria-label="Search everything"
+          autoComplete="off"
+        />
+        {query && (
+          <button
+            onClick={() => { setQuery(""); setArtistResults([]); inputRef.current?.focus(); }}
+            className="mr-4 text-ink/40 hover:text-ink transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {showDropdown && (
+        <div className="absolute top-full left-0 right-0 z-50 border-4 border-ink border-t-0 bg-cream shadow-[8px_8px_0_#1a1a1a] max-h-[70vh] overflow-y-auto">
+          {/* Loading */}
+          {loadingArtists && allResults.length === 0 && (
+            <div className="p-4">
+              <div className="h-5 bg-ink/10 animate-pulse w-32 mb-2" />
+              <div className="h-5 bg-ink/10 animate-pulse w-48" />
+            </div>
+          )}
+
+          {/* No results */}
+          {!loadingArtists && allResults.length === 0 && (
+            <div className="p-6 text-center">
+              <p className="font-display text-sm text-ink/50 uppercase">Nothing found for "{query}"</p>
+              <p className="text-xs text-ink/40 mt-1">Try "house", "bengaluru", or an artist name</p>
+            </div>
+          )}
+
+          {/* Results grouped by type */}
+          {Object.entries(grouped).map(([type, results]) => (
+            <div key={type}>
+              {/* Group header */}
+              <div className="px-4 pt-3 pb-1 flex items-center gap-2 border-b border-ink/10">
+                <span className="text-ink/40">{typeIcons[type]}</span>
+                <span className="font-display text-[10px] uppercase tracking-widest text-ink/50">
+                  {typeLabels[type]}
+                </span>
+              </div>
+              {results.map((r, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSelect(r.href)}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-acid-yellow transition-colors border-b border-ink/10 last:border-b-0 group"
+                >
+                  {/* Colour swatch for non-artist results */}
+                  {r.accent && r.type !== "artist" && (
+                    <span className={`shrink-0 w-3 h-3 border border-ink ${r.accent}`} />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-display text-sm text-ink uppercase truncate group-hover:text-ink">
+                      {r.label}
+                    </p>
+                    {r.sublabel && (
+                      <p className="text-xs text-ink/50 truncate mt-0.5">{r.sublabel}</p>
+                    )}
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-ink/30 group-hover:text-ink ml-auto shrink-0 transition-colors" />
+                </button>
+              ))}
+            </div>
+          ))}
+
+          {/* Footer hint */}
+          {allResults.length > 0 && (
+            <div className="px-4 py-2 border-t-4 border-ink bg-ink/5">
+              <p className="font-display text-[10px] uppercase text-ink/30 tracking-widest">
+                Press Enter to select · Esc to close
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DiscoverPage() {
   const jsonLd = [
@@ -133,11 +482,20 @@ export default function DiscoverPage() {
       />
       <Nav />
 
+      {/* ── What's On This Weekend strip ── */}
+      <div className="pt-[72px] md:pt-[80px]">
+        <WhatsOnStrip />
+      </div>
+
       {/* ── Hero ── */}
-      <section className="bg-ink pt-32 pb-20 md:pt-40 md:pb-28 border-b-4 border-ink relative overflow-hidden">
+      <section className="bg-ink pt-16 pb-20 md:pt-20 md:pb-28 border-b-4 border-ink relative overflow-hidden">
         {/* Background grid decoration */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none"
-          style={{ backgroundImage: "repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 1px,transparent 60px)" }}
+        <div
+          className="absolute inset-0 opacity-5 pointer-events-none"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 1px,transparent 60px)",
+          }}
         />
         <div className="container relative z-10">
           <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">
@@ -145,20 +503,23 @@ export default function DiscoverPage() {
             Scene Discovery
           </p>
           <h1 className="font-display text-cream text-[14vw] md:text-[8vw] leading-[0.85] uppercase mb-8">
-            WHERE<br/>
-            <span className="text-acid-yellow">DOES THE</span><br/>
-            MUSIC<br/>
+            WHERE<br />
+            <span className="text-acid-yellow">DOES THE</span><br />
+            MUSIC<br />
             COME FROM?
           </h1>
-          <p className="text-cream/70 max-w-xl text-lg leading-relaxed">
+          <p className="text-cream/70 max-w-xl text-lg leading-relaxed mb-10">
             Every sound has an origin. Every city has a scene. Every genre has a story.
             This is your map — from Detroit Techno to Bengaluru Jungle, from Chicago House to Goa Trance.
           </p>
+
+          {/* ── Search bar inside hero ── */}
+          <UniversalSearch />
         </div>
       </section>
 
       {/* ── Indian Cities ── */}
-      <section className="container py-16 md:py-24">
+      <section id="indian-scenes" className="container py-16 md:py-24">
         <SectionHeader
           eyebrow="Indian Scenes"
           title="The Cities"
@@ -195,7 +556,7 @@ export default function DiscoverPage() {
       </section>
 
       {/* ── Global Scenes ── */}
-      <section className="container py-16 md:py-24">
+      <section id="global-scenes" className="container py-16 md:py-24">
         <SectionHeader
           eyebrow="Global Origins"
           title="Where It Started"
@@ -217,10 +578,16 @@ export default function DiscoverPage() {
             <p className="text-cream/80 mt-1">Find events near you across India.</p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            <Link href="/events" className="bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+            <Link
+              href="/events"
+              className="bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+            >
               See All Events →
             </Link>
-            <Link href="/artists" className="bg-cream text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+            <Link
+              href="/artists"
+              className="bg-cream text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+            >
               Browse Artists
             </Link>
           </div>
