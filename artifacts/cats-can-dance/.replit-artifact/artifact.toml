@@ -1,0 +1,27 @@
+kind = "web"
+  previewPath = "/"
+  title = "Cats Can Dance"
+  version = "1.0.0"
+  id = "artifacts/cats-can-dance"
+  router = "path"
+
+  [[integratedSkills]]
+  name = "react-vite"
+  version = "1.0.0"
+
+  [[services]]
+  name = "web"
+  paths = [ "/" ]
+  localPort = 18502
+
+  [services.development]
+  run = "pnpm --filter @workspace/cats-can-dance run dev"
+
+  [services.production]
+  build = [ "pnpm", "--filter", "@workspace/cats-can-dance", "run", "build" ]
+  run = [ "pnpm", "--filter", "@workspace/cats-can-dance", "run", "start" ]
+
+  [services.env]
+  PORT = "18502"
+  BASE_PATH = "/"
+  

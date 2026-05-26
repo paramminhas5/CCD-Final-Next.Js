@@ -1,0 +1,32 @@
+{
+  "src/pages/Index.tsx -> @/components/Drops": {
+    "id": "src/pages/Index.tsx -> @/components/Drops",
+    "files": [
+      "static/chunks/src_components_Drops_tsx.js"
+    ]
+  },
+  "src/pages/Index.tsx -> @/components/EarlyAccess": {
+    "id": "src/pages/Index.tsx -> @/components/EarlyAccess",
+    "files": [
+      "static/chunks/src_components_EarlyAccess_tsx.js"
+    ]
+  },
+  "src/pages/Index.tsx -> @/components/Instagram": {
+    "id": "src/pages/Index.tsx -> @/components/Instagram",
+    "files": [
+      "static/chunks/src_components_Instagram_tsx.js"
+    ]
+  },
+  "src/pages/Index.tsx -> @/components/Playlist": {
+    "id": "src/pages/Index.tsx -> @/components/Playlist",
+    "files": [
+      "static/chunks/src_components_Playlist_tsx.js"
+    ]
+  },
+  "src/pages/Index.tsx -> @/components/Videos": {
+    "id": "src/pages/Index.tsx -> @/components/Videos",
+    "files": [
+      "static/chunks/src_components_Videos_tsx.js"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/scrape-events",
+      "schedule": "30 20 * * *"
+    }
+  ],
+  "functions": {
+    "pages/api/cron/scrape-events.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/[...proxy].ts": {
+      "maxDuration": 60
+    }
+  }
+}
