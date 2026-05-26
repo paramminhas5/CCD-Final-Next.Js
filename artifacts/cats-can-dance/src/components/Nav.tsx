@@ -12,8 +12,10 @@ import { useUser, useClerk } from "@clerk/react";
 
 const primaryLinks = [
   { to: "/about", label: "About" },
+  { to: "/discover", label: "Discover" },
   { to: "/events", label: "Events" },
   { to: "/artists", label: "Artists" },
+  { to: "/book", label: "Book" },
   { to: "/promoters", label: "Promoters" },
   { to: "/shop", label: "Shop" },
 ];
@@ -22,7 +24,6 @@ const partnersLinks = [
   { to: "/for-venues", label: "For Venues" },
   { to: "/for-artists", label: "For Artists" },
   { to: "/for-investors", label: "For Investors" },
-  { to: "/ccdxsocial/sponsor", label: "Sponsor a Show 🐾" },
 ];
 
 const moreLinks: { to: string; label: string; external?: boolean }[] = [
@@ -217,6 +218,10 @@ const Nav = () => {
           {isLoaded && (
             user ? (
               <div className="flex items-center gap-2">
+                <a href="/profile"
+                  className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-cream text-ink hover:bg-acid-yellow transition-colors">
+                  Profile
+                </a>
                 <a href="/dashboard"
                   className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-acid-yellow text-ink hover:bg-magenta hover:text-cream transition-colors">
                   Dashboard
@@ -280,6 +285,7 @@ const Nav = () => {
             {isLoaded && (
               user ? (
                 <>
+                  <li><a href="/profile" className="block font-display text-2xl text-ink py-2">Profile</a></li>
                   <li><a href="/dashboard" className="block font-display text-2xl text-ink py-2">Dashboard</a></li>
                   <li><button onClick={() => signOut()} className="block font-display text-2xl text-ink/50 py-2 w-full text-left">Sign Out</button></li>
                 </>

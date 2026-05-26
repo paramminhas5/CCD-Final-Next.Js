@@ -13,6 +13,7 @@ type Filter = "ALL" | "STREETWEAR" | "PETS";
 const Shop = () => {
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shopError, setShopError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
 
   useEffect(() => {
@@ -20,8 +21,9 @@ const Shop = () => {
       try {
         const data = await storefrontApiRequest(STOREFRONT_QUERY, { first: 30, query: null });
         setProducts(data?.data?.products?.edges || []);
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed to load products:", e);
+        setShopError(e.message || "Failed to connect to shop");
       } finally {
         setLoading(false);
       }
@@ -127,6 +129,17 @@ const Shop = () => {
           {loading ? (
             <div className="flex justify-center py-32">
               <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          ) : shopError ? (
+            <div className="text-center py-32 border-4 border-ink bg-magenta">
+              <p className="font-display text-3xl text-cream mb-2">SHOP OFFLINE</p>
+              <p className="text-cream/80 text-sm mb-4">Could not connect to the CCD store. Try refreshing in a moment.</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="font-display text-sm uppercase px-5 py-2 border-4 border-cream bg-cream text-ink chunk-shadow hover:bg-acid-yellow transition-colors"
+              >
+                Retry →
+              </button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-32 border-4 border-ink chunk-shadow bg-cream">

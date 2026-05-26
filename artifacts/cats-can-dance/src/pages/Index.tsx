@@ -13,6 +13,10 @@ import SectionReveal from "@/components/SectionReveal";
 import SectionDots from "@/components/SectionDots";
 import SEO from "@/components/SEO";
 import MoonwalkCat from "@/components/MoonwalkCat";
+import SceneSnapshot from "@/components/SceneSnapshot";
+import GenreWheel from "@/components/GenreWheel";
+import ArtistSpotlight from "@/components/ArtistSpotlight";
+import CityMarquee from "@/components/CityMarquee";
 
 const Playlist = lazy(() => import("@/components/Playlist"));
 const Drops = lazy(() => import("@/components/Drops"));
@@ -37,10 +41,10 @@ const Index = () => {
   return (
     <>
       <SEO
-        title="Cats Can Dance — Bangalore Underground Parties, Apparel & Culture"
-        description="Bangalore's underground crew. Dance music nights, limited apparel drops, CCD goods, and cool culture & streetwear. RSVP, shop, join the pack."
+        title="Cats Can Dance — India's Underground Electronic Music Scene"
+        description="Discover India's underground electronic music scene. Events in Bengaluru, Mumbai, Delhi & Goa. Artist directory, genre guides, global scene origins and limited apparel drops."
         path="/"
-        keywords="bangalore parties, underground events bangalore, dance music bangalore, streetwear india, apparel drops, cool culture, electronic music bangalore, cats can dance"
+        keywords="india electronic music, bangalore underground, mumbai techno, delhi house, goa trance, electronic music india, cats can dance, jungle drum bass india"
         jsonLd={[
           {
             "@context": "https://schema.org",
@@ -99,10 +103,15 @@ const Index = () => {
         <Catbot />
         <MoonwalkCat />
         <Hero />
+        <CityMarquee />
         <MarqueeBySlot id="above-about" />
         <SectionReveal><About /></SectionReveal>
         <MarqueeBySlot id="above-events" />
         <SectionReveal><Events /></SectionReveal>
+        {/* ── Scene Discovery Sections ── */}
+        <SectionReveal><SceneSnapshot /></SectionReveal>
+        <SectionReveal><GenreWheel /></SectionReveal>
+        <SectionReveal><ArtistSpotlight /></SectionReveal>
         <MarqueeBySlot id="above-videos" />
         <Suspense fallback={<SectionFallback bg="bg-ink" />}>
           <SectionReveal><Videos /></SectionReveal>
