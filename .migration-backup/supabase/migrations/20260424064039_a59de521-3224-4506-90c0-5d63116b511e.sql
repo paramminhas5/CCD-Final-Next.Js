@@ -1,0 +1,1 @@
+UPDATE public.events SET poster_url = '/episodes/episode-01.gif' WHERE slug = 'episode-1';

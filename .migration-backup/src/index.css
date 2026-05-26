@@ -1,0 +1,205 @@
+@import url('https://fonts.googleapis.com/css2?family=Bowlby+One&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cats Can Dance — Brutalist palette */
+    --background: 20 6% 90%;            /* stone */
+    --foreground: 222 47% 4%;           /* near-black ink */
+
+    --hot-pink: 0 72% 51%;
+    --bubblegum: 0 93% 86%;
+    --acid-yellow: 84 81% 56%;          /* lime-yellow */
+    --electric-blue: 221 83% 53%;       /* #2563EB */
+    --lime: 142 76% 73%;
+    --orange: 21 90% 53%;
+    --magenta: 0 72% 51%;               /* hot red #DC2626 */
+    --cream: 20 6% 90%;                 /* stone */
+    --ink: 222 47% 4%;
+
+    /* Semantic theme tokens — overridden at runtime by ThemeProvider */
+    --brand: 0 72% 51%;
+    --accent: 84 81% 56%;
+    --surface: 20 6% 90%;
+    --surface-alt: 222 47% 4%;
+    --on-brand: 20 6% 90%;
+    --on-surface: 222 47% 4%;
+    --shadow: 222 47% 4%;
+
+    --card: 20 6% 90%;
+    --card-foreground: 222 47% 4%;
+    --popover: 20 6% 90%;
+    --popover-foreground: 222 47% 4%;
+    --primary: 222 47% 4%;
+    --primary-foreground: 84 81% 56%;
+    --secondary: 84 81% 56%;
+    --secondary-foreground: 222 47% 4%;
+    --muted: 20 6% 82%;
+    --muted-foreground: 222 20% 25%;
+    --accent: 84 81% 56%;
+    --accent-foreground: 222 47% 4%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 47% 4%;
+    --input: 222 47% 4%;
+    --ring: 222 47% 4%;
+    --radius: 1.25rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+
+  @media (min-width: 768px) {
+    html { font-size: 14px; }
+  }
+
+  body {
+    cursor: default;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Bowlby One', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    line-height: 0.9;
+  }
+
+  .ink-stroke {
+    -webkit-text-stroke: 2px hsl(var(--ink));
+  }
+
+  .chunk-shadow {
+    box-shadow: 8px 8px 0 0 hsl(var(--ink));
+  }
+  .chunk-shadow-lg {
+    box-shadow: 14px 14px 0 0 hsl(var(--ink));
+  }
+
+  .border-ink {
+    border-color: hsl(var(--ink));
+  }
+
+  .bg-grain {
+    background-image:
+      radial-gradient(hsl(var(--ink) / 0.08) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+
+  .marquee {
+    animation: marquee 18s linear infinite;
+  }
+  .marquee-speed { animation-duration: 18s; }
+  @media (max-width: 768px) {
+    .marquee-speed { animation-duration: 9s; }
+  }
+
+  .headline-responsive {
+    font-size: clamp(2.25rem, 9vw, 5rem);
+    line-height: 0.9;
+    word-break: break-word;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .spin-slow {
+    animation: spin 8s linear infinite;
+  }
+
+  .wiggle {
+    animation: wiggle 3s ease-in-out infinite;
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+
+  .float {
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+  }
+}
+
+/* DISCO MODE */
+@keyframes disco-shake {
+  0%, 100% { transform: translate(0,0) rotate(0); }
+  25% { transform: translate(-2px, 1px) rotate(-0.5deg); }
+  75% { transform: translate(2px, -1px) rotate(0.5deg); }
+}
+@keyframes disco-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@keyframes disco-strobe {
+  0% { background-color: hsl(var(--electric-blue)); }
+  25% { background-color: hsl(var(--magenta)); }
+  50% { background-color: hsl(var(--lime)); }
+  75% { background-color: hsl(var(--orange)); }
+  100% { background-color: hsl(var(--electric-blue)); }
+}
+@keyframes disco-dance {
+  0%, 100% { transform: rotate(-15deg) translateY(0); }
+  50% { transform: rotate(15deg) translateY(-10px); }
+}
+
+body.disco { animation: disco-strobe 2s linear infinite; }
+body.disco section { animation: disco-shake 0.5s ease-in-out infinite; }
+body.disco .chunk-shadow,
+body.disco .chunk-shadow-lg { animation: disco-pulse 0.5s ease-in-out infinite; }
+body.disco .wiggle { animation: disco-dance 0.4s ease-in-out infinite !important; }
+body.disco .marquee-speed { animation-duration: 6s !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.disco,
+  body.disco section,
+  body.disco .chunk-shadow,
+  body.disco .chunk-shadow-lg,
+  body.disco .wiggle,
+  body.disco .marquee-speed { animation: none !important; }
+}
+
+/* ShinyBall (3D disco ball) */
+@keyframes rotateDiscoBall {
+  0% { transform: rotateX(90deg) rotateZ(0deg); }
+  100% { transform: rotateX(90deg) rotateZ(360deg); }
+}
+@keyframes rotateDiscoBallMiddle {
+  0% { transform: rotateX(90deg) rotateY(0deg); }
+  100% { transform: rotateX(90deg) rotateY(-360deg); }
+}
+@keyframes reflect {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
+/* Disco mode: full-vibe gradient backgrounds on every section */
+body.disco section {
+  background-image: linear-gradient(135deg,
+    hsl(var(--magenta)) 0%,
+    hsl(var(--electric-blue)) 35%,
+    hsl(var(--lime)) 70%,
+    hsl(var(--orange)) 100%) !important;
+  background-size: 300% 300% !important;
+  animation: disco-shake 0.5s ease-in-out infinite, disco-gradient 4s linear infinite !important;
+}
+@keyframes disco-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
