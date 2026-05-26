@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import ArtistAudioEmbed from "@/components/ArtistAudioEmbed";
 import ArtistGigChart from "@/components/ArtistGigChart";
 import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
+import SimilarArtists from "@/components/SimilarArtists";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -644,6 +645,11 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
+      <SimilarArtists
+        slug={artist.slug}
+        genres={artist.genres}
+        connections={connections}
+      />
       <Marquee bg="bg-ink" />
       <Footer />
     </main>
