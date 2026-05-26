@@ -34,6 +34,25 @@ export default function GlobalScenePage({ slug }: Props) {
         description={`${scene.tagline} The origin story of ${scene.name} from ${scene.city} and how it connects to India's underground music scene.`}
         path={`/scenes/${scene.slug}`}
         keywords={`${scene.name.toLowerCase()}, ${scene.city.toLowerCase()} electronic music, ${scene.relatedGenres.join(", ").toLowerCase()} india`}
+        jsonLd={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Place",
+            name: `${scene.name} — ${scene.city}`,
+            description: scene.origin,
+            url: `https://catscandance.com/scenes/${scene.slug}`,
+            address: { "@type": "PostalAddress", addressLocality: scene.city },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com/" },
+              { "@type": "ListItem", position: 2, name: "Discover", item: "https://catscandance.com/discover" },
+              { "@type": "ListItem", position: 3, name: scene.name, item: `https://catscandance.com/scenes/${scene.slug}` },
+            ],
+          },
+        ]}
       />
       <Nav />
 

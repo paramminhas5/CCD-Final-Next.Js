@@ -43,6 +43,24 @@ export default function GenrePage({ slug }: Props) {
         description={`${genre.tagline} ${genre.description.slice(0, 120)}… Discover Indian artists, key tracks and where to hear ${genre.name} in India.`}
         path={`/genres/${genre.slug}`}
         keywords={`${genre.name.toLowerCase()} music india, ${genre.name.toLowerCase()} artists india, ${genre.origin.toLowerCase()} ${genre.name.toLowerCase()}`}
+        jsonLd={[
+          {
+            "@context": "https://schema.org",
+            "@type": "MusicGenre",
+            name: genre.name,
+            description: genre.description,
+            url: `https://catscandance.com/genres/${genre.slug}`,
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com/" },
+              { "@type": "ListItem", position: 2, name: "Discover", item: "https://catscandance.com/discover" },
+              { "@type": "ListItem", position: 3, name: genre.name, item: `https://catscandance.com/genres/${genre.slug}` },
+            ],
+          },
+        ]}
       />
       <Nav />
 

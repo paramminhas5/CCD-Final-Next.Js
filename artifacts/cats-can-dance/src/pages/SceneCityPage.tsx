@@ -70,6 +70,25 @@ export default function SceneCityPage({ slug }: Props) {
         description={`${scene.tagline} Discover artists, events, promoters and venues from ${scene.name}'s underground electronic music scene.`}
         path={`/scene/${scene.slug}`}
         keywords={`${scene.name.toLowerCase()} electronic music, ${scene.name.toLowerCase()} underground, ${scene.activeGenres.join(", ").toLowerCase()}`}
+        jsonLd={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Place",
+            name: `${scene.name} Electronic Music Scene`,
+            description: scene.description,
+            url: `https://catscandance.com/scene/${scene.slug}`,
+            address: { "@type": "PostalAddress", addressLocality: scene.name, addressCountry: "IN" },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com/" },
+              { "@type": "ListItem", position: 2, name: "Discover", item: "https://catscandance.com/discover" },
+              { "@type": "ListItem", position: 3, name: scene.name, item: `https://catscandance.com/scene/${scene.slug}` },
+            ],
+          },
+        ]}
       />
       <Nav />
 

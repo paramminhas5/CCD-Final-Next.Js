@@ -98,6 +98,30 @@ function GenreTile({ genre }: { genre: (typeof GENRE_PAGES)[0] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DiscoverPage() {
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: "Discover — Indian & Global Electronic Music Scenes",
+      description: "Explore India's underground electronic music cities, global scene origins, and every genre you need to know.",
+      url: "https://catscandance.com/discover",
+      about: CITY_SCENES.map(c => ({
+        "@type": "Place",
+        name: c.name,
+        url: `https://catscandance.com/scene/${c.slug}`,
+        description: c.tagline,
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: "https://catscandance.com/" },
+        { "@type": "ListItem", position: 2, name: "Discover", item: "https://catscandance.com/discover" },
+      ],
+    },
+  ];
+
   return (
     <main className="bg-cream text-ink">
       <SEO
@@ -105,6 +129,7 @@ export default function DiscoverPage() {
         description="Explore India's underground electronic music cities, global scene origins — Detroit Techno, Chicago House, London Jungle — and every genre you need to know."
         path="/discover"
         keywords="india electronic music scenes, discover underground music, techno house jungle drum and bass india, bengaluru mumbai delhi goa music"
+        jsonLd={jsonLd}
       />
       <Nav />
 
