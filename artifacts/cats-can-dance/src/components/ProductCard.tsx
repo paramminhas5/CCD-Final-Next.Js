@@ -1,4 +1,4 @@
-import { Link } from "@/lib/compat-router";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import type { ShopifyProduct } from "@/lib/shopify";
@@ -17,7 +17,7 @@ const ProductCard = ({ product, altSuffix = "Cats Can Dance limited drop" }: Pro
 
   return (
     <article className="border-4 border-ink chunk-shadow bg-cream overflow-hidden hover:-translate-y-1 transition-transform">
-      <Link to={`/product/${product.node.handle}`} className="block">
+      <Link href={`/product/${product.node.handle}`} className="block">
         <div className="aspect-square bg-acid-yellow border-b-4 border-ink overflow-hidden">
           {img && (
             <img
@@ -31,7 +31,7 @@ const ProductCard = ({ product, altSuffix = "Cats Can Dance limited drop" }: Pro
         </div>
       </Link>
       <div className="p-5">
-        <Link to={`/product/${product.node.handle}`}>
+        <Link href={`/product/${product.node.handle}`}>
           <h3 className="font-display text-2xl mb-1 hover:text-magenta transition-colors">
             {product.node.title}
           </h3>
