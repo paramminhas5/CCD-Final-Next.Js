@@ -272,11 +272,17 @@ export default function ArtistDetailPage() {
               </div>
 
               {/* Book button */}
-              {artist.open_to_bookings && artist.booking_email && (
-                <div className="mt-4">
-                  <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
-                    className="inline-flex items-center gap-2 bg-magenta text-cream font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                    <Mail className="w-4 h-4" /> BOOK ARTIST →
+              {artist.open_to_bookings && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {artist.booking_email && (
+                    <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
+                      className="inline-flex items-center gap-2 bg-magenta text-cream font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                      <Mail className="w-4 h-4" /> BOOK ARTIST →
+                    </a>
+                  )}
+                  <a href={`/book?q=${encodeURIComponent(artist.name)}`}
+                    className="inline-flex items-center gap-2 bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                    VIEW ON MARKETPLACE
                   </a>
                 </div>
               )}

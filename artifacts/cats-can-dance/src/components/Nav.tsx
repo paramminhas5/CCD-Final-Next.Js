@@ -15,6 +15,7 @@ const primaryLinks = [
   { to: "/discover", label: "Discover" },
   { to: "/events", label: "Events" },
   { to: "/artists", label: "Artists" },
+  { to: "/book", label: "Book" },
   { to: "/promoters", label: "Promoters" },
   { to: "/shop", label: "Shop" },
 ];
