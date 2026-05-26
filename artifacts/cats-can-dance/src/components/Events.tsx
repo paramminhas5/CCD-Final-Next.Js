@@ -3,20 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@/lib/compat-router";
 import RsvpDialog from "@/components/RsvpDialog";
 import { supabase } from "@/lib/supabase-shim";
-
-type EventRow = {
-  id: string;
-  slug: string;
-  title: string;
-  date: string;
-  city: string;
-  venue: string;
-  blurb: string;
-  lineup: string[];
-  status: "upcoming" | "past";
-  poster_url: string | null;
-  sort_order: number;
-};
+import type { EventRow } from "@/types/events";
 
 const resolvePosterUrl = (raw: string | null | undefined): string | null => {
   if (!raw) return null;

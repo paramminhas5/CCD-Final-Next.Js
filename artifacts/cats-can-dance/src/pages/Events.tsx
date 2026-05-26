@@ -1,29 +1,84 @@
-import { useEffect, useState } from "react";
+/**
+ * Events listing.
+ *
+ * IA, top → bottom:
+ *
+ *   1. PageHero       — eyebrow + title + tagline
+ *   2. Marquee        — vibe slogans
+ *   3. Featured next  — the next upcoming event as a hero card with poster
+ *   4. Series banner  — if any active series, a strip linking the series shows
+ *   5. Upcoming list  — remaining upcoming events (cards)
+ *   6. Past episodes  — recap row, visually distinct
+ *   7. CuratedEvents  — external feed of other Bangalore events
+ *   8. Host CTA       — for venues
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/lib/compat-router";
+
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
-import CuratedEvents from "@/components/CuratedEvents";
 import Marquee from "@/components/Marquee";
-import { supabase } from "@/lib/supabase-shim";
+import CuratedEvents from "@/components/CuratedEvents";
+import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
+import SeriesStrip from "@/components/SeriesStrip";
 
-type EventRow = {
-  slug: string; title: string; city: string; venue: string; date: string; status: string;
+import { supabase } from "@/lib/supabase-shim";
+import { getEventContent } from "@/content/events";
+import type { EventRow } from "@/types/events";
+
+// ──────────────────── helpers ────────────────────
+
+const resolvePosterUrl = (raw: string | null | undefined): string | null => {
+  if (!raw) return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.startsWith("http://") || v.startsWith("https://")) return v;
+  if (v.startsWith("/")) return v;
+  try {
+    const { data } = supabase.storage.from("event-posters").getPublicUrl(v);
+    return data?.publicUrl ?? `/${v}`;
+  } catch {
+    return `/${v}`;
+  }
 };
+
+// ──────────────────── component ────────────────────
 
 const Events = () => {
   const [all, setAll] = useState<EventRow[]>([]);
+
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("events").select("slug,title,city,venue,date,status").order("sort_order", { ascending: true });
-      if (data) setAll(data as EventRow[]);
+      const { data } = await supabase
+        .from("events")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      if (data) setAll(data as unknown as EventRow[]);
     })();
   }, []);
 
-  const upcoming = all.filter((e) => e.status === "upcoming");
+  const upcoming = useMemo(() => all.filter((e) => e.status === "upcoming"), [all]);
+  const past     = useMemo(() => all.filter((e) => e.status === "past"),     [all]);
+  const featured = upcoming[0] ?? all[0];
+  const restUpcoming = upcoming.slice(1);
 
+  // Group upcoming events by series (if any).
+  const seriesGroup = useMemo(() => {
+    const upcomingSeries = upcoming.find((e) => !!e.series);
+    if (!upcomingSeries?.series) return null;
+    const events = all.filter((e) => e.series === upcomingSeries.series);
+    return {
+      key: upcomingSeries.series,
+      label: upcomingSeries.series_label || upcomingSeries.series.toUpperCase(),
+      events,
+    };
+  }, [all, upcoming]);
+
+  // ─── JSON-LD ───
   const eventLd = all.map((e) => ({
     "@context": "https://schema.org",
     "@type": "MusicEvent",
@@ -45,11 +100,7 @@ const Events = () => {
         addressCountry: "IN",
       },
     },
-    organizer: {
-      "@type": "Organization",
-      name: "Cats Can Dance",
-      url: "https://catscandance.com",
-    },
+    organizer: { "@type": "Organization", name: "Cats Can Dance", url: "https://catscandance.com" },
     offers: {
       "@type": "Offer",
       url: `https://catscandance.com/events/${e.slug}`,
@@ -82,37 +133,51 @@ const Events = () => {
       {
         "@type": "Question",
         name: "What underground dance music events does Cats Can Dance host in Bangalore?",
-        acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance hosts RSVP-only underground dance music episodes in Bengaluru featuring House, Disco, Jungle, Garage, and Drum & Bass. Events are held at venues including Bar Wild in Indiranagar. All upcoming events are listed at catscandance.com/events." },
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Cats Can Dance hosts RSVP-only underground dance music episodes in Bengaluru featuring House, Disco, Jungle, Garage, and Drum & Bass. Events are held at venues across the city, including the CCD × SOCIAL pet-friendly series.",
+        },
       },
       {
         "@type": "Question",
         name: "How do I RSVP to a Cats Can Dance event in Bangalore?",
-        acceptedAnswer: { "@type": "Answer", text: "RSVP links for upcoming Cats Can Dance events are at catscandance.com/events. Capacity is limited — RSVP early. Most episodes are free entry with name on the door." },
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "RSVP links for upcoming Cats Can Dance events are at catscandance.com/events. Capacity is limited — RSVP early. Most episodes are free entry with name on the door.",
+        },
       },
       {
         "@type": "Question",
         name: "Are Cats Can Dance events free?",
-        acceptedAnswer: { "@type": "Answer", text: "Most Cats Can Dance episodes are free entry with RSVP. Capacity is controlled to keep the room right. Check individual event pages for details." },
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Most CCD episodes are free entry with RSVP. Capacity is controlled to keep the room right.",
+        },
       },
       {
         "@type": "Question",
-        name: "What venues does Cats Can Dance use in Bengaluru?",
-        acceptedAnswer: { "@type": "Answer", text: "Cats Can Dance regularly hosts events at Bar Wild in Indiranagar, Bengaluru, and other underground venues across the city. Venues vary by episode." },
+        name: "What is CCD × SOCIAL?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "CCD × SOCIAL is India's first curated pet lifestyle series — outdoor pet zone in the afternoon, then underground dance music in the evening. Vaccinated dogs welcome.",
+        },
       },
     ],
   };
+
   const jsonLd = itemListLd ? [...eventLd, itemListLd, eventsFaqLd] : [...eventLd, eventsFaqLd];
 
   return (
     <>
       <SEO
         title="Parties & Curated Dance Events in Bangalore | Cats Can Dance"
-        description="Our nights plus a hand-picked feed of the best dance music events in Bangalore this week."
+        description="Cats Can Dance episodes plus a hand-picked feed of the best dance music events in Bangalore this week. RSVP-only, capacity-controlled, curated."
         path="/events"
         jsonLd={jsonLd}
       />
       <main className="bg-background text-foreground min-h-screen">
         <Nav />
+
         <PageHero
           eyebrow="EVENTS"
           title="NIGHTS THAT MOVE."
@@ -126,53 +191,73 @@ const Events = () => {
             The cult underground series. Every drop, every floor, every city.
           </p>
         </PageHero>
+
         <Marquee
           bg="bg-acid-yellow"
           items={["DOORS OPEN LATE", "BRING YOUR PACK", "NO DRESS CODE — MOVE", "SOLD-OUT IS A LOVE LANGUAGE"]}
         />
-        <section className="container py-12 md:py-16">
+
+        <section className="container py-10 md:py-12">
           <Breadcrumbs items={[{ label: "Home", to: "/" }, { label: "Events" }]} />
 
-          <div className="grid gap-6 max-w-4xl mt-8">
-            {all.map((e, i) => {
-              const upcomingPalette = [
-                { bg: "bg-magenta", text: "text-cream", chip: "bg-acid-yellow text-ink" },
-                { bg: "bg-electric-blue", text: "text-cream", chip: "bg-acid-yellow text-ink" },
-                { bg: "bg-acid-yellow", text: "text-ink", chip: "bg-magenta text-cream" },
-              ];
-              const isUpcoming = e.status === "upcoming";
-              const upIdx = all.filter((x, j) => j < i && x.status === "upcoming").length;
-              const palette = isUpcoming
-                ? upcomingPalette[upIdx % upcomingPalette.length]
-                : { bg: "bg-cream", text: "text-ink", chip: "bg-ink text-cream" };
-              return (
-                <Link
-                  key={e.slug}
-                  to={`/events/${e.slug}`}
-                  className={`relative block border-4 border-ink chunk-shadow p-6 md:p-8 hover:-translate-y-1 hover:translate-x-1 transition-transform ${palette.bg} ${palette.text}`}
-                >
-                  {isUpcoming && (
-                    <span className="absolute -top-3 -right-3 rotate-6 bg-ink text-acid-yellow font-display text-xs md:text-sm px-3 py-1 border-4 border-ink">
-                      LATE NIGHT ✦
-                    </span>
-                  )}
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`text-xs font-bold px-3 py-1 border-2 border-ink uppercase ${palette.chip}`}>
-                      {isUpcoming ? "UPCOMING · RSVP" : "PAST"}
-                    </span>
-                    <span className="font-display text-lg">{e.date}</span>
-                  </div>
-                  <h2 className="font-display text-4xl md:text-6xl mb-2">{e.title.toUpperCase()}</h2>
-                  <p className="font-medium opacity-90">{e.city} · {e.venue}</p>
-                </Link>
-              );
-            })}
-          </div>
+          {featured && <FeaturedEventCard event={featured} />}
         </section>
+
+        {seriesGroup && (
+          <SeriesStrip
+            events={seriesGroup.events}
+            currentSlug={undefined}
+            seriesLabel={seriesGroup.label}
+            variant="banner"
+          />
+        )}
+
+        {restUpcoming.length > 0 && (
+          <section className="container py-10 md:py-14">
+            <p className="font-display text-magenta text-base md:text-lg mb-3">/ MORE UPCOMING</p>
+            <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight mb-6">
+              ON THE CALENDAR.
+            </h2>
+            <div className="grid gap-4 md:gap-6 md:grid-cols-2">
+              {restUpcoming.map((e, i) => (
+                <EventLineCard key={e.slug} event={e} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {past.length > 0 && (
+          <section className="bg-cream border-y-4 border-ink py-12 md:py-16">
+            <div className="container">
+              <p className="font-display text-magenta text-base md:text-lg mb-3">/ RECAP</p>
+              <h2 className="font-display text-ink text-3xl md:text-5xl leading-tight mb-6">
+                PAST EPISODES.
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {past.map((e) => (
+                  <Link
+                    key={e.slug}
+                    to={`/events/${e.slug}`}
+                    className="block bg-background border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform"
+                  >
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 border-2 border-ink uppercase tracking-widest bg-ink text-cream mb-3">
+                      PAST
+                    </span>
+                    <h3 className="font-display text-2xl md:text-3xl text-ink leading-tight mb-1 break-words">
+                      {e.title.toUpperCase()}
+                    </h3>
+                    <p className="text-ink/70 font-medium text-sm">
+                      {e.date} · {e.city} · {e.venue}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         <CuratedEvents />
 
-        {/* Host strip — moved to bottom per request */}
         <section className="bg-ink border-y-4 border-ink py-10 md:py-14">
           <div className="container flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>
@@ -193,6 +278,124 @@ const Events = () => {
         <Footer />
       </main>
     </>
+  );
+};
+
+// ──────────────────── sub-components ────────────────────
+
+const FeaturedEventCard = ({ event }: { event: EventRow }) => {
+  const isUpcoming = event.status === "upcoming";
+  const poster = resolvePosterUrl(event.poster_url);
+  const content = getEventContent(event);
+
+  return (
+    <Link
+      to={`/events/${event.slug}`}
+      className="block bg-magenta text-cream border-4 border-ink chunk-shadow-lg overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform"
+    >
+      <div className="grid md:grid-cols-[0.9fr_1.1fr]">
+        <div className="bg-ink relative">
+          {poster ? (
+            <img
+              src={poster}
+              alt={`${event.title} poster`}
+              loading="eager"
+              className="w-full h-full object-cover aspect-[3/4] md:aspect-auto"
+            />
+          ) : (
+            <EventPosterPlaceholder
+              title={event.title}
+              date={event.date}
+              city={event.city || "Bangalore"}
+              eyebrow={event.series_label ?? undefined}
+              lineup={(event.lineup ?? []).join(" · ")}
+            />
+          )}
+        </div>
+        <div className="p-6 md:p-8 flex flex-col justify-center">
+          <p className="font-display text-acid-yellow text-xs md:text-sm tracking-[0.3em] mb-3">
+            / {isUpcoming ? "NEXT UP" : "FEATURED"}
+          </p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {event.series_label && (
+              <span className="text-[10px] font-bold px-2 py-1 border-2 border-cream uppercase tracking-widest bg-cream text-ink">
+                {event.series_label}
+              </span>
+            )}
+            {event.pet_friendly && (
+              <span className="text-[10px] font-bold px-2 py-1 border-2 border-cream uppercase tracking-widest bg-electric-blue text-cream">
+                🐾 PET-FRIENDLY
+              </span>
+            )}
+            {event.is_finale && (
+              <span className="text-[10px] font-bold px-2 py-1 border-2 border-cream uppercase tracking-widest bg-acid-yellow text-ink">
+                ★ FINALE
+              </span>
+            )}
+          </div>
+          <h2 className="font-display text-5xl md:text-7xl leading-[0.85] mb-4 break-words">
+            {event.title.toUpperCase()}
+          </h2>
+          <p className="font-display text-base md:text-lg tracking-widest text-acid-yellow mb-2">
+            {event.date}
+          </p>
+          <p className="font-medium text-cream/90 mb-5">
+            {event.venue} · {event.city}
+          </p>
+          {event.blurb && (
+            <p className="text-cream/80 font-medium leading-snug mb-6 line-clamp-3 max-w-xl">
+              {event.blurb}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3 items-center mt-auto">
+            <span className="bg-acid-yellow text-ink font-display text-base md:text-lg px-5 py-3 border-4 border-ink chunk-shadow">
+              {isUpcoming ? content.cta_label ?? "RSVP →" : "READ THE RECAP →"}
+            </span>
+            {content.peak_time && (
+              <span className="font-display text-xs tracking-widest text-acid-yellow">
+                / FLOOR PEAKS {content.peak_time}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+const EventLineCard = ({ event, index }: { event: EventRow; index: number }) => {
+  const palettes = [
+    { bg: "bg-electric-blue", text: "text-cream", chip: "bg-acid-yellow text-ink" },
+    { bg: "bg-acid-yellow",   text: "text-ink",   chip: "bg-magenta text-cream"    },
+    { bg: "bg-cream",         text: "text-ink",   chip: "bg-ink text-cream"        },
+  ];
+  const palette = palettes[index % palettes.length];
+  return (
+    <Link
+      to={`/events/${event.slug}`}
+      className={`relative block border-4 border-ink chunk-shadow p-6 md:p-7 hover:-translate-y-1 hover:translate-x-1 transition-transform ${palette.bg} ${palette.text}`}
+    >
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          <span className={`text-[10px] font-bold px-2 py-1 border-2 border-ink uppercase tracking-widest ${palette.chip}`}>
+            UPCOMING · RSVP
+          </span>
+          {event.series_label && (
+            <span className="text-[10px] font-bold px-2 py-1 border-2 border-ink uppercase tracking-widest bg-ink text-cream">
+              {event.series_label}
+            </span>
+          )}
+          {event.pet_friendly && <span className="text-base" aria-label="pet-friendly">🐾</span>}
+        </div>
+        <span className="font-display text-base md:text-lg whitespace-nowrap">{event.date}</span>
+      </div>
+      <h3 className="font-display text-3xl md:text-5xl leading-none mb-2 break-words">
+        {event.title.toUpperCase()}
+      </h3>
+      <p className="font-medium opacity-90">
+        {event.city} · {event.venue}
+      </p>
+    </Link>
   );
 };
 
