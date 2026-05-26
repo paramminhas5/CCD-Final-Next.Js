@@ -15,6 +15,7 @@ import ArtistAudioEmbed from "@/components/ArtistAudioEmbed";
 import ArtistGigChart from "@/components/ArtistGigChart";
 import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
 import SimilarArtists from "@/components/SimilarArtists";
+import FollowButton from "@/components/FollowButton";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -269,6 +270,7 @@ export default function ArtistDetailPage() {
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? "COPIED" : "COPY LINK"}
                 </button>
+                <FollowButton artistSlug={artist.slug} artistName={artist.name} />
               </div>
 
               {/* Book button */}
