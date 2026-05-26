@@ -985,6 +985,137 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // ── Artist Marketplace: Booking Requests ────────────────────────────────────
+  // POST /api/booking-inquiry  { artist_slug, artist_name, requester_name, requester_email, requester_phone?, purpose, event_date?, venue?, budget?, notes? }
+  // Creates a booking inquiry — no OTP needed for marketplace (lower friction)
+  if (path === "booking-inquiry" && m === "POST") {
+    const { artist_slug, artist_name, requester_name, requester_email, requester_phone, purpose, event_date, venue, budget, notes } = body;
+    if (!artist_slug || !artist_name || !requester_email || !requester_name) {
+      return res.status(400).json({ error: "artist_slug, artist_name, requester_name, requester_email are required" });
+    }
+    const now = new Date().toISOString();
+    const { ok, data } = await ins("booking_requests", {
+      artist_id: null, // will be resolved if artist is approved
+      artist_name,
+      requester_email: requester_email.toLowerCase().trim(),
+      requester_phone: requester_phone ?? null,
+      purpose: [purpose, event_date ? `Date: ${event_date}` : null, venue ? `Venue: ${venue}` : null, budget ? `Budget: ${budget}` : null, notes].filter(Boolean).join(" | ") || null,
+      forward_requested: true,
+      ip_hash: null,
+      user_agent: req.headers["user-agent"] ?? null,
+      created_at: now,
+    });
+    if (!ok) return res.status(500).json({ error: "Failed to save booking request" });
+    return res.json({ ok: true, message: "Booking inquiry submitted. The artist will be notified." });
+  }
+
+  // GET /api/booking-inquiries?artist_slug=xxx  — for artist portal
+  if (path === "booking-inquiries" && m === "GET") {
+    const slug = rq.artist_slug;
+    if (!slug) return res.status(400).json({ error: "artist_slug required" });
+    // Look up artist to get their name
+    const artistRows = await get("artists", pq({ ...eqf("slug", slug) })) as any[];
+    const artistName = artistRows?.[0]?.name;
+    if (!artistName) return res.json([]);
+    const inquiries = await get("booking_requests", pq({ ...eqf("artist_name", artistName), ...ord("created_at", false) }));
+    return res.json(inquiries ?? []);
+  }
+
+  // ── Artist Availability ───────────────────────────────────────────────────────
+  // GET /api/artist-availability?slug=xxx  — public: returns available months/cities
+  if (path === "artist-availability" && m === "GET") {
+    const slug = rq.slug;
+    if (!slug) return res.status(400).json({ error: "slug required" });
+    const artistRows = await get("artists", pq(eqf("slug", slug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Not found" });
+    const artist = artistRows[0];
+    // Get upcoming public dates
+    const today = new Date().toISOString().split("T")[0];
+    const dates = await get("artist_dates", pq({ ...eqf("artist_id", artist.id), ...eqf("is_public","true"), "event_date": `gte.${today}`, ...ord("event_date") }));
+    return res.json({
+      available_cities: artist.available_cities ?? [],
+      fee_range: artist.fee_min_inr || artist.fee_max_inr ? {
+        min: artist.fee_min_inr,
+        max: artist.fee_max_inr,
+        currency: artist.fee_currency ?? "INR",
+      } : null,
+      open_to_bookings: artist.open_to_bookings ?? false,
+      upcoming_dates: dates ?? [],
+    });
+  }
+
+  // ── Marketplace browse: artists available in city/genre ──────────────────────
+  // GET /api/marketplace/artists?city=Mumbai&genre=Techno&fee_max=50000
+  if (path === "marketplace/artists" && m === "GET") {
+    const f: Record<string,string> = { ...eqf("status", "approved"), ...eqf("open_to_bookings", "true"), ...ord("name") };
+    // City filter: available_cities contains city (array overlap)
+    const city = rq.city;
+    if (city) f["available_cities"] = `cs.{${city}}`; // Postgres array contains
+    // Genre filter using LIKE on genres array cast
+    const rows = await get("artists", pq(f)) as any[];
+    // Post-filter by genre client-side (array contains check)
+    const genre = rq.genre;
+    const feeMax = rq.fee_max ? parseInt(rq.fee_max) : null;
+    const filtered = rows.filter((a: any) => {
+      if (genre && !(a.genres ?? []).some((g: string) => g.toLowerCase().includes(genre.toLowerCase()))) return false;
+      if (feeMax && a.fee_min_inr && a.fee_min_inr > feeMax) return false;
+      return true;
+    });
+    return res.json(filtered);
+  }
+
+  // ── User: follow/unfollow artist ─────────────────────────────────────────────
+  // POST /api/user/follow  { userId, artistSlug, action: "follow" | "unfollow" }
+  if (path === "user/follow" && m === "POST") {
+    const { userId, artistSlug, action: followAction } = body;
+    if (!userId || !artistSlug) return res.status(400).json({ error: "userId and artistSlug required" });
+    // Read current taste profile
+    const rows = await get("user_taste_profiles", pq(eqf("user_id", userId))) as any[];
+    const existing = rows?.[0];
+    const now = new Date().toISOString();
+
+    if (!existing) {
+      // Create new profile
+      const liked = followAction === "follow" ? [artistSlug] : [];
+      const { ok } = await ins("user_taste_profiles", { user_id: userId, liked_artist_slugs: liked, created_at: now, updated_at: now });
+      return ok ? res.json({ ok: true, following: liked.includes(artistSlug) }) : res.status(500).json({ error: "Failed" });
+    }
+
+    // Update existing profile
+    let liked: string[] = existing.liked_artist_slugs ?? [];
+    if (followAction === "follow") {
+      if (!liked.includes(artistSlug)) liked = [...liked, artistSlug];
+    } else {
+      liked = liked.filter((s: string) => s !== artistSlug);
+    }
+
+    const { ok } = await patch("user_taste_profiles", pq(eqf("user_id", userId)), { liked_artist_slugs: liked, updated_at: now });
+    return ok ? res.json({ ok: true, following: liked.includes(artistSlug) }) : res.status(500).json({ error: "Failed" });
+  }
+
+  // GET /api/user/profile?userId=xxx
+  if (path === "user/profile" && m === "GET") {
+    const userId = rq.userId;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    const rows = await get("user_taste_profiles", pq(eqf("user_id", userId))) as any[];
+    const profile = rows?.[0] ?? null;
+    return res.json(profile ?? { user_id: userId, liked_artist_slugs: [], cities: [], genres: [] });
+  }
+
+  // POST /api/user/profile  { userId, liked_artist_slugs?, cities?, genres? }
+  if (path === "user/profile" && m === "POST") {
+    const { userId, ...updates } = body;
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    const existing = await get("user_taste_profiles", pq(eqf("user_id", userId))) as any[];
+    const now = new Date().toISOString();
+    if (existing?.length) {
+      const { ok } = await patch("user_taste_profiles", pq(eqf("user_id", userId)), { ...updates, updated_at: now });
+      return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+    }
+    const { ok } = await ins("user_taste_profiles", { user_id: userId, ...updates, created_at: now, updated_at: now });
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+  }
+
   return res.status(404).json({ error: `No handler for ${m} /${path}` });
   } catch (err: any) {
     console.error("[proxy] unhandled error:", err);
