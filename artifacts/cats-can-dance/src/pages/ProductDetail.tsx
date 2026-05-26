@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "@/lib/compat-router";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { PRODUCT_BY_HANDLE_QUERY, storefrontApiRequest } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,8 @@ import SEO from "@/components/SEO";
 import { CartDrawer } from "@/components/CartDrawer";
 
 const ProductDetail = () => {
-  const { handle } = useParams<{ handle: string }>();
+  const router = useRouter();
+  const handle = router.query?.handle as string | undefined;
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
@@ -114,7 +116,7 @@ const ProductDetail = () => {
           <div className="absolute top-8 right-4 md:right-8 z-10">
             <CartDrawer />
           </div>
-          <Link to="/shop" className="inline-flex items-center gap-2 mb-8 font-bold hover:text-magenta">
+          <Link href="/shop" className="inline-flex items-center gap-2 mb-8 font-bold hover:text-magenta">
             <ArrowLeft className="w-4 h-4" /> BACK TO SHOP
           </Link>
 
@@ -222,15 +224,15 @@ const ProductDetail = () => {
           <div className="container">
             <p className="font-display text-magenta text-base md:text-lg mb-4">/ MORE FROM CATS CAN DANCE</p>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Link to="/shop" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
+              <Link href="/shop" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
                 <p className="font-display text-ink text-2xl mb-1">SEE ALL CCD STREETWEAR →</p>
                 <p className="text-ink/70 text-sm font-medium">Limited drops, no restocks. Bangalore-made.</p>
               </Link>
-              <Link to="/pets" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
+              <Link href="/pets" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
                 <p className="font-display text-ink text-2xl mb-1">PET DROPS & TREATS →</p>
                 <p className="text-ink/70 text-sm font-medium">Cat bandanas, bucket hats, CCD treats.</p>
               </Link>
-              <Link to="/events" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
+              <Link href="/events" className="block bg-cream border-4 border-ink chunk-shadow p-5 hover:-translate-y-1 hover:translate-x-1 transition-transform">
                 <p className="font-display text-ink text-2xl mb-1">UPCOMING EPISODES →</p>
                 <p className="text-ink/70 text-sm font-medium">RSVP an underground night in Bangalore.</p>
               </Link>
