@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase-shim";
 
-export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general";
+export type PartnerKind = "venues" | "artists" | "investors" | "press" | "team" | "submit-event" | "general" | "sponsors";
 
 type KindConfig = {
   title: string;
@@ -59,6 +59,20 @@ const KIND_CONFIG: Record<PartnerKind, KindConfig> = {
     eyebrow: "/ DROP US A LINE",
     reasons: ["General", "Brand collab", "Other"],
     fallbackEmail: "hello@catscandance.com",
+  },
+  sponsors: {
+    title: "SPONSORSHIP ENQUIRY",
+    eyebrow: "/ CCD × SOCIAL — SPONSORSHIP",
+    reasons: [
+      "Title sponsor",
+      "Show sponsor",
+      "Activation partner",
+      "Vendor / market stall",
+      "Media partner",
+      "Other",
+    ],
+    fallbackEmail: "sponsors@catscandance.com",
+    fallbackSubject: "CCD × SOCIAL — Sponsorship enquiry",
   },
 };
 
