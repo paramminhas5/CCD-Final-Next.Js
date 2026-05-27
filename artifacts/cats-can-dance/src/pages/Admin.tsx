@@ -396,7 +396,7 @@ const Admin = () => {
     } catch {
       sessionStorage.removeItem(PASS_KEY);
       setAuthed(false);
-      toast.error("Wrong password.");
+      toast.error("Wrong password — or the admin API is unreachable. Check /api/health in your browser.");
     } finally {
       setBusy(false);
     }
@@ -596,6 +596,14 @@ const Admin = () => {
                 {busy ? "CHECKING…" : "UNLOCK"}
               </button>
             </form>
+            <div className="mt-6 border-t-4 border-ink/20 pt-4">
+              <p className="font-display text-xs text-ink/50 uppercase tracking-widest mb-2">Troubleshooting</p>
+              <ul className="text-xs text-ink/60 space-y-1">
+                <li>• Default password: <code className="font-mono bg-acid-yellow/30 px-1">84838281</code></li>
+                <li>• Set <code className="font-mono">ADMIN_PASSWORD</code> in Vercel env vars to change it</li>
+                <li>• If panel loads blank, check <a href="/api/health" target="_blank" rel="noreferrer" className="underline text-magenta">API health</a></li>
+              </ul>
+            </div>
           </div>
         ) : (
           <div>
@@ -1523,54 +1531,6 @@ const EventEditor = ({
           onChange={(v) => onChange({ ...event, sort_order: Number(v) || 0 })}
         />
       </div>
-
-      {/* ── Series fields ─────────────────────────────────────────────────── */}
-      <div className="border-t-4 border-ink pt-4">
-        <p className="font-display text-xs text-ink/50 uppercase tracking-widest mb-3">Series / Special Event Settings</p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <Field
-            label="Series slug (e.g. ccdxsocial)"
-            value={(event as any).series ?? ""}
-            onChange={(v) => onChange({ ...event, ...(v ? { series: v } : { series: null }) } as any)}
-          />
-          <Field
-            label="Series label (e.g. CCD × SOCIAL)"
-            value={(event as any).series_label ?? ""}
-            onChange={(v) => onChange({ ...event, ...(v ? { series_label: v } : { series_label: null }) } as any)}
-          />
-          <Field
-            label="Event type (e.g. ccdxsocial)"
-            value={(event as any).event_type ?? ""}
-            onChange={(v) => onChange({ ...event, ...(v ? { event_type: v } : { event_type: null }) } as any)}
-          />
-          <Field
-            label="Series tagline (e.g. BROAD · WELCOMING)"
-            value={(event as any).series_tagline ?? ""}
-            onChange={(v) => onChange({ ...event, ...(v ? { series_tagline: v } : { series_tagline: null }) } as any)}
-          />
-        </div>
-        <div className="flex items-center gap-4 mt-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={!!(event as any).pet_friendly}
-              onChange={(e) => onChange({ ...event, pet_friendly: e.target.checked } as any)}
-              className="w-5 h-5 border-4 border-ink accent-magenta"
-            />
-            <span className="font-display text-sm text-ink">🐾 Pet Friendly (shows pet zone section on event page)</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={!!(event as any).is_finale}
-              onChange={(e) => onChange({ ...event, is_finale: e.target.checked } as any)}
-              className="w-5 h-5 border-4 border-ink accent-magenta"
-            />
-            <span className="font-display text-sm text-ink">★ Season Finale</span>
-          </label>
-        </div>
-      </div>
-
       <div>
         <label className="block font-display text-sm text-ink mb-1">Blurb</label>
         <textarea

@@ -9,9 +9,41 @@ const groups = [
     links: [
       { to: "/", label: "Home" },
       { to: "/about", label: "About" },
+      { to: "/discover", label: "Discover" },
       { to: "/events", label: "Events" },
-      { to: "/events", label: "CCDxSocial Shows" },
       { to: "/shop", label: "Shop" },
+    ],
+  },
+  {
+    title: "SCENES",
+    links: [
+      { to: "/scene/bengaluru", label: "Bengaluru" },
+      { to: "/scene/mumbai", label: "Mumbai" },
+      { to: "/scene/delhi", label: "Delhi" },
+      { to: "/scene/goa", label: "Goa" },
+      { to: "/scene/hyderabad", label: "Hyderabad" },
+      { to: "/scene/pune", label: "Pune" },
+    ],
+  },
+  {
+    title: "GENRES",
+    links: [
+      { to: "/genres/techno", label: "Techno" },
+      { to: "/genres/house", label: "House" },
+      { to: "/genres/jungle-dnb", label: "Jungle / D&B" },
+      { to: "/genres/uk-garage", label: "UK Garage" },
+      { to: "/genres/disco", label: "Disco" },
+      { to: "/genres/ambient", label: "Ambient" },
+    ],
+  },
+  {
+    title: "GLOBAL ORIGINS",
+    links: [
+      { to: "/scenes/detroit-techno", label: "Detroit Techno" },
+      { to: "/scenes/chicago-house", label: "Chicago House" },
+      { to: "/scenes/london-jungle", label: "London Jungle" },
+      { to: "/scenes/berlin-techno", label: "Berlin Techno" },
+      { to: "/scenes/goa-trance", label: "Goa Trance" },
     ],
   },
   {
@@ -42,7 +74,6 @@ const groups = [
       { to: "/for-venues", label: "Venue Partners" },
       { to: "/for-artists", label: "For Artists" },
       { to: "/for-investors", label: "For Investors" },
-      { to: "/ccdxsocial/sponsor", label: "Sponsor a Show" },
     ],
   },
   {

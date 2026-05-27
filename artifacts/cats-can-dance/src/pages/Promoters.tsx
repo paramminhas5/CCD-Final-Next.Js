@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "@/lib/compat-router";
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import PageHero from "@/components/PageHero";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase-shim";
 
 type Promoter = {
   id: string;
@@ -28,7 +27,9 @@ const PromoterCard = ({ p }: { p: Promoter }) => (
   <article className="bg-cream border-4 border-ink chunk-shadow p-5 flex flex-col gap-3 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
     <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h3 className="font-display text-xl text-ink leading-tight uppercase truncate">{p.name}</h3>
+        <Link href={`/promoters/${p.slug}`}>
+          <h3 className="font-display text-xl text-ink leading-tight uppercase truncate hover:text-magenta transition-colors">{p.name}</h3>
+        </Link>
         <p className="text-xs text-ink/60 mt-1">{p.city ?? p.cities[0] ?? ""}</p>
       </div>
       {p.trusted && (
@@ -73,15 +74,16 @@ const PromotersPage = () => {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("promoters")
-        .select("id,slug,name,city,cities,blurb,genres,instagram,website,booking_email,logo_url,trusted")
-        .eq("status", "approved")
-        .order("trusted", { ascending: false })
-        .order("name", { ascending: true });
-      if (error) console.error("promoters fetch", error);
-      setRows((data ?? []) as Promoter[]);
-      setLoading(false);
+      try {
+        const res = await fetch("/api/promoters");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setRows((data ?? []) as Promoter[]);
+      } catch (e) {
+        console.error("promoters fetch", e);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -164,7 +166,9 @@ const PromotersPage = () => {
           <p className="text-cream/80 mb-4 text-sm">
             We're always adding promoters who programme real underground electronic music. Get in touch and we'll feature your events.
           </p>
-          <Link to="/submit-event" className="inline-block bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-cream chunk-shadow text-sm">
+          <Link
+            href="/submit-event"
+            className="inline-block bg-acid-yellow text-ink font-display px-5 py-2 border-4 border-cream chunk-shadow text-sm">
             Submit your night →
           </Link>
         </div>

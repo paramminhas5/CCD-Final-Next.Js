@@ -6,7 +6,6 @@ import Footer from "@/components/Footer";
 import PageHero from "@/components/PageHero";
 import Marquee from "@/components/Marquee";
 import SEO from "@/components/SEO";
-import { supabase } from "@/integrations/supabase/client";
 
 interface DBArtist {
   id: string;
@@ -71,19 +70,10 @@ export default function ArtistsPage() {
       setLoading(true);
       setError(null);
       try {
-        const { data, error } = await supabase
-          .from("artists")
-          .select(
-            "id,slug,name,members,from_city,based_city,genres,festivals,bio,why,instagram,soundcloud,website,booking_email,photo_url,labels,fee_min_inr,fee_max_inr,videos,gallery"
-          )
-          .eq("status", "approved")
-          .order("name", { ascending: true });
-
-        if (error) {
-          setError(error.message);
-        } else {
-          setArtists((data ?? []) as DBArtist[]);
-        }
+        const res = await fetch("/api/artists");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setArtists((data ?? []) as DBArtist[]);
       } catch (e: any) {
         setError(e.message || "Unexpected error");
       } finally {

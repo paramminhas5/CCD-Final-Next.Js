@@ -11,6 +11,11 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import Marquee from "@/components/Marquee";
 import { useToast } from "@/hooks/use-toast";
+import ArtistAudioEmbed from "@/components/ArtistAudioEmbed";
+import ArtistGigChart from "@/components/ArtistGigChart";
+import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
+import SimilarArtists from "@/components/SimilarArtists";
+import FollowButton from "@/components/FollowButton";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -265,14 +270,21 @@ export default function ArtistDetailPage() {
                   {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? "COPIED" : "COPY LINK"}
                 </button>
+                <FollowButton artistSlug={artist.slug} artistName={artist.name} />
               </div>
 
               {/* Book button */}
-              {artist.open_to_bookings && artist.booking_email && (
-                <div className="mt-4">
-                  <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
-                    className="inline-flex items-center gap-2 bg-magenta text-cream font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                    <Mail className="w-4 h-4" /> BOOK ARTIST →
+              {artist.open_to_bookings && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {artist.booking_email && (
+                    <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
+                      className="inline-flex items-center gap-2 bg-magenta text-cream font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                      <Mail className="w-4 h-4" /> BOOK ARTIST →
+                    </a>
+                  )}
+                  <a href={`/book?q=${encodeURIComponent(artist.name)}`}
+                    className="inline-flex items-center gap-2 bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                    VIEW ON MARKETPLACE
                   </a>
                 </div>
               )}
@@ -339,6 +351,15 @@ export default function ArtistDetailPage() {
                   </div>
                 </section>
               )}
+
+              {/* Audio embeds */}
+              <section className="max-w-xl">
+                <ArtistAudioEmbed
+                  soundcloud={artist.soundcloud}
+                  spotify={artist.spotify}
+                  artistName={artist.name}
+                />
+              </section>
 
               {/* Cool Facts */}
               {facts.length > 0 && (
@@ -455,37 +476,7 @@ export default function ArtistDetailPage() {
           {activeTab === "connections" && (
             <div className="space-y-6">
               <h2 className="font-display text-3xl text-ink">CONNECTIONS</h2>
-              {connections.length === 0 ? (
-                <div className="border-4 border-ink bg-acid-yellow chunk-shadow p-6 inline-block">
-                  <p className="font-display text-xl text-ink">NO CONNECTIONS YET.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-                  {connections.map((conn, i) => {
-                    const partner = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
-                    return (
-                      <div key={i} className="border-4 border-ink bg-cream chunk-shadow p-5">
-                        <Link href={`/artists/${partner}`} className="font-display text-xl text-ink hover:text-magenta transition-colors block mb-1">
-                          {partner.replace(/-/g, " ").toUpperCase()} →
-                        </Link>
-                        <p className="text-xs text-ink/50 font-display mb-3">{conn.connection_type.toUpperCase()}</p>
-                        {/* Strength bar */}
-                        <div className="flex gap-1 mb-3">
-                          {Array.from({ length: 10 }).map((_, j) => (
-                            <div key={j} className={`h-2 flex-1 border border-ink ${j < conn.strength ? "bg-ink" : "bg-transparent"}`} />
-                          ))}
-                        </div>
-                        {conn.shared_events.length > 0 && (
-                          <p className="text-xs text-ink/50">
-                            {conn.shared_events.slice(0, 2).join(", ")}
-                            {conn.shared_events.length > 2 && ` +${conn.shared_events.length - 2} more`}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <ArtistConnectionGraph slug={artist.slug} connections={connections} />
             </div>
           )}
 
@@ -557,6 +548,10 @@ export default function ArtistDetailPage() {
                         <p className="font-display text-xs text-ink/50 mt-1">{label}</p>
                       </div>
                     ))}
+                  </div>
+                  {/* Gig history chart */}
+                  <div className="max-w-2xl">
+                    <ArtistGigChart appearances={appearances} />
                   </div>
 
                   {/* Top cities */}
@@ -658,6 +653,11 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
+      <SimilarArtists
+        slug={artist.slug}
+        genres={artist.genres}
+        connections={connections}
+      />
       <Marquee bg="bg-ink" />
       <Footer />
     </main>

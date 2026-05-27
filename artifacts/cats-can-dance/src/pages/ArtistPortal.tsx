@@ -304,8 +304,87 @@ function BookingInbox({ artistId }: { artistId: string }) {
   );
 }
 
+/* ─── Marketplace Inbox ──────────────────────────────────────────────────── */
+function MarketplaceInbox({ artistSlug, artistName }: { artistSlug: string; artistName: string }) {
+  const [inquiries, setInquiries] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/booking-inquiries?artist_slug=${encodeURIComponent(artistSlug)}`)
+      .then(r => r.json())
+      .then(data => { setInquiries(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [artistSlug]);
+
+  return (
+    <div className="space-y-5">
+      <div className="border-b-4 border-ink pb-4 flex items-end justify-between">
+        <div>
+          <h2 className="font-display text-2xl uppercase text-ink">Booking Inquiries</h2>
+          <p className="text-sm text-ink/60 mt-1">Direct booking requests from venues and promoters via <a href="/book" className="underline text-magenta">/book</a></p>
+        </div>
+        {inquiries.length > 0 && (
+          <span className="font-display text-xs uppercase bg-acid-yellow text-ink px-3 py-1 border-2 border-ink">
+            {inquiries.length} request{inquiries.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      {loading ? (
+        <p className="font-display text-sm text-ink/50 animate-pulse">Loading…</p>
+      ) : inquiries.length === 0 ? (
+        <div className="border-4 border-ink bg-acid-yellow p-8 text-center">
+          <p className="font-display text-lg text-ink mb-2">No Inquiries Yet</p>
+          <p className="text-sm text-ink/60">Booking inquiries sent through <a href="/book" className="underline">catscandance.com/book</a> will appear here.</p>
+          <p className="text-sm text-ink/50 mt-2">Make sure your profile shows <strong>open_to_bookings: true</strong> and has cities set.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {inquiries.map((b) => (
+            <div key={b.id} className="border-4 border-ink bg-cream p-5 chunk-shadow">
+              <div className="flex justify-between items-start gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <p className="font-display text-lg text-ink">{b.requester_email}</p>
+                  {b.requester_phone && <p className="text-sm text-ink/60 mt-0.5">{b.requester_phone}</p>}
+                  {b.purpose && (
+                    <div className="mt-2 space-y-1">
+                      {b.purpose.split(" | ").map((part, i) => (
+                        <p key={i} className="text-sm text-ink/80">{part}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-display text-xs text-ink/50">
+                    {new Date(b.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                  <span className="font-display text-[10px] uppercase bg-electric-blue text-cream px-2 py-0.5 border border-ink mt-1 inline-block">
+                    Marketplace
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <a href={`mailto:${b.requester_email}?subject=Re: Booking request for ${artistName}`}
+                  className="font-display text-xs uppercase bg-magenta text-cream px-4 py-2 border-2 border-ink hover:bg-ink transition-colors">
+                  Reply by Email →
+                </a>
+                {b.requester_phone && (
+                  <a href={`https://wa.me/${b.requester_phone.replace(/\D/g, "")}?text=Hi, I received your booking inquiry for ${artistName}`}
+                    target="_blank" rel="noreferrer"
+                    className="font-display text-xs uppercase bg-acid-yellow text-ink px-4 py-2 border-2 border-ink hover:bg-orange transition-colors">
+                    WhatsApp
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main Dashboard ─────────────────────────────────────────────────────── */
-type Tab = "profile" | "dates" | "bookings";
+type Tab = "profile" | "dates" | "bookings" | "inquiries";
 
 const ArtistPortal = () => {
   const navigate = useNavigate();
@@ -440,6 +519,7 @@ const ArtistPortal = () => {
     { key: "profile", label: "Profile" },
     { key: "dates", label: "Dates" },
     { key: "bookings", label: "Bookings" },
+    { key: "inquiries", label: "📩 Inquiries" },
   ];
 
   return (
@@ -487,6 +567,7 @@ const ArtistPortal = () => {
         {tab === "profile" && <ProfileEditor artist={artist} onSaved={setArtist} />}
         {tab === "dates" && <DateManager artistId={artist.id} />}
         {tab === "bookings" && <BookingInbox artistId={artist.id} />}
+        {tab === "inquiries" && <MarketplaceInbox artistSlug={artist.slug} artistName={artist.name} />}
       </div>
       <Footer />
     </div>

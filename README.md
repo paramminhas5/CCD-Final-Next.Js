@@ -1,311 +1,607 @@
-# Cats Can Dance — Next.js Web App
+# 🐱 Cats Can Dance — Platform
 
-> Bangalore's underground dance music crew + streetwear label. Events, drops, playlists, community.
+> **India's definitive underground electronic music platform.**
+> Events · Artists · Scenes · Culture · Shop · Ticketing
 
-**Live site:** [catscandance.com](https://catscandance.com)  
-**Stack:** Next.js 14 (Pages Router) · TypeScript · TailwindCSS · Supabase · Clerk Auth
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://typescriptlang.org)
+[![pnpm](https://img.shields.io/badge/pnpm-monorepo-orange)](https://pnpm.io)
 
 ---
 
 ## Table of Contents
 
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [What Was Built — CCDxSocial Series Update](#what-was-built--ccdxsocial-series-update)
-- [How to Go Live with the Events](#how-to-go-live-with-the-events)
-- [Architecture: The Series Template](#architecture-the-series-template)
-- [Next Steps](#next-steps)
-- [Suggestions](#suggestions)
-- [Environment Variables](#environment-variables)
+1. [What Is This?](#what-is-this)
+2. [Monorepo Structure](#monorepo-structure)
+3. [Tech Stack](#tech-stack)
+4. [Getting Started](#getting-started)
+5. [Environment Variables](#environment-variables)
+6. [Features Built](#features-built)
+7. [Features In Progress / Broken](#features-in-progress--broken)
+8. [Database Schema](#database-schema)
+9. [API Reference](#api-reference)
+10. [Roadmap](#roadmap)
+11. [Design System](#design-system)
+12. [Contributing](#contributing)
 
 ---
 
-## Project Structure
+
+## What Is This?
+
+Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — events, streetwear, culture. This repo is the full-stack platform powering `catscandance.com`.
+
+**Three audiences it serves:**
+- 🎧 **Fans / newcomers** — discover the Indian underground scene, find events, learn genres
+- 🎛️ **Artists** — self-service profile management, tour dates, booking requests inbox
+- 🎪 **Promoters / venues** — submit events, get listed, (coming) sell tickets through the platform
+
+**Vision:** Become the definitive digital home for India's electronic music scene, contextualised within global scenes (Detroit Techno, Chicago House, London Jungle, Goa Trance). The Resident Advisor of India, built by the people who live it.
+
+---
+
+## Monorepo Structure
 
 ```
-artifacts/cats-can-dance/     ← Main Next.js app
-├── pages/                    ← Next.js routes (thin wrappers)
-│   ├── events/               ← /events, /events/[slug]
-│   ├── ccdxsocial/           ← /ccdxsocial, /ccdxsocial/sponsor, /ccdxsocial/events
-│   └── ...
-├── src/
-│   ├── types/events.ts       ← Shared EventRow type (series-aware)
-│   ├── pages/                ← Page implementations
-│   │   ├── Events.tsx        ← /events page — series-first layout
-│   │   ├── EventDetail.tsx   ← /events/[slug] — pet zone + series siblings
-│   │   ├── CcdxSocial.tsx    ← /ccdxsocial (private proposal doc)
-│   │   └── CcdxSocialSponsor.tsx ← /ccdxsocial/sponsor (NEW)
-│   └── components/
-│       ├── Events.tsx        ← Homepage events section (series-aware)
-│       ├── Nav.tsx           ← Global nav (Sponsor a Show added)
-│       ├── Footer.tsx        ← Global footer (CCDxSocial links added)
-│       └── PartnerContactDialog.tsx ← Contact dialog (sponsors kind added)
-├── public/
-│   └── ccdxsocial-seed.sql   ← Supabase seed for the 3 shows + finale
-artifacts/api-server/         ← Express API server
-lib/                          ← Shared packages (db, api-spec, api-client)
-.migration-backup/            ← Original Vite/React source (reference only)
+/
+├── artifacts/
+│   ├── cats-can-dance/        ← Next.js 14 frontend (Pages Router)
+│   └── api-server/            ← Express 5 REST API server
+├── lib/
+│   ├── db/                    ← Drizzle ORM schema + Postgres
+│   ├── api-spec/              ← OpenAPI 3.1 YAML + Orval codegen config
+│   ├── api-client-react/      ← Auto-generated TanStack Query hooks
+│   └── api-zod/               ← Auto-generated Zod schemas
+├── scripts/                   ← SQL migrations, seed scripts
+├── .migration-backup/         ← Original Vite/React SPA (reference only)
+└── pnpm-workspace.yaml
 ```
 
----
-
-## Quick Start
-
-```bash
-cd artifacts/cats-can-dance
-npm install
-npm run dev
-```
-
-Requires `.env.local` — see [Environment Variables](#environment-variables).
-
----
-
-## What Was Built — CCDxSocial Series Update
-
-### PR #1 · `feat/ccdxsocial-events-series`
-
-This update wires the CCDxSocial pet lifestyle festival series into every part of the site and backend. Here's exactly what changed:
-
----
-
-### 1. `src/types/events.ts` — Shared Event Type *(new file)*
-
-A single source of truth for the `EventRow` type used across all components and pages. Added optional series fields that are **fully backward-compatible** — existing events work with zero changes:
-
-| Field | Type | Purpose |
-|---|---|---|
-| `series` | `string \| null` | Stable series slug, e.g. `"ccdxsocial"` |
-| `series_label` | `string \| null` | Display name, e.g. `"CCD × SOCIAL"` |
-| `event_type` | `string \| null` | Type key for conditional UI |
-| `pet_friendly` | `boolean \| null` | Shows pet zone section on event page |
-| `series_tagline` | `string \| null` | Short tagline on series cards |
-| `is_finale` | `boolean \| null` | Marks the season finale |
-
----
-
-### 2. `src/components/Events.tsx` — Homepage Events *(updated)*
-
-- Detects active series: **when 2+ upcoming events share the same `series` slug**, the component automatically switches to `SeriesBanner` mode
-- `SeriesBanner` shows all 3 show cards side-by-side with RSVP buttons + grand finale teaser
-- Falls back cleanly to the original single-featured layout when no series is active
-- Per-card RSVP dialogs work individually for each show
-
----
-
-### 3. `src/pages/Events.tsx` — `/events` Page *(updated)*
-
-- **Series is front and centre** at the top of the page when a series is active
-- `SeriesSection` component: 3 show cards, activities strip (Startdawg · Merman · Pet Zone · Agility · Portrait Booth), grand format finale dark-hero block
-- Standalone upcoming events (non-series) appear below the series
-- Past events unchanged
-- "Host with us" strip now includes **Sponsor a Show →** CTA alongside For Venues
-
----
-
-### 4. `src/pages/EventDetail.tsx` — `/events/[slug]` *(updated)*
-
-- **Series banner** at top of page: "Part of the CCD × SOCIAL series" with link back to /events
-- **Pet-friendly chips** on hero: 🐾 PET FRIENDLY · 🌿 OUTDOOR ZONE 4PM–8PM · 🎧 DANCE MUSIC TILL CLOSE
-- **`PetFriendlySchedule`** section: full 4PM–8PM timeline (doors → activities → peak → evening mode) + pet amenities chips — only shown when `pet_friendly: true`
-- **`SeriesSiblings`** section: dynamically fetches and displays the other events in the same series, plus a grand finale teaser card with Sponsor It CTA — only shown when `series` is set
-
----
-
-### 5. `src/pages/CcdxSocialSponsor.tsx` — `/ccdxsocial/sponsor` *(new page)*
-
-Full sponsor pitch page with:
-- **The Opportunity** — audience stats, demographic profile, reach numbers
-- **The Series** — 3 show cards + grand finale card with attendance projection
-- **Three sponsor tiers:**
-  - 🐾 **SERIES PARTNER** — All 3 shows + finale, headline placement, stage naming, co-branded content, email reach, website logo
-  - ✦ **SHOW SPONSOR** — One show of choice, headline logo, activation booth, co-branded content, social post
-  - 🌿 **COMMUNITY SUPPORTER** — All shows light touch, logo + social mentions, passes
-- **Who Should Sponsor** — 8 brand category cards
-- **What You Get** — activation space, content assets, social reach, co-branding, reporting
-- All CTAs use `PartnerContactDialog` with pre-filled reason + default message per tier
-
----
-
-### 6. `pages/ccdxsocial/sponsor.tsx` + `pages/ccdxsocial/events.tsx` *(new routes)*
-
-- `/ccdxsocial/sponsor` — renders the Sponsor page
-- `/ccdxsocial/events` — redirects to `/events` (preserves any external links)
-
----
-
-### 7. `src/pages/Admin.tsx` — Admin Dashboard *(updated)*
-
-Series fields added to the **EventEditor** in the admin Events tab:
-
-- Series slug input
-- Series label input
-- Event type input
-- Series tagline input
-- 🐾 Pet Friendly checkbox
-- ★ Season Finale checkbox
-
-Any future event series can be tagged from the admin dashboard — no code changes needed.
-
----
-
-### 8. `src/components/PartnerContactDialog.tsx` *(updated)*
-
-Added `"sponsors"` kind with:
-- 5 pre-filled reason options (Series Partner / Show Sponsor / Community Supporter / Grand Finale / Custom)
-- Default message pre-filled
-- Routes to `hello@catscandance.com` with subject `CCDxSocial Sponsorship Enquiry`
-
----
-
-### 9. `src/components/Footer.tsx` + `src/components/Nav.tsx` *(updated)*
-
-- Footer → EXPLORE section: **CCDxSocial Shows** link added
-- Footer → PARTNERS section: **Sponsor a Show** link added
-- Nav → Partners dropdown: **Sponsor a Show 🐾** added
-
----
-
-### 10. `public/ccdxsocial-seed.sql` *(new file)*
-
-Supabase SQL seed — see [How to Go Live](#how-to-go-live-with-the-events).
-
----
-
-## How to Go Live with the Events
-
-The frontend is live the moment the PR is merged. To activate the series banner and all three event pages, you need to seed the Supabase database:
-
-### Step 1 — Open Supabase SQL Editor
-
-Go to your project → SQL Editor → New query.
-
-### Step 2 — Paste and run the seed
-
-Copy the contents of `artifacts/cats-can-dance/public/ccdxsocial-seed.sql` and run it.
-
-This will:
-1. Add the series columns to your `events` table (if not already there)
-2. Insert all 4 CCDxSocial events (3 shows + finale) with `ON CONFLICT DO UPDATE` — safe to re-run
-
-### Step 3 — Verify
-
-```sql
-SELECT slug, title, date, series, pet_friendly, is_finale, sort_order
-FROM events
-WHERE series = 'ccdxsocial'
-ORDER BY sort_order;
-```
-
-Expected result: 4 rows with slugs `ccdxsocial-debut`, `ccdxsocial-groom-room`, `ccdxsocial-zoomies`, `ccdxsocial-grand-finale`.
-
-### Step 4 — Update lineup when confirmed
-
-Once Startdawg, Merman, and the 3 TBA artists are locked in, update the `lineup` column via `/admin` → Events tab, or directly in Supabase.
-
----
-
-## Architecture: The Series Template
-
-The series system is designed as a **reusable template** for every future event series. To create a new series:
-
-### In the Admin Dashboard (`/admin` → Events tab):
-
-For each event in the series, set:
-
-| Field | Example |
+**Package names:**
+| Package | Name |
 |---|---|
-| Series slug | `episode-2-series` |
-| Series label | `CCD EPISODE II` |
-| Event type | `standard` |
-| Series tagline | `WAREHOUSE · LATE NIGHT · ACID` |
-| Pet Friendly | ☐ (uncheck for non-pet events) |
-| Season Finale | ☐ or ☑ for the capstone show |
-
-When **2 or more upcoming events share the same series slug**, the series banner activates automatically across:
-- Homepage Events component
-- `/events` page (front and centre)
-- Individual event detail pages (series banner + sibling links)
-
-No code changes needed for future series.
+| `artifacts/cats-can-dance` | `@workspace/cats-can-dance` |
+| `artifacts/api-server` | `@workspace/api-server` |
+| `lib/db` | `@workspace/db` |
+| `lib/api-client-react` | `@workspace/api-client-react` |
 
 ---
 
-## Next Steps
 
-These are the immediate next actions to get the CCDxSocial series fully live:
+## Tech Stack
 
-### Must Do
+### Frontend (`artifacts/cats-can-dance`)
+| Layer | Tech | Notes |
+|---|---|---|
+| Framework | **Next.js 14** (Pages Router) | Migrated from Vite/React SPA |
+| Language | TypeScript 5.x (strict) | |
+| Auth | **Clerk** | Magic link replaced by Clerk OAuth |
+| State | **Zustand** (cart) + **TanStack Query v5** | |
+| UI | **shadcn/ui** (Radix primitives) + Tailwind CSS v3 | |
+| Animation | **Framer Motion v12** | Hero parallax, section reveals |
+| Carousel | **Embla Carousel** | Artist Spotlight |
+| Charts | **Recharts** | Artist gig stats |
+| Forms | **react-hook-form** + Zod | |
+| SEO | **react-helmet-async** | JSON-LD, OG tags, structured data |
+| Shop | **Shopify Storefront API** | Direct browser calls, cart via Zustand |
 
-- [ ] **Run `ccdxsocial-seed.sql`** in Supabase SQL Editor to activate the series on the live site
-- [ ] **Update lineup** once all 5 DJs are confirmed — edit via `/admin` → Events → lineup field
-- [ ] **Add event posters** — upload via `/admin` → Events → Poster upload for each show
-- [ ] **Confirm venues** — update venue name for each show (currently "Social, Indiranagar", "Social, Church Street", "Social, Koramangala" — adjust if needed)
-- [ ] **Set exact show dates** — Jun 21 and Jun 28/29 are set; confirm all three match actual booking dates
-- [ ] **Update the Grand Finale date** once confirmed — change `date` field from "Date TBA · 2026" to the actual date
+### Backend (`artifacts/api-server`)
+| Layer | Tech | Notes |
+|---|---|---|
+| Runtime | **Express 5** + Node.js | |
+| Database | **PostgreSQL** via Supabase | |
+| ORM | **Drizzle ORM** | Full typed schema |
+| Validation | **Zod v4** + drizzle-zod | |
+| Auth middleware | **Clerk Express** | |
+| API contract | **OpenAPI 3.1** YAML | Orval → TanStack Query hooks |
+| Logging | **Pino** | |
 
-### Should Do
+### Infrastructure
+| Layer | Tech |
+|---|---|
+| Database | Supabase (Postgres + storage) |
+| Auth | Clerk (with proxy URL support) |
+| Deployment | Vercel (frontend) + Railway/Render (API server) |
+| Package manager | pnpm workspaces |
 
-- [ ] **Create event posters** — design a poster per show in the CCD brutalist visual language and upload via admin; the events page becomes significantly more visually striking with posters
-- [ ] **Send sponsor pack** — the `/ccdxsocial/sponsor` page is live; follow up by email with the full deck to priority brands using `hello@catscandance.com`
-- [ ] **Add CCDxSocial to sitemap.xml** — add `/ccdxsocial/sponsor` to `public/sitemap.xml`
-- [ ] **Update `public/brand.json`** — add the CCDxSocial series to the `knownFor` and `categories` arrays so AI crawlers surface it
-- [ ] **Update `public/llms.txt` and `public/llms-full.txt`** — include the series for GEO (AI search) coverage
-- [ ] **Instagram + email campaign** — announce the series; link to `/events` for RSVPs and `/ccdxsocial/sponsor` for sponsors
-- [ ] **Submit updated sitemap to Google Search Console** after the events are live
+---
 
-### Nice to Have
 
-- [ ] Set up a countdown timer on the hero of each event detail page
-- [ ] Add a "Bring a friend" share button to the RSVP confirmation
-- [ ] Add pet-specific FAQ to each CCDxSocial event detail page (what animals are allowed, what to bring, etc.)
-- [ ] Create a CCDxSocial-specific OG image for social sharing previews
+## Getting Started
+
+### Prerequisites
+- Node.js 22+
+- pnpm 10+ (`npm install -g pnpm`)
+- A Supabase project
+- A Clerk application
+
+### Install
+```bash
+git clone https://github.com/paramminhas5/ccdkiroedit.git
+cd ccdkiroedit
+pnpm install
+```
+
+### Run the frontend
+```bash
+pnpm --filter @workspace/cats-can-dance dev
+# → http://localhost:3000
+```
+
+### Run the API server
+```bash
+pnpm --filter @workspace/api-server dev
+# → http://localhost:3001
+```
+
+### Run both together
+```bash
+# Terminal 1
+pnpm --filter @workspace/api-server dev
+
+# Terminal 2
+pnpm --filter @workspace/cats-can-dance dev
+```
+
+### Build (production)
+```bash
+pnpm --filter @workspace/cats-can-dance build
+```
 
 ---
 
-## Suggestions
-
-### On Sponsors
-
-1. **Lead with the finale** — the 2,000+ capacity grand format show is the anchor. Pitch series partners on the finale first, then back-fill individual show sponsors. The finale is where headline logos matter most.
-
-2. **Pet brand outreach shortlist** — Heads Up For Tails, Supertails, Wiggles India, Drools, Pawsitively are the obvious first five. All have marketing budgets and are actively looking for experiential activations.
-
-3. **Beverage brand angle** — position the outdoor pet zone (4PM–8PM, family-friendly) as a premium opportunity for non-alcoholic and health beverage brands who can't buy into traditional nightlife but want the same crowd.
-
-4. **Content package is the pitch** — the strongest sponsor sell is the content deliverable (photo + video assets within a week). Lead with that in every outreach email.
-
-### On Events
-
-5. **Keep sort_order 1–3 for the CCDxSocial shows** — the homepage series banner auto-activates based on sort order; don't add other upcoming events at sort_order 1–3 during June or they'll compete for the featured slot.
-
-6. **RSVP flow** — consider a post-RSVP confirmation email that mentions the pet zone rules (on-lead, vaccinated, calm dogs) to set expectations and reduce day-of friction.
-
-7. **Series cadence** — 3 shows in 9 days (Jun 21, 28, 29) is tight. If demand is strong after Show 01, you have an argument to extend the series into July. The series system supports adding events at any time.
-
-### On the Codebase
-
-8. **The series template is generic** — use the same `series` slug pattern for future themed runs (e.g. a rooftop summer series, a collab with another brand). Admin fields are already there — no code changes needed.
-
-9. **Admin panel** — the Events tab now has all series fields. Use it as your primary CMS for event management; it writes directly to Supabase via the `admin-content` edge function.
-
-10. **The `supabase-seed.sql` pattern** — keep this approach for any data you want to be reproducible across environments. Store future seeds in `public/` or a `scripts/` folder.
-
----
 
 ## Environment Variables
 
-Create `artifacts/cats-can-dance/.env.local`:
+### Frontend (`artifacts/cats-can-dance/.env.local`)
+```bash
+# Clerk auth
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CLERK_PROXY_URL=                          # Optional: for Replit/custom domain proxy
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-CLERK_SECRET_KEY=your_clerk_secret_key
+# Supabase (anon key is safe to expose — RLS protects data)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# API server URL (used by SSR pages)
+NEXT_PUBLIC_API_URL=http://localhost:3001/api   # or production URL
+
+# Admin panel password
+ADMIN_PASSWORD=your_secure_password_here
+
+# Supabase service key (for /api proxy routes — server-side only)
+SUPABASE_SERVICE_KEY=eyJ...
 ```
+
+### API Server (`artifacts/api-server/.env`)
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+
+# Clerk
+CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+
+# Admin password (matches frontend)
+ADMIN_PASSWORD=your_secure_password_here
+
+# Optional integrations
+YOUTUBE_API_KEY=AIza...
+FIRECRAWL_API_KEY=fc-...
+OPENAI_API_KEY=sk-...
+INSTAGRAM_ACCESS_TOKEN=...
+RESEND_API_KEY=re_...           # For email notifications
+STRIPE_SECRET_KEY=sk_...        # For ticketing (coming soon)
+```
+
+> ⚠️ **Never commit `.env` files.** All secrets must be set in Vercel / Railway env var dashboards.
 
 ---
 
-## Contact
 
-**hello@catscandance.com** · [@catscan.dance](https://instagram.com/catscan.dance) · [catscandance.com](https://catscandance.com)
+## Features Built
+
+### 🏠 Homepage
+- Full-viewport Hero with parallax DJ cat + animated flanking cats (Framer Motion)
+- **CityMarquee** — acid-yellow rolling ticker of Indian cities + global scene names
+- **SceneSnapshot** — 6 Indian city tiles with **live event count badges** from API
+- **GenreWheel** — 6 genre tiles (ink bg) with global origins teaser strip
+- **ArtistSpotlight** — Embla carousel of up to 5 featured artists, 5s autoplay, dots + arrows
+- Events section (upcoming CCD episodes + curated events)
+- Videos, Playlist, Drops (shop), Instagram feed, Early Access signup
+- Disco Mode easter egg 🪩 (disco ball, lasers, audio, beat pulse)
+
+### 🗺️ Discover Page (`/discover`)
+- **Universal search** — artists + cities + genres + global scenes in one dropdown
+- **"What's On This Weekend"** — live strip showing event counts per city for next 7 days
+- 6 Indian city tiles → city scene pages
+- 6 genre tiles → genre education pages
+- 7 global scene tiles → origin story pages
+
+### 🏙️ City Scene Pages (`/scene/:city`)
+- Available: Bengaluru, Mumbai, Delhi, Goa, Hyderabad, Pune
+- Live artists from that city (API)
+- Live upcoming events in that city (API)
+- Promoters active in that city
+- Key venues + active genres
+- Related genre links
+- JSON-LD: `Place` schema
+
+### 🎛️ Genre Pages (`/genres/:genre`)
+- Available: Techno, House, Jungle/D&B, UK Garage, Disco, Ambient
+- BPM range, origin, decade
+- "What is this genre?" origin story
+- "The Indian Scene" — key Indian artists + scene description
+- Starter tracks (YouTube embeds, no API key needed)
+- Key global landmarks (clubs, labels, events)
+- Link to parent global scene
+- Live Indian artists from API filtered by genre
+- JSON-LD: `MusicGenre` schema
+
+### 🌍 Global Scene Pages (`/scenes/:scene`)
+- Available: Detroit Techno, Chicago House, London Jungle/D&B, Berlin Techno, UK Garage, NYC House, Goa Trance
+- Origin story editorial
+- India connection (how it reached India, who carries it)
+- Key artists who built the scene
+- Starter tracks (YouTube embeds)
+- Related genres + Indian cities where it's heard
+- "More global scenes" section
+- JSON-LD: `Place` schema
+
+### 🎤 Artists Directory (`/artists`)
+- Grid with search, city filter, genre pills, sort (A-Z / City / Genre)
+- Mosaic layout (every 9th card spans 2 columns)
+- Accent colour placeholders for artists without photos
+- Fetches from `/api/artists` (migrated from Supabase direct)
+
+### 🎤 Artist Detail Pages (`/artists/:slug`)
+- **6-tab layout:** Overview · Gigs · Connections · Journey · Stats · EPK
+- **Overview:** Bio, SoundCloud oEmbed player, Spotify embed, Quick Facts, Recent Gigs, Connections preview
+- **Gigs:** Full gigography with year filter
+- **Connections:** `ArtistConnectionGraph` — strength-bar visual cards with connection type badges
+- **Journey:** Vertical milestone timeline (first gig, festival debut, city debuts)
+- **Stats:** Stat tiles + `ArtistGigChart` (Recharts bar chart per year + city bars)
+- **EPK:** Electronic Press Kit — bio, photo, booking info, fee range, availability
+- **Similar Artists** section below tabs — connections-first, genre fallback, 6-wide grid
+- Blurred hero background with artist photo
+
+### 🎪 Promoters (`/promoters`, `/promoters/:slug`)
+- Directory with search, city filter, trusted-only toggle
+- Promoter names link to detail pages
+- Detail page: bio, genre tags, links, recent events, submit-your-night CTA
+- Fetches from `/api/promoters` (migrated from Supabase direct)
+
+### 🎟️ Events (`/events`)
+- CCD own events + curated events from trusted promoters
+- Tabs: For You · Trending · Editor's Picks · This Weekend
+- Infinite scroll, save/share events
+- Redesigned to match CCD brutalist design system (cream/ink/chunk-shadow)
+- Filter: city + genre pills
+
+### 🛍️ Shop (`/shop`, `/product/:handle`)
+- Shopify Storefront API integration
+- Filter: All / Streetwear / Pets
+- Cart managed via Zustand + Shopify cart mutations
+- Cart drawer (slide-out)
+
+### ✍️ Blog (`/blog`, `/blog/:slug`)
+- 11 SEO-optimised articles (Bengaluru scene guides, genre primers)
+- Author profiles (`/authors/:slug`)
+
+### 🎓 Admin Panel (`/admin`)
+- Password-gated CMS (14 tabs)
+- Manages: signups, playlists, videos, events, messages, blog posts, curated events, promoters, artists, SEO, marquees, theme, homepage content, RSVPs
+
+### 🎛️ Artist Portal (`/artist/dashboard`)
+- Self-service for claimed artists
+- Edit profile (bio, social links, booking preferences)
+- Manage tour dates
+- View booking requests inbox (OTP-verified)
+
+### 📊 Other Pages
+- `/about` — Brand story
+- `/for-venues`, `/for-artists`, `/for-investors` — Partnership pages
+- `/care` — Cats Can Care (NGO arm)
+- `/ccdxsocial` — CCD × Social (media agency arm)
+- `/playlists`, `/videos` — Media content
+- `/cat-studio` — AI cat image generator
+- `/submit-event` — Community event submission
+- `/bengaluru-underground-dance-music`, `/bengaluru-techno-events`, `/bengaluru-house-parties` — SEO landing pages
+
+### 🔍 SEO
+- Dynamic `sitemap.xml` (server-rendered, fetches all artist slugs live)
+- JSON-LD structured data on all major page types
+- `robots.txt`, `rss.xml`, OG images
+- Per-page `keywords`, `description`, canonical URLs
+- Schema types: Organization, BreadcrumbList, CollectionPage, Place, MusicGenre, FAQPage, ItemList
+
+---
+
+
+## Features In Progress / Broken
+
+### 🔴 Currently Broken (need fixing before launch)
+
+| Issue | Root Cause | Fix Needed |
+|---|---|---|
+| **Shop products not visible** | `SHOPIFY_STOREFRONT_TOKEN` may not be valid for current store domain, or Shopify store may have no published products | Verify token in Shopify Admin → Apps → Storefront API. Confirm products are published to Storefront channel |
+| **Admin panel not loading** | Admin.tsx uses `/api/[...proxy].ts` which proxies to Supabase REST. Requires `SUPABASE_SERVICE_KEY` env var set in Vercel. If missing, all admin fetches silently fail | Set `SUPABASE_SERVICE_KEY` in Vercel project settings |
+| **AdminPanel.tsx ghost routes** | Calls `/api/role-applications` which doesn't exist in Express server — only the old proxy | Either wire these routes in Express server or remove AdminPanel.tsx |
+| **Instagram feed empty** | Returns `[]` — Instagram Graph API token not configured | Set `INSTAGRAM_ACCESS_TOKEN` env var with a long-lived token |
+| **YouTube videos empty** | Returns `[]` — YouTube Data API key not configured | Set `YOUTUBE_API_KEY` env var |
+| **Artist enrichment no-op** | Firecrawl stub returns `{ enriched: 0 }` | Set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY` and implement enrichment logic |
+
+### 🟡 Partially Working
+
+| Feature | Status |
+|---|---|
+| **Curated events** | API route exists and scores events, but crawler (`curate-events`) isn't scheduled — events only appear if manually seeded via admin |
+| **Event RSVP** | Form works, data saved to DB, but no confirmation email sent |
+| **Booking OTP flow** | OTP code generation works, but email delivery requires `RESEND_API_KEY` or similar transactional email service configured |
+| **Shopify cart** | Cart state logic is complete but depends on valid Shopify token |
+| **Artist claiming** | Self-service claiming UI exists but email notification to admin on claim request not wired |
+| **Disco Mode audio** | Works in dev, may have CORS issues if audio file moved to external CDN |
+
+### 🟢 Stubbed but ready to wire
+- YouTube video sync → set `YOUTUBE_API_KEY`
+- Instagram feed → set `INSTAGRAM_ACCESS_TOKEN`
+- Artist enrichment → set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY`
+- Email notifications → set `RESEND_API_KEY`
+
+---
+
+
+## Database Schema
+
+21 tables in PostgreSQL (Supabase), managed via Drizzle ORM (`lib/db/src/schema/`).
+
+### Core Tables
+| Table | Purpose |
+|---|---|
+| `artists` | Artist profiles — bio, genres, city, social links, fee range, booking status |
+| `events` | CCD own events — title, date, venue, lineup, poster, status |
+| `curated_events` | Events crawled/submitted from external promoters |
+| `promoters` | Promoter profiles — city, genres, trust status |
+| `venue_profiles` | Venue data — capacity, genre focus, tier (basement/club/festival) |
+| `bookings` (booking_requests) | OTP-verified artist booking requests |
+| `booking_otp_codes` | One-time codes for booking flow anti-spam |
+| `artist_submissions` | New artist submissions awaiting admin approval |
+| `site_settings` | CMS data — playlists, marquees, theme, homepage content, blog posts |
+| `site_videos` | YouTube video IDs + metadata |
+| `forms` | Contact messages + early access signups |
+
+### Rich Artist Data (Enrichment Layer)
+| Table | Purpose |
+|---|---|
+| `artist_connections` | B2B/collab connections between artists (strength score 0–10) |
+| `artist_dates` | Self-managed tour dates (artist portal) |
+| `event_appearances` | Full gigography — artist × event records |
+| `artist_milestones` | Career milestones (first gig, festival debut, city debuts) |
+| `artist_social_stats` | Follower snapshot history (IG, SC, Spotify) |
+| `artist_discography` | Releases/tracks/EPs |
+| `artist_press` | Press mention cards |
+| `schema_event_artist_lineups` | Event lineup join table |
+| `schema_user_event_interactions` | User save/dismiss/click tracking |
+| `schema_user_taste_profiles` | User music taste (genres, cities, liked artists) |
+
+---
+
+
+## API Reference
+
+Base URL: `/api` (proxied through Next.js → Express 5 server)
+
+### Artists
+| Method | Route | Description |
+|---|---|---|
+| GET | `/artists` | List approved artists (filter: genre, city, featured, limit, offset) |
+| GET | `/artists/:slug` | Artist profile |
+| GET | `/artists/:slug/basic` | Artist + appearances + upcoming dates (resilient) |
+| GET | `/artists/:slug/full` | Artist + all enriched data in one request |
+| GET | `/artists/:slug/gigography` | Full gig history (filter: year, city, venue) |
+| GET | `/artists/:slug/milestones` | Career milestones |
+| GET | `/artists/:slug/stats` | Gig stats (by year, city, venue) |
+| GET | `/artists/:slug/connections` | Artist connections network |
+| PATCH | `/artists/:id/profile` | Update artist profile (auth: claimed artist) |
+| POST | `/artists/:id/claim` | Claim artist profile (auth: Clerk) |
+
+### Events
+| Method | Route | Description |
+|---|---|---|
+| GET | `/events` | List CCD events |
+| GET | `/events/:slug` | Event detail |
+| GET | `/curated-events` | Curated/crawled events (filter: city, featured, limit) |
+| GET | `/events/recommended` | Personalised event recommendations (tabs: for_you/trending/editors_picks/this_weekend) |
+
+### Artist Portal
+| Method | Route | Description |
+|---|---|---|
+| GET | `/artists/by-user` | Get artist profile claimed by current user |
+| GET | `/artist-dates/:artistId` | List tour dates |
+| POST | `/artist-dates/:artistId` | Add tour date |
+| PATCH | `/artist-dates/entry/:id` | Update tour date |
+| DELETE | `/artist-dates/entry/:id` | Delete tour date |
+| GET | `/booking-requests/:artistId` | Booking requests for artist |
+
+### Forms
+| Method | Route | Description |
+|---|---|---|
+| POST | `/booking-otp/start` | Start booking OTP flow |
+| POST | `/booking-otp/verify` | Verify OTP → create booking request |
+| POST | `/event-rsvp` | RSVP to event |
+| POST | `/artist-submissions` | Submit new artist |
+| POST | `/contact` | Contact form |
+| POST | `/early-access` | Early access signup |
+
+### Content
+| Method | Route | Description |
+|---|---|---|
+| GET | `/site-settings` | CMS settings (playlists, marquees, theme) |
+| GET | `/videos` | YouTube videos |
+| GET | `/promoters` | Promoter directory |
+
+### Integrations (currently stubbed)
+| Method | Route | Description |
+|---|---|---|
+| GET | `/instagram-feed` | Instagram posts (requires `INSTAGRAM_ACCESS_TOKEN`) |
+| GET | `/youtube-videos` | YouTube sync (requires `YOUTUBE_API_KEY`) |
+| POST | `/cat-generate` | AI cat image generation |
+
+---
+
+
+## Roadmap
+
+### 🔥 Phase 6 — Fix What's Broken (Critical, do first)
+- [ ] Fix shop: verify Shopify token + confirm products published to Storefront channel
+- [ ] Fix admin: document all required env vars, add `.env.example`, verify Supabase service key setup
+- [ ] Wire YouTube API (`YOUTUBE_API_KEY`) → populate Videos page
+- [ ] Wire email delivery (`RESEND_API_KEY`) → booking OTP + RSVP confirmations + early access
+- [ ] Remove AdminPanel.tsx ghost routes or wire them properly
+
+### 🎯 Phase 7 — Artist Data Collection Engine
+- [ ] **Firecrawl enrichment pipeline** — crawl artist IG bios, SoundCloud profiles, Bandcamp pages
+- [ ] **Auto-populate gigography** — parse event listings from promoter websites
+- [ ] **Social stats snapshots** — weekly cron to capture IG followers, SC plays, Spotify monthly listeners
+- [ ] **Artist submission review flow** — admin gets notified, one-click approve → artist gets welcome email
+- [ ] **Discography import** — Spotify API: pull releases for artists with spotify URL set
+- [ ] **Press mention scraper** — search Google News for artist name + music keywords
+
+### 🎪 Phase 8 — Live Events Infrastructure
+- [ ] **Event crawler scheduler** — cron job running `curate-events` for all trusted promoter URLs
+- [ ] **Promoter crawl URLs** — promoters table already has `crawl_urls` field, just need the cron wired
+- [ ] **Event poster upload** — admin uploads poster → Supabase storage → poster_url
+- [ ] **RSVP confirmation emails** — "You're on the list for [event]" email with event details
+- [ ] **Event reminder emails** — 24h before event for RSVPd users
+- [ ] **Embedded event widget** — `/embed/upcoming` already exists, needs styling polish
+
+### 🏠 Phase 9 — Artist Marketplace (Airbnb for Artists)
+> Venues and promoters browse artists, see availability, send direct booking inquiries
+
+- [ ] **Artist availability calendar** — artists mark available dates in portal
+- [ ] **Venue/Promoter browse** — filter artists by genre, city, fee range, availability date
+- [ ] **"Request a date" form** — venue submits booking request with event details + budget
+- [ ] **Artist response flow** — artist gets notified, can accept/decline/counter-propose
+- [ ] **Booking contract** — PDF download of agreed terms (date, fee, venue, performance duration)
+- [ ] **Promoter verified accounts** — promoters can claim a profile, get `✓ Verified Promoter` badge
+- [ ] **Public availability display** — artist profile shows "Available in [city] on [month]"
+- [ ] **Fee transparency** — artists set public fee range (already in DB, just not displayed by default)
+
+### 🎟️ Phase 10 — First-Party Ticketing
+> Promoters sell tickets directly through CCD, CCD takes a small commission
+
+- [ ] **Stripe integration** — payment processing for ticket purchases
+- [ ] **Event ticketing setup** — promoter creates event → sets ticket tiers (Early Bird / General / VIP)
+- [ ] **QR code tickets** — PDF ticket with QR code sent by email (Resend)
+- [ ] **Door list management** — promoter dashboard shows RSVPs + paid tickets in one list
+- [ ] **Check-in app** — simple `/checkin/:eventSlug` page for door staff with QR scanner
+- [ ] **Refund flow** — admin-triggered refund via Stripe API
+- [ ] **Sales dashboard** — promoter sees real-time ticket sales, revenue, capacity %
+
+### 👤 Phase 11 — Community & User Profiles
+- [ ] **User profile page** (`/profile`) — avatar, saved events, followed artists, cities
+- [ ] **Follow an artist** — heart button → persists to `user_taste_profiles.liked_artist_slugs`
+- [ ] **"Going" to events** — mark attendance, see who else is going
+- [ ] **Activity feed** — "3 artists you follow have upcoming events"
+- [ ] **Weekly email digest** — "What's happening in [your cities] this week" (Resend)
+- [ ] **Push notifications** (PWA) — new event from followed artist
+- [ ] **"Heard at [event]"** — crowd-sourced track ID submissions
+- [ ] **Event memories** — post-event photo gallery (moderated)
+
+### 📱 Phase 12 — PWA + Mobile
+- [ ] **Service worker** — offline cache for artists page + events
+- [ ] **Push notifications** — opt-in for followed artists' upcoming events
+- [ ] **Add to Home Screen** — install prompt on mobile
+- [ ] **Splash screen** + native-feel transitions
+
+### 💰 Phase 13 — Monetisation
+- [ ] **Artist verified badge** — paid annual subscription for verified status + analytics
+- [ ] **Featured listings** — promoters pay to feature events in "Editor's Picks" tab
+- [ ] **Shop v2** — complete Shopify integration, "Reserve My Drop" pre-registration
+- [ ] **CCD × Social media agency** — service pages, portfolio, inquiry form fully built out
+- [ ] **Affiliate links** — gear guides, course recommendations (DJ equipment, production tools)
+
+---
+
+
+## Design System
+
+CCD uses a custom brutalist design system. All classes are in Tailwind.
+
+### Palette
+| Token | Value | Usage |
+|---|---|---|
+| `cream` | `#F5F0E8` | Primary background |
+| `ink` | `#1A1A1A` | Text, borders |
+| `magenta` | `#E040FB` | Accent, CTAs |
+| `acid-yellow` | `#F5E642` | Accent, badges |
+| `electric-blue` | `#00BFFF` | Bengaluru, ambient |
+| `orange` | `#FF6600` | Hyderabad, warnings |
+| `lime` | `#AAFF00` | Goa, jungle/DnB |
+| `hot-pink` | `#FF69B4` | Occasional accent |
+
+### Typography
+- **Display font:** `font-display` — Bowlby One SC (all-caps, chunky)
+- **Body font:** system sans-serif
+
+### Signature Utilities
+```css
+/* Hard offset box shadow — the CCD "chunk shadow" */
+.chunk-shadow { box-shadow: 4px 4px 0 #1a1a1a; }
+
+/* Hover micro-interaction — shadow "presses in" */
+.hover:translate-x-[2px] .hover:translate-y-[2px] .hover:shadow-none
+
+/* Everything has border-4 border-ink */
+```
+
+### Component Patterns
+- All interactive elements: `border-4 border-ink` + `chunk-shadow` + hover press-in
+- Cards: cream background, 4px ink border, chunk shadow
+- Buttons: solid background, uppercase font-display, 4px border
+- Genre/category tags: `bg-acid-yellow text-ink` or `bg-ink text-cream`
+
+---
+
+## Contributing
+
+This is a private project. All work is done via the `ccdkiroedit` GitHub repo.
+
+### Branch naming
+- `feat/[feature-name]` — new features
+- `fix/[bug-name]` — bug fixes
+- `batch-[n]-[description]` — batch work from AI-assisted sessions
+
+### Commit conventions
+```
+feat: add similar artists section on artist detail pages
+fix: remove duplicate </div> in ArtistDetail stats section
+batch-5B: Discover — What's On This Weekend strip + universal search
+```
+
+### Before pushing
+1. Run `pnpm --filter @workspace/cats-can-dance build` — must pass
+2. Run `pnpm --filter @workspace/cats-can-dance exec tsc --noEmit` — must be clean
+3. Check new pages render in browser with `pnpm dev`
+
+---
+
+## Known Issues Log
+
+| Date | Issue | Status |
+|---|---|---|
+| 2026-05 | Shop products not visible — Shopify token needs verification | 🔴 Open |
+| 2026-05 | Admin panel not loading — `SUPABASE_SERVICE_KEY` env var likely not set in deployment | 🔴 Open |
+| 2026-05 | Instagram feed returns `[]` — no access token | 🟡 Needs env var |
+| 2026-05 | YouTube videos empty — no API key | 🟡 Needs env var |
+| 2026-05 | Artist enrichment stub — Firecrawl not wired | 🟡 Needs API key + implementation |
+| 2026-05 | AdminPanel.tsx calls non-existent routes | 🟡 Needs Express routes wired |
+| 2026-05 | Booking OTP emails not delivered | 🟡 Needs `RESEND_API_KEY` |
+| 2026-05 | `ArtistGigChart` had duplicate `</div>` breaking build | ✅ Fixed |
+| 2026-05 | `public/sitemap.xml` conflicted with dynamic `pages/sitemap.xml.tsx` | ✅ Fixed |
+
+---
+
+*Built with ❤️ by Cats Can Dance — Bengaluru's underground crew.*
+*Platform built by Kiro AI in collaboration with the CCD team.*
