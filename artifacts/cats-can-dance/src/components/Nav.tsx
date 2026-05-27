@@ -15,8 +15,6 @@ const primaryLinks = [
   { to: "/discover", label: "Discover" },
   { to: "/events", label: "Events" },
   { to: "/artists", label: "Artists" },
-  { to: "/book", label: "Book" },
-  { to: "/promoters", label: "Promoters" },
   { to: "/shop", label: "Shop" },
 ];
 
@@ -32,10 +30,10 @@ const moreLinks: { to: string; label: string; external?: boolean }[] = [
   { to: "/playlists", label: "Playlists" },
   { to: "/pets", label: "Pets" },
   { to: "/blog", label: "Blog" },
-  { to: "https://lovable.dev/projects/74e0d8d1-d0d1-44e3-a353-45e10e319248", label: "Learn", external: true },
+  { to: "https://learn.catscandance.com", label: "Learn", external: true },
 ];
 
-// Flat list for mobile hamburger
+// Flat list for mobile hamburger — primary + partners + more (no Book/Promoters in primary)
 const mobileLinks: { to: string; label: string; external?: boolean }[] = [...primaryLinks, ...partnersLinks, ...moreLinks];
 
 const scrollToEarlyAccess = () => {

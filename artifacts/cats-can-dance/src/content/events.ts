@@ -6,13 +6,14 @@
  * partners — lives here so it can be reviewed in PRs and stays in sync
  * with the brand voice.
  *
- * To add rich content for a new event:
- *   1. Add an entry to EVENT_CONTENT keyed by the event slug.
- *   2. Anything you omit falls back to type-driven defaults.
+ * CCD × SOCIAL — Season 1 show structure:
+ *   Show 01 · 29 Jun 2026 → THE DEBUT         (broad, welcoming, first impression)
+ *   Show 02 · 27 Jul 2026 → THE HEAT          (style, fashion, summer energy)
+ *   Show 03 · 30 Aug 2026 → LOOSE ENDS        (agility, performance, pre-finale)
+ *   Grand Finale · Oct 2026 → THE GATHERING   (large format, season closer)
  *
- * To add a brand-new event entirely:
- *   1. Insert a row into Supabase `events` (or extend ccdxsocial-seed.sql).
- *   2. Optionally add an entry here for the rich copy.
+ * Past episodes:
+ *   Episode 1 · 2 Apr 2025 → Bar Wild, Indiranagar
  */
 
 import type {
@@ -39,33 +40,37 @@ const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
 // ──────────────────── Per-slug content ────────────────────
 
 export const EVENT_CONTENT: Record<string, EventContent> = {
-  /**
-   * THE SHOWCASE EVENT — Sunday, June 29, 2026.
-   * Update copy here directly; CMS-style edits via /admin still work for
-   * date / lineup / status / poster.
-   */
-  "ccdxsocial-zoomies": {
+
+  // ─── Past Episodes ───────────────────────────────────────────────
+
+  "episode-1": {
+    narrative:
+      "The first Cats Can Dance episode. Bar Wild, Indiranagar. The room that started it — house, disco, garage, and the kind of floor that makes you forget what time it is. Startdawg and Merman held it down from open to close.",
+    vibe_pillars: DEFAULT_VIBE_PILLARS_STANDARD,
+    venue_address: "Bar Wild, 1st Cross, Stage 2, Indiranagar, Bengaluru 560038",
+    venue_map_url: "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
+    price_text: "FREE — RSVP only",
+  },
+
+  // ─── CCD × SOCIAL — Show 01: THE DEBUT ───────────────────────────
+
+  "ccdxsocial-debut": {
     cta_label: "RSVP — IT'S FREE →",
 
     narrative:
-      "ZOOMIES is the most physical chapter of CCD × SOCIAL. The afternoon belongs to the dogs — two agility courses, a timed speed run, and a performance contest where any breed, any age, any skill level can show off. Then 8 PM hits, the parents take over the floor, and Startdawg b2b Merman drag the room into the night. One ticket, two parties. The pack moves together.",
+      "THE DEBUT is the first chapter. Wide open — first impression, big tent, easy yes. The afternoon belongs to the animals: portrait booth, lookalike contest, vendor market. Then the room flips at 8 and Startdawg b2b Merman take the floor. The pack meets for the first time.",
 
-    vibe_pillars: [
-      { icon: "🏃", label: "AGILITY", desc: "Two outdoor courses, timed speed runs, performance contest. Open to any breed, any age, any skill level." },
-      { icon: "🎧", label: "FLOOR",   desc: "DJs play through the afternoon, but the real party starts at 9 PM with Startdawg b2b Merman." },
-      { icon: "🐾", label: "PACK",    desc: "Pet-first by design. Outdoor pet zone, water stations, and a quiet corner for the shy ones." },
-    ],
+    vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
 
     doors_time: "4 PM (pet zone) · 8 PM (floor)",
     peak_time:  "9 PM — late",
 
     schedule: [
       { time: "4:00 PM",  what: "Gates open · pet zone begins · vendor market opens" },
-      { time: "4:30 PM",  what: "Agility course warm-up · meet the trainers" },
-      { time: "5:30 PM",  what: "Timed speed runs · leaderboard goes live" },
-      { time: "6:30 PM",  what: "Performance contest · best-dressed pup · fastest paw" },
+      { time: "4:30 PM",  what: "Pet portrait booth · lookalike contest begins" },
+      { time: "6:00 PM",  what: "Lookalike contest results · crowd vote" },
       { time: "7:30 PM",  what: "Pet zone wraps · portrait booth final calls" },
-      { time: "8:00 PM",  what: "Doors open for the night · room reset" },
+      { time: "8:00 PM",  what: "Doors open for the night · room resets" },
       { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
       { time: "11:00 PM", what: "Special guest set (TBA)" },
       { time: "1:00 AM",  what: "Last drinks · last dance" },
@@ -91,7 +96,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
         role: "Special Guest",
         set_time: "11 PM — late",
         tba: true,
-        blurb: "Announcement next week. The kind of guest you don't tell your friends about.",
+        blurb: "Announcement next week.",
       },
     },
 
@@ -101,19 +106,15 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     venue_embed_url:  "https://www.google.com/maps?q=Indiranagar+Social+Bengaluru&output=embed",
     capacity:         250,
     dress_code:       "Wear what dances. Pets in their best.",
-    house_rules:      "Vaccinated dogs only · short leads · water bowls provided · no flash on the floor",
+    house_rules:      "Vaccinated pets only · short leads · water bowls provided · no flash on the floor",
     price_text:       "FREE — RSVP only",
 
     partners: [
-      {
-        name: "Social",
-        role: "Series Partner",
-        href: "/ccdxsocial",
-      },
+      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
     ],
 
     marquee_items: [
-      "PUPS WELCOME",
+      "PETS WELCOME",
       "DOORS LATE",
       "9 PM SHARP",
       "B2B ALL NIGHT",
@@ -121,42 +122,169 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
   },
 
-  /**
-   * Other CCD × SOCIAL shows — start with light content. Fill in as we
-   * lock venues, lineups, and schedules.
-   */
-  "ccdxsocial-debut": {
+  // ─── CCD × SOCIAL — Show 02: THE HEAT ────────────────────────────
+
+  "ccdxsocial-the-heat": {
+    cta_label: "RSVP — IT'S FREE →",
+
     narrative:
-      "Chapter one. THE DEBUT is broad on purpose — first impression, big tent, easy yes. Outdoor pet zone all afternoon, vendor market, and Startdawg + Merman taking the floor when the room flips at 9.",
-    vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
+      "THE HEAT is the style chapter — midsummer, outdoors, everyone looking their best. Live grooming demo on stage, a best-dressed contest for pets and parents alike, and a dedicated photography corner. When the sun drops, Startdawg b2b Merman bring the floor into the night.",
+
+    vibe_pillars: [
+      { icon: "✂️", label: "STYLE",   desc: "Live grooming demo on stage. Best-dressed contest for pets and parents." },
+      { icon: "📸", label: "LOOKS",   desc: "Dedicated style photography corner. The most content of any show this season." },
+      { icon: "🎧", label: "FLOOR",   desc: "Doors at 8, music at 9. Same residents, sharper energy." },
+    ],
+
     doors_time: "4 PM (pet zone) · 8 PM (floor)",
     peak_time:  "9 PM — late",
-    venue_map_url: "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
-    price_text:    "FREE — RSVP only",
+
+    schedule: [
+      { time: "4:00 PM",  what: "Gates open · vendor market · style photography corner opens" },
+      { time: "4:30 PM",  what: "Live grooming demo on stage" },
+      { time: "5:30 PM",  what: "Best-dressed contest — pet · parent · duo categories" },
+      { time: "6:30 PM",  what: "Results · crowd vote · winners announced" },
+      { time: "7:30 PM",  what: "Pet zone wraps" },
+      { time: "8:00 PM",  what: "Doors open for the night" },
+      { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
+      { time: "11:00 PM", what: "Special guest set (TBA)" },
+      { time: "1:00 AM",  what: "Last drinks · last dance" },
+    ],
+
+    artist_details: {
+      "Startdawg": {
+        name: "Startdawg",
+        role: "Resident",
+        set_time: "9 PM — 11 PM (b2b)",
+        slug: "startdawg",
+        blurb: "House selector with a soft spot for disco edits and the long build.",
+      },
+      "Merman": {
+        name: "Merman",
+        role: "Resident",
+        set_time: "9 PM — 11 PM (b2b)",
+        slug: "merman",
+        blurb: "Garage, jungle, and the kind of low-end that fixes posture problems.",
+      },
+    },
+
+    venue_address:  "Social BLR (Venue TBC)",
+    venue_map_url:  "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
+    capacity:       250,
+    dress_code:     "Come dressed. Pets too.",
+    house_rules:    "Vaccinated pets only · short leads · water bowls provided",
+    price_text:     "FREE — RSVP only",
+
+    partners: [
+      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
+    ],
+
+    marquee_items: [
+      "MIDSUMMER",
+      "BEST DRESSED",
+      "9 PM SHARP",
+      "STYLE CHAPTER",
+      "PACK MOVES TOGETHER",
+    ],
   },
 
-  "ccdxsocial-groom-room": {
+  // ─── CCD × SOCIAL — Show 03: LOOSE ENDS ──────────────────────────
+
+  "ccdxsocial-loose-ends": {
+    cta_label: "RSVP — IT'S FREE →",
+
     narrative:
-      "Chapter two. THE GROOM ROOM is the style chapter — fashion, grooming, accessories. Live grooming demo, best-dressed contest, dedicated style photography corner. Startdawg + Merman keep the floor moving.",
+      "LOOSE ENDS is the last show before the finale — and the most physical. Two agility courses, a timed speed run, a performance contest open to any breed. The community is fully formed by now. Finale tickets drop exclusively at this event. One more show, then everything.",
+
     vibe_pillars: [
-      { icon: "💈", label: "GROOMING", desc: "Live grooming demos on stage. Style consultations all afternoon." },
-      { icon: "👗", label: "FASHION",  desc: "Best-dressed contest. Dedicated style photography corner." },
-      { icon: "🎧", label: "FLOOR",    desc: "Doors at 8, music at 9. Same residents, sharper energy." },
+      { icon: "🏃", label: "AGILITY",  desc: "Two outdoor courses, timed speed runs, performance contest. Open to any breed, any age." },
+      { icon: "🎟️", label: "FINALE",   desc: "Grand Finale tickets drop exclusively at this show. First access for attendees only." },
+      { icon: "🎧", label: "FLOOR",    desc: "9 PM sharp. Startdawg b2b Merman one last time before the big one." },
     ],
+
     doors_time: "4 PM (pet zone) · 8 PM (floor)",
     peak_time:  "9 PM — late",
-    price_text: "FREE — RSVP only",
+
+    schedule: [
+      { time: "4:00 PM",  what: "Gates open · pet zone begins · vendor market" },
+      { time: "4:30 PM",  what: "Agility course warm-up · meet the trainers" },
+      { time: "5:30 PM",  what: "Timed speed runs · leaderboard goes live" },
+      { time: "6:30 PM",  what: "Performance contest · best paw · fastest breed" },
+      { time: "7:00 PM",  what: "🎟️ Grand Finale tickets on sale — attendees only", highlight: true },
+      { time: "7:30 PM",  what: "Pet zone wraps · portrait booth final calls" },
+      { time: "8:00 PM",  what: "Doors open for the night" },
+      { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
+      { time: "11:00 PM", what: "Special guest set (TBA)" },
+      { time: "1:00 AM",  what: "Last drinks · see you at The Gathering" },
+    ],
+
+    artist_details: {
+      "Startdawg": {
+        name: "Startdawg",
+        role: "Resident",
+        set_time: "9 PM — 11 PM (b2b)",
+        slug: "startdawg",
+        blurb: "House selector with a soft spot for disco edits and the long build.",
+      },
+      "Merman": {
+        name: "Merman",
+        role: "Resident",
+        set_time: "9 PM — 11 PM (b2b)",
+        slug: "merman",
+        blurb: "Garage, jungle, and the kind of low-end that fixes posture problems.",
+      },
+    },
+
+    venue_address:  "Social BLR (Venue TBC)",
+    venue_map_url:  "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
+    capacity:       250,
+    dress_code:     "Wear what moves. Pets in their game gear.",
+    house_rules:    "Vaccinated pets only · short leads · water bowls provided",
+    price_text:     "FREE — RSVP only",
+
+    partners: [
+      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
+    ],
+
+    marquee_items: [
+      "LOOSE ENDS",
+      "AGILITY FINALS",
+      "FINALE TICKETS DROP HERE",
+      "9 PM SHARP",
+      "ONE MORE BEFORE THE BIG ONE",
+    ],
   },
 
-  "ccdxsocial-grand-finale": {
+  // ─── CCD × SOCIAL — Grand Finale: THE GATHERING ──────────────────
+
+  "ccdxsocial-the-gathering": {
+    cta_label: "GET TICKETS →",
+
     narrative:
-      "The season finale. Everything the series has been building to. Full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we've ever done. Sponsorship enquiries open now.",
+      "THE GATHERING is the season finale — everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. A complete DJ lineup yet to be announced. The biggest thing we've ever done, and the whole pack in one place.",
+
     vibe_pillars: [
-      { icon: "🎪", label: "GRAND FORMAT", desc: "Full outdoor stage. 2,000+ capacity. Pet runway and agility finals." },
-      { icon: "🎧", label: "LINEUP",       desc: "Headliner TBA. Local residents support. Full reveal closer to date." },
-      { icon: "🐾", label: "PACK",         desc: "The whole community in one place. The pups know their parents by now." },
+      { icon: "🎪", label: "SCALE",    desc: "Full outdoor stage. 2,000+ capacity. Pet runway and agility finals." },
+      { icon: "🎧", label: "LINEUP",   desc: "Headliner TBA. Full reveal closer to date. Resident support confirmed." },
+      { icon: "🐾", label: "THE PACK", desc: "The whole community in one place. The pups know their parents by now." },
     ],
-    price_text: "Sponsorship enquiries open at /ccdxsocial",
+
+    doors_time:  "TBA",
+    peak_time:   "TBA",
+    price_text:  "Tickets from The Preview · General on sale soon",
+    capacity:    2000,
+
+    partners: [
+      { name: "Social", role: "Series Partner", href: "/ccdxsocial" },
+    ],
+
+    marquee_items: [
+      "THE GATHERING",
+      "SEASON FINALE",
+      "2000+ PEOPLE",
+      "PET RUNWAY",
+      "OCTOBER 2026",
+    ],
   },
 };
 

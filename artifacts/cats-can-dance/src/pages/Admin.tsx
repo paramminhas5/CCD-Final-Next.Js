@@ -1233,9 +1233,50 @@ const Admin = () => {
               {/* HOMEPAGE */}
               <TabsContent value="homepage">
                 <p className="text-ink/70 font-medium mb-4">
-                  Edit copy that appears on the homepage. Leave a field blank to use the default.
+                  Edit copy and control which sections appear on the homepage.
                 </p>
                 <div className="space-y-6">
+
+                  {/* ── Section Visibility Toggles ── */}
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-4">
+                    <p className="font-display text-xl text-ink mb-1">HOMEPAGE SECTIONS</p>
+                    <p className="text-ink/60 text-sm font-medium mb-4">Toggle sections on or off. Changes take effect on next page load.</p>
+                    <div className="space-y-3">
+                      {[
+                        { key: "show_scene_map",        label: "Scene Map",        desc: "India's Cities — 6 city tiles with event counts" },
+                        { key: "show_pick_your_sound",   label: "Pick Your Sound",  desc: "Genre grid — Techno, House, Jungle, UK Garage, Disco, Ambient" },
+                        { key: "show_featured_artists",  label: "Featured Artists", desc: "Artist carousel — pulls from artists with featured=true" },
+                      ].map(({ key, label, desc }) => {
+                        const vis = (settings?.home_content as any)?.section_visibility ?? {};
+                        const checked = !!vis[key];
+                        return (
+                          <label key={key} className={`flex items-start gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const currentVis = (settings.home_content as any)?.section_visibility ?? {};
+                                setSettings({
+                                  ...settings,
+                                  home_content: {
+                                    ...(settings.home_content ?? {}),
+                                    section_visibility: { ...currentVis, [key]: e.target.checked },
+                                  },
+                                });
+                              }}
+                              className="w-5 h-5 mt-0.5 accent-magenta shrink-0"
+                            />
+                            <div>
+                              <p className="font-display text-ink text-base">{label}</p>
+                              <p className="text-ink/60 text-xs font-medium">{desc}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="bg-cream border-4 border-ink chunk-shadow p-4">
                     <p className="font-display text-xl text-ink mb-3">ABOUT STRIP</p>
                     {([

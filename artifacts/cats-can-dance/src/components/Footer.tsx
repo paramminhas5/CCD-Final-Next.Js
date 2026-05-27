@@ -74,6 +74,8 @@ const groups = [
       { to: "/for-venues", label: "Venue Partners" },
       { to: "/for-artists", label: "For Artists" },
       { to: "/for-investors", label: "For Investors" },
+      { to: "/book", label: "Book an Artist" },
+      { to: "/promoters", label: "Promoters" },
     ],
   },
   {
