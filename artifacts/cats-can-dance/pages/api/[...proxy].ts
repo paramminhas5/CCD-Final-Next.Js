@@ -551,8 +551,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ── Events (public) ─────────────────────────────────────────────────────────
+  // Honour ?slug=, ?series=, ?status= so supabase-shim's .eq() filters work.
   if (path === "events" && m === "GET") {
-    return res.json(await get("events", pq(ord("sort_order"))));
+    const f: Record<string, string> = { ...ord("sort_order") };
+    if (rq.slug) f["slug"] = `eq.${rq.slug}`;
+    if (rq.series) f["series"] = `eq.${rq.series}`;
+    if (rq.status) f["status"] = `eq.${rq.status}`;
+    if (rq.event_type) f["event_type"] = `eq.${rq.event_type}`;
+    return res.json(await get("events", pq(f)));
   }
   if (segs[0] === "events" && segs[1] && m === "GET") {
     const rows = await get("events", pq(eqf("slug", segs[1]))) as any[];

@@ -1,8 +1,20 @@
-// Shopify Storefront API client
-export const SHOPIFY_API_VERSION = "2025-07";
-export const SHOPIFY_STORE_PERMANENT_DOMAIN = "ccd-final-bv8ld.myshopify.com";
+// Shopify Storefront API client.
+//
+// Configuration is env-var first with hardcoded fallbacks so the shop keeps
+// working in preview deploys without env vars set. To override in Vercel:
+//   NEXT_PUBLIC_SHOPIFY_API_VERSION   (e.g. "2025-10")
+//   NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN  (e.g. "ccd-final-bv8ld.myshopify.com")
+//   NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
+//
+// The version was bumped from 2025-07 → 2025-10 (current stable). Older
+// versions get deprecated and start returning 4xx silently.
+export const SHOPIFY_API_VERSION =
+  process.env.NEXT_PUBLIC_SHOPIFY_API_VERSION || "2025-10";
+export const SHOPIFY_STORE_PERMANENT_DOMAIN =
+  process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN || "ccd-final-bv8ld.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-export const SHOPIFY_STOREFRONT_TOKEN = "c75a9a7d6421884caeb278e3fd07867b";
+export const SHOPIFY_STOREFRONT_TOKEN =
+  process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN || "c75a9a7d6421884caeb278e3fd07867b";
 
 export interface ShopifyProduct {
   node: {
@@ -90,22 +102,41 @@ export const PRODUCT_BY_HANDLE_QUERY = `
 `;
 
 export async function storefrontApiRequest(query: string, variables: any = {}) {
-  const response = await fetch(SHOPIFY_STOREFRONT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(SHOPIFY_STOREFRONT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch (err: any) {
+    // Network error / CORS / DNS — surface a clearer message.
+    throw new Error(
+      `Could not reach Shopify Storefront (${SHOPIFY_STORE_PERMANENT_DOMAIN}): ${err?.message ?? "network error"}`,
+    );
+  }
 
   if (response.status === 402) {
-    console.error("Shopify: Payment required");
+    console.error("Shopify: 402 Payment Required — check your Shopify plan / billing.");
     return null;
   }
 
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      `Shopify auth failed (${response.status}). Check NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN ` +
+        `and that the Storefront API is enabled for the channel.`,
+    );
+  }
+
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const txt = await response.text().catch(() => "");
+    throw new Error(
+      `Shopify HTTP ${response.status}${txt ? ` — ${txt.slice(0, 160)}` : ""}. ` +
+        `API version "${SHOPIFY_API_VERSION}" may be deprecated — try bumping to a newer release.`,
+    );
   }
 
   const data = await response.json();

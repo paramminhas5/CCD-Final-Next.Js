@@ -1,10 +1,31 @@
+/**
+ * ArtistDetail — magazine-style artist profile.
+ *
+ * Layout:
+ *   1. Cover hero       — full-bleed, editorial. Sticky BOOK CTA.
+ *   2. Sticky tab nav   — HOME / GIGS / CONNECTIONS / JOURNEY / STATS / EPK / BOOK
+ *   3. HOME             — snapshot of every other tab. Bio + audio dominant,
+ *                         then a contact-sheet grid linking into the deep tabs.
+ *   4. GIGS             — full gigography with year filter
+ *   5. CONNECTIONS      — connection graph
+ *   6. JOURNEY          — timeline of milestones
+ *   7. STATS            — counters + chart + top cities
+ *   8. EPK              — press kit
+ *   9. BOOK             — inline booking inquiry form + calendar
+ *                         (artist controls open/closed via Artist Portal)
+ *
+ * Booking auto-availability: artist_dates with status = "confirmed" or
+ * "tentative" mark days busy on the calendar. status = "available" marks
+ * open slots. Form is gated by `open_to_bookings`.
+ */
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapPin, Calendar, Music, Share2, Copy, Check, ExternalLink, Instagram,
   Globe, Mail, Headphones, ChevronDown, ChevronUp, Users, ArrowLeft,
   Ticket, Star, Play, TrendingUp, Route, Building2, Award, Radio,
+  Send, Loader2, X,
 } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -17,6 +38,7 @@ import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
 import SimilarArtists from "@/components/SimilarArtists";
 import FollowButton from "@/components/FollowButton";
 
+// ───────────────────────── Types ─────────────────────────
 interface Artist {
   id: string; slug: string; name: string;
   based_city?: string; from_city?: string;
@@ -31,8 +53,7 @@ interface Artist {
 interface Connection {
   artist_a_slug: string; artist_b_slug: string;
   connection_type: string; strength: number;
-  shared_events: string[]; shared_venues: string[];
-  notes?: string;
+  shared_events: string[]; shared_venues: string[]; notes?: string;
 }
 interface Appearance {
   event_name: string; venue?: string; city?: string;
@@ -51,15 +72,21 @@ interface ArtistStats {
   total_connections: number; years_active: number; b2b_count: number; festival_count: number;
 }
 interface CoolFact { icon: string; label: string; value: string; detail: string; }
+interface ArtistDate {
+  id: string; city: string; venue?: string | null; event_date: string;
+  status: "confirmed" | "tentative" | "available"; ticket_url?: string | null;
+}
 
 const TABS = [
-  { id: "overview", label: "OVERVIEW" },
-  { id: "gigography", label: "GIGS" },
+  { id: "home",        label: "HOME" },
+  { id: "gigography",  label: "GIGS" },
   { id: "connections", label: "CONNECTIONS" },
-  { id: "journey", label: "JOURNEY" },
-  { id: "stats", label: "STATS" },
-  { id: "epk", label: "EPK" },
-];
+  { id: "journey",     label: "JOURNEY" },
+  { id: "stats",       label: "STATS" },
+  { id: "epk",         label: "EPK" },
+  { id: "book",        label: "BOOK" },
+] as const;
+type TabId = typeof TABS[number]["id"];
 
 const milestoneIcons: Record<string, any> = {
   first_gig: Play, festival_debut: Star, label_signing: Award,
@@ -82,6 +109,235 @@ function fmt(n: number): string {
   return n.toString();
 }
 
+const formatDateLine = (iso?: string): string => {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch { return iso; }
+};
+
+// ───────────────────────── Booking Form (inline) ─────────────────────────
+
+function InlineBookingForm({ artist, onClose }: { artist: Artist; onClose?: () => void }) {
+  const [form, setForm] = useState({
+    requester_name: "",
+    requester_email: "",
+    requester_phone: "",
+    purpose: "",
+    event_date: "",
+    venue: "",
+    budget: "",
+    notes: "",
+  });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set = (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm(f => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true); setError(null);
+    try {
+      const res = await fetch("/api/booking-inquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artist_slug: artist.slug,
+          artist_name: artist.name,
+          ...form,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send");
+      setSent(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send. Try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="border-4 border-ink bg-acid-yellow chunk-shadow p-8 text-center">
+        <div className="w-16 h-16 border-4 border-ink bg-cream flex items-center justify-center mx-auto mb-4">
+          <Check className="w-8 h-8 text-ink" />
+        </div>
+        <h3 className="font-display text-2xl text-ink uppercase mb-2">Request Sent</h3>
+        <p className="text-ink/70 max-w-md mx-auto">
+          Your booking inquiry for <strong>{artist.name}</strong> is in. They'll reply via your email.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="border-4 border-ink bg-cream chunk-shadow p-5 md:p-7 space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Your Name *</label>
+          <input required value={form.requester_name} onChange={set("requester_name")} placeholder="Venue / promoter / company"
+            className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
+        </div>
+        <div>
+          <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Email *</label>
+          <input required type="email" value={form.requester_email} onChange={set("requester_email")} placeholder="your@email.com"
+            className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
+        </div>
+      </div>
+
+      <div>
+        <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Phone (optional)</label>
+        <input value={form.requester_phone} onChange={set("requester_phone")} placeholder="+91 98765 43210"
+          className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
+      </div>
+
+      <div className="border-t-4 border-ink pt-4">
+        <p className="font-display text-xs uppercase text-ink/60 tracking-widest mb-3">Event details</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Event type *</label>
+            <select required value={form.purpose} onChange={set("purpose")}
+              className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-xs uppercase text-ink focus:outline-none">
+              <option value="">Select…</option>
+              <option value="Club night">Club night</option>
+              <option value="Festival">Festival</option>
+              <option value="Rooftop party">Rooftop party</option>
+              <option value="Warehouse rave">Warehouse rave</option>
+              <option value="Corporate event">Corporate event</option>
+              <option value="Private party">Private party</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Event date</label>
+            <input type="date" value={form.event_date} onChange={set("event_date")}
+              className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
+          </div>
+          <div>
+            <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Venue / city</label>
+            <input value={form.venue} onChange={set("venue")} placeholder="e.g. Bar Wild, Bengaluru"
+              className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
+          </div>
+          <div>
+            <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Budget (INR)</label>
+            <select value={form.budget} onChange={set("budget")}
+              className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-xs uppercase text-ink focus:outline-none">
+              <option value="">Not specified</option>
+              <option value="Under ₹10,000">Under ₹10,000</option>
+              <option value="₹10,000–₹25,000">₹10,000–₹25,000</option>
+              <option value="₹25,000–₹50,000">₹25,000–₹50,000</option>
+              <option value="₹50,000–₹1,00,000">₹50,000–₹1,00,000</option>
+              <option value="₹1,00,000+">₹1,00,000+</option>
+              <option value="Negotiable">Negotiable</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Notes</label>
+        <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Crowd size, set length, anything else relevant…"
+          className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors resize-none" />
+      </div>
+
+      {error && (
+        <p className="text-sm text-cream bg-magenta border-2 border-ink px-3 py-2 font-display">{error}</p>
+      )}
+
+      <button type="submit" disabled={sending}
+        className="w-full flex items-center justify-center gap-2 py-3 border-4 border-ink bg-ink text-cream font-display text-sm uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-60">
+        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        {sending ? "Sending…" : "Send booking request"}
+      </button>
+    </form>
+  );
+}
+
+// ───────────────────────── Availability Calendar ─────────────────────────
+// 6-month strip showing days as marked busy / tentative / available based on
+// the artist's saved dates. Auto-updates as artist edits their calendar from
+// the portal.
+
+function AvailabilityStrip({ dates }: { dates: ArtistDate[] }) {
+  // Map of YYYY-MM-DD → status
+  const byDay = useMemo(() => {
+    const m: Record<string, "confirmed" | "tentative" | "available"> = {};
+    for (const d of dates) {
+      const key = d.event_date.slice(0, 10);
+      if (!m[key] || d.status === "confirmed") m[key] = d.status;
+    }
+    return m;
+  }, [dates]);
+
+  // Build next 6 months
+  const months = useMemo(() => {
+    const out: { label: string; year: number; month: number; days: { day: number; iso: string }[] }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const monthName = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const days: { day: number; iso: string }[] = [];
+      for (let dd = 1; dd <= lastDay; dd++) {
+        const cell = new Date(d.getFullYear(), d.getMonth(), dd);
+        const iso = `${cell.getFullYear()}-${String(cell.getMonth() + 1).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+        if (cell >= today) days.push({ day: dd, iso });
+      }
+      out.push({ label: monthName, year: d.getFullYear(), month: d.getMonth(), days });
+    }
+    return out;
+  }, []);
+
+  if (dates.length === 0 && months.every(m => m.days.length === 0)) return null;
+
+  return (
+    <div className="border-4 border-ink bg-cream p-5">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <p className="font-display text-sm uppercase text-ink">Next 6 months</p>
+        <div className="flex flex-wrap gap-3 text-[10px] font-display uppercase">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-cream border-2 border-ink inline-block"/> open</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-magenta border-2 border-ink inline-block"/> busy</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-acid-yellow border-2 border-ink inline-block"/> tentative</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-lime border-2 border-ink inline-block"/> available slot</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {months.map(m => (
+          <div key={`${m.year}-${m.month}`} className="border-2 border-ink/20 p-3">
+            <p className="font-display text-xs uppercase text-ink/70 mb-2">{m.label}</p>
+            <div className="grid grid-cols-7 gap-1">
+              {m.days.map(({ day, iso }) => {
+                const status = byDay[iso];
+                const cls =
+                  status === "confirmed" ? "bg-magenta text-cream border-ink"
+                  : status === "tentative" ? "bg-acid-yellow text-ink border-ink"
+                  : status === "available" ? "bg-lime text-ink border-ink"
+                  : "bg-cream text-ink/60 border-ink/15";
+                return (
+                  <span
+                    key={iso}
+                    title={status ? `${iso} — ${status}` : iso}
+                    className={`text-[10px] font-display flex items-center justify-center w-full aspect-square border ${cls}`}
+                  >
+                    {day}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────── Main page ─────────────────────────
+
 export default function ArtistDetailPage() {
   const router = useRouter();
   const slug = (router.query?.slug as string) || "";
@@ -90,15 +346,18 @@ export default function ArtistDetailPage() {
   const [data, setData] = useState<{
     artist: Artist | null; connections: Connection[]; appearances: Appearance[];
     milestones: Milestone[]; socialStats: SocialStats | null;
-    stats: ArtistStats; facts: CoolFact[];
+    stats: ArtistStats; facts: CoolFact[]; upcomingDates: ArtistDate[];
   } | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<TabId>("home");
   const [isLoading, setIsLoading] = useState(true);
   const [expandedBio, setExpandedBio] = useState(false);
   const [selectedYear, setSelectedYear] = useState("all");
   const [copied, setCopied] = useState(false);
+
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const bookSectionRef = useRef<HTMLDivElement | null>(null);
 
   const emptyStats: ArtistStats = { total_gigs: 0, total_cities: 0, total_venues: 0, total_connections: 0, years_active: 0, b2b_count: 0, festival_count: 0 };
 
@@ -113,11 +372,20 @@ export default function ArtistDetailPage() {
           const b = await fetch(`/api/artists/${slug}/basic`);
           if (!b.ok) throw new Error(`Artist not found (${b.status})`);
           const bd = await b.json();
-          setData({ artist: bd.artist, connections: [], appearances: bd.appearances || [], milestones: [], socialStats: null, stats: bd.stats || emptyStats, facts: [] });
+          setData({
+            artist: bd.artist, connections: [], appearances: bd.appearances || [],
+            milestones: [], socialStats: null, stats: bd.stats || emptyStats, facts: [],
+            upcomingDates: bd.upcomingDates || [],
+          });
           return;
         }
         const d = await r.json();
-        setData({ artist: d.artist, connections: d.connections || [], appearances: d.appearances || [], milestones: d.milestones || [], socialStats: d.socialStats || null, stats: d.stats || emptyStats, facts: d.facts || [] });
+        setData({
+          artist: d.artist, connections: d.connections || [], appearances: d.appearances || [],
+          milestones: d.milestones || [], socialStats: d.socialStats || null,
+          stats: d.stats || emptyStats, facts: d.facts || [],
+          upcomingDates: d.upcomingDates || [],
+        });
       })
       .catch((e) => { setFetchError(e.message || "Failed to load artist"); })
       .finally(() => setIsLoading(false));
@@ -134,6 +402,13 @@ export default function ArtistDetailPage() {
     await navigator.clipboard.writeText(text);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
     toast({ title: "Copied!" });
+  };
+
+  const goToTab = (id: TabId) => {
+    setActiveTab(id);
+    setTimeout(() => {
+      tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   };
 
   if (isLoading) return (
@@ -161,9 +436,16 @@ export default function ArtistDetailPage() {
     </main>
   );
 
-  const { artist, connections, appearances, milestones, socialStats, stats, facts } = data;
+  const { artist, connections, appearances, milestones, socialStats, stats, facts, upcomingDates } = data;
   const years = [...new Set(appearances.map((a) => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
   const filteredAppearances = selectedYear === "all" ? appearances : appearances.filter((a) => a.year === parseInt(selectedYear));
+
+  // Auto-availability flag: if the artist hasn't explicitly set
+  // open_to_bookings = false and they have at least one upcoming
+  // "available" date → considered actively booking. Either way the toggle in
+  // their portal wins.
+  const isBookable = artist.open_to_bookings !== false;
+  const hasOpenSlot = upcomingDates.some(d => d.status === "available");
 
   return (
     <main className="bg-background text-foreground">
@@ -174,15 +456,21 @@ export default function ArtistDetailPage() {
       />
       <Nav />
 
-      {/* ── Hero ─────────────────────────────────────────────────── */}
+      {/* ─── COVER HERO (magazine cover) ───────────────────────────── */}
       <section className="relative border-b-4 border-ink pt-28 md:pt-36 pb-0 overflow-hidden bg-ink">
-        {/* blurred bg photo */}
         {artist.photo_url && (
           <div className="absolute inset-0">
-            <img src={artist.photo_url} alt="" className="w-full h-full object-cover opacity-20 blur-md scale-110" />
+            <img src={artist.photo_url} alt="" className="w-full h-full object-cover opacity-25 blur-md scale-110" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/40" />
           </div>
         )}
         <div className="relative container pb-0">
+          {/* Issue line */}
+          <div className="flex items-center gap-3 mb-4">
+            <span className="font-display text-acid-yellow text-xs uppercase tracking-[0.3em]">/ CCD ARTIST PROFILE</span>
+            <span className="font-display text-cream/40 text-xs uppercase tracking-widest">No. {artist.id?.slice(0, 4) ?? "—"}</span>
+          </div>
+
           <div className="flex flex-col md:flex-row gap-6 items-end pb-0">
             {/* Photo */}
             <div className="shrink-0">
@@ -199,32 +487,38 @@ export default function ArtistDetailPage() {
 
             {/* Info */}
             <div className="flex-1 pb-6">
-              {artist.featured && (
-                <span className="inline-block bg-acid-yellow text-ink font-display text-xs px-3 py-1 border-2 border-cream mb-2">
-                  ✦ FEATURED
-                </span>
-              )}
-              {artist.claimed_by && (
-                <span className="inline-block ml-2 bg-lime text-ink font-display text-xs px-3 py-1 border-2 border-cream mb-2">
-                  ✓ VERIFIED
-                </span>
-              )}
-              <h1 className="font-display text-4xl sm:text-6xl md:text-7xl text-cream leading-[0.9]">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {artist.featured && (
+                  <span className="inline-block bg-acid-yellow text-ink font-display text-xs px-3 py-1 border-2 border-cream">
+                    ✦ FEATURED
+                  </span>
+                )}
+                {artist.claimed_by && (
+                  <span className="inline-block bg-lime text-ink font-display text-xs px-3 py-1 border-2 border-cream">
+                    ✓ VERIFIED
+                  </span>
+                )}
+                {isBookable && (
+                  <span className="inline-block bg-magenta text-cream font-display text-xs px-3 py-1 border-2 border-cream">
+                    ◉ BOOKINGS OPEN
+                  </span>
+                )}
+              </div>
+
+              <h1 className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-cream leading-[0.85] mb-3 break-words">
                 {artist.name.toUpperCase()}
               </h1>
-              <div className="flex flex-wrap items-center gap-3 mt-3 text-cream/70 text-sm">
+
+              <div className="flex flex-wrap items-center gap-3 mt-2 text-cream/70 text-sm">
                 {artist.based_city && (
                   <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{artist.based_city}</span>
                 )}
                 {stats.years_active > 0 && (
                   <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{stats.years_active} yrs active</span>
                 )}
-                {stats.total_gigs > 0 && (
-                  <span>{stats.total_gigs} gigs</span>
-                )}
+                {stats.total_gigs > 0 && <span>{stats.total_gigs} gigs</span>}
               </div>
 
-              {/* Genre tags */}
               {artist.genres.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
                   {artist.genres.map((g) => (
@@ -235,7 +529,6 @@ export default function ArtistDetailPage() {
                 </div>
               )}
 
-              {/* Social links */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {artist.instagram && (
                   <a href={`https://instagram.com/${artist.instagram.replace("@", "")}`} target="_blank" rel="noreferrer"
@@ -273,19 +566,13 @@ export default function ArtistDetailPage() {
                 <FollowButton artistSlug={artist.slug} artistName={artist.name} />
               </div>
 
-              {/* Book button */}
-              {artist.open_to_bookings && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {artist.booking_email && (
-                    <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
-                      className="inline-flex items-center gap-2 bg-magenta text-cream font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                      <Mail className="w-4 h-4" /> BOOK ARTIST →
-                    </a>
-                  )}
-                  <a href={`/book?q=${encodeURIComponent(artist.name)}`}
-                    className="inline-flex items-center gap-2 bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                    VIEW ON MARKETPLACE
-                  </a>
+              {/* Sticky-ish primary CTA — book now */}
+              {isBookable && (
+                <div className="mt-5">
+                  <button onClick={() => goToTab("book")}
+                    className="inline-flex items-center gap-2 bg-magenta text-cream font-display text-base md:text-lg px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                    <Ticket className="w-4 h-4" /> BOOK {artist.name.split(" ")[0].toUpperCase()} →
+                  </button>
                 </div>
               )}
             </div>
@@ -293,26 +580,31 @@ export default function ArtistDetailPage() {
         </div>
       </section>
 
-      {/* ── Tab nav ──────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-cream border-b-4 border-ink">
+      {/* ─── STICKY TAB NAV ─────────────────────────────────────────── */}
+      <div ref={tabsRef} className="sticky top-0 z-30 bg-cream border-b-4 border-ink">
         <div className="container">
           <div className="flex gap-0 overflow-x-auto scrollbar-hide">
             {TABS.map((tab) => {
               const hasData =
-                tab.id === "overview" ? true :
+                tab.id === "home" ? true :
                 tab.id === "gigography" ? appearances.length > 0 :
                 tab.id === "connections" ? connections.length > 0 :
                 tab.id === "journey" ? milestones.length > 0 :
-                tab.id === "stats" ? stats.total_gigs > 0 : true;
+                tab.id === "stats" ? stats.total_gigs > 0 :
+                tab.id === "book" ? isBookable :
+                true;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`font-display text-xs px-4 py-3 border-r-4 border-ink whitespace-nowrap transition-colors ${
                     activeTab === tab.id ? "bg-ink text-cream" : "bg-cream text-ink hover:bg-acid-yellow"
-                  } ${!hasData ? "opacity-40" : ""}`}
+                  } ${!hasData ? "opacity-40" : ""} ${tab.id === "book" && isBookable ? "bg-magenta text-cream hover:bg-ink" : ""} ${tab.id === "book" && activeTab === "book" ? "bg-ink text-cream" : ""}`}
                 >
                   {tab.label}
+                  {tab.id === "book" && isBookable && activeTab !== "book" && (
+                    <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-acid-yellow rounded-full" />
+                  )}
                 </button>
               );
             })}
@@ -320,7 +612,7 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
-      {/* ── Tab content ──────────────────────────────────────────── */}
+      {/* ─── TAB CONTENT ────────────────────────────────────────────── */}
       <div className="bg-cream bg-grain border-b-4 border-ink">
         <div className="container py-10 md:py-14">
 
@@ -330,43 +622,59 @@ export default function ArtistDetailPage() {
             </div>
           )}
 
-          {/* OVERVIEW */}
-          {activeTab === "overview" && (
-            <div className="space-y-10">
-              {/* Bio */}
-              {artist.bio && (
-                <section>
-                  <h2 className="font-display text-3xl text-ink mb-4">ABOUT</h2>
-                  <div className="border-4 border-ink bg-cream chunk-shadow p-6 max-w-3xl">
-                    <p className={`text-ink/80 leading-relaxed text-lg ${expandedBio ? "" : "line-clamp-4"}`}>
-                      {artist.bio}
-                    </p>
-                    {artist.bio.length > 300 && (
-                      <button onClick={() => setExpandedBio(!expandedBio)}
-                        className="mt-3 flex items-center gap-1 font-display text-sm text-ink hover:text-magenta transition-colors">
-                        {expandedBio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        {expandedBio ? "READ LESS" : "READ MORE"}
-                      </button>
-                    )}
-                  </div>
-                </section>
-              )}
+          {/* ════════════ HOME (magazine snapshot) ════════════ */}
+          {activeTab === "home" && (
+            <div className="space-y-12">
+              {/* Lead spread: bio + audio */}
+              <section className="grid lg:grid-cols-[1.4fr_1fr] gap-8">
+                <div>
+                  <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-3">/ THE STORY</p>
+                  {artist.bio ? (
+                    <div className="border-4 border-ink bg-cream chunk-shadow p-6">
+                      <p className={`text-ink/85 leading-relaxed text-lg md:text-xl first-letter:text-5xl first-letter:font-display first-letter:float-left first-letter:mr-2 first-letter:leading-none ${expandedBio ? "" : "line-clamp-6"}`}>
+                        {artist.bio}
+                      </p>
+                      {artist.bio.length > 300 && (
+                        <button onClick={() => setExpandedBio(!expandedBio)}
+                          className="mt-4 flex items-center gap-1 font-display text-sm text-ink hover:text-magenta transition-colors">
+                          {expandedBio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {expandedBio ? "READ LESS" : "READ MORE"}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border-4 border-ink bg-acid-yellow p-6">
+                      <p className="font-display text-xl text-ink">{artist.name.toUpperCase()} hasn't written a bio yet.</p>
+                      <p className="text-ink/70 text-sm mt-1">Check back soon, or hit them up at <a href="/book" className="underline">/book</a> for a direct introduction.</p>
+                    </div>
+                  )}
+                </div>
 
-              {/* Audio embeds */}
-              <section className="max-w-xl">
-                <ArtistAudioEmbed
-                  soundcloud={artist.soundcloud}
-                  spotify={artist.spotify}
-                  artistName={artist.name}
-                />
+                <div className="space-y-4">
+                  <ArtistAudioEmbed
+                    soundcloud={artist.soundcloud}
+                    spotify={artist.spotify}
+                    artistName={artist.name}
+                  />
+                  {(artist.fee_min_inr || artist.fee_max_inr) && (
+                    <div className="border-4 border-ink bg-acid-yellow chunk-shadow p-5">
+                      <p className="font-display text-xs uppercase text-ink/60 tracking-widest">FEE RANGE</p>
+                      <p className="font-display text-2xl text-ink mt-1">
+                        {artist.fee_min_inr && artist.fee_max_inr
+                          ? `₹${artist.fee_min_inr.toLocaleString("en-IN")} – ₹${artist.fee_max_inr.toLocaleString("en-IN")}`
+                          : "Contact for rates"}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </section>
 
-              {/* Cool Facts */}
+              {/* Pull quote / facts strip */}
               {facts.length > 0 && (
                 <section>
-                  <h2 className="font-display text-3xl text-ink mb-4">QUICK FACTS</h2>
+                  <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-3">/ QUICK FACTS</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {facts.map((fact, i) => (
+                    {facts.slice(0, 4).map((fact, i) => (
                       <div key={i} className="border-4 border-ink chunk-shadow p-4 bg-cream">
                         <div className="text-2xl mb-1">{fact.icon}</div>
                         <p className="font-display text-xs text-ink/50 mb-0.5">{fact.label.toUpperCase()}</p>
@@ -378,57 +686,134 @@ export default function ArtistDetailPage() {
                 </section>
               )}
 
-              {/* Recent gigs */}
-              {appearances.length > 0 && (
-                <section>
-                  <h2 className="font-display text-3xl text-ink mb-4">RECENT GIGS</h2>
-                  <div className="space-y-2 max-w-2xl">
-                    {appearances.slice(0, 6).map((gig, i) => (
-                      <div key={i} className="border-4 border-ink bg-cream chunk-shadow p-4 flex items-center gap-4">
-                        <div className="w-12 text-right shrink-0">
-                          <p className="font-display text-sm text-ink">{gig.year || "?"}</p>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-display text-sm text-ink truncate">{gig.event_name}</p>
-                          <p className="text-xs text-ink/50">
-                            {[gig.venue, gig.city].filter(Boolean).join(" · ")}
-                          </p>
-                        </div>
-                        <span className={roleTag(gig.role)}>{gig.role.toUpperCase()}</span>
+              {/* Snapshot grid: each block is a peek into a tab */}
+              <section>
+                <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-3">/ INSIDE THIS ISSUE</p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Recent gigs preview */}
+                  {appearances.length > 0 && (
+                    <button onClick={() => goToTab("gigography")} className="text-left border-4 border-ink bg-cream chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <p className="font-display text-xl text-ink uppercase">Recent gigs</p>
+                        <span className="font-display text-xs text-ink/40">→ {appearances.length}</span>
                       </div>
-                    ))}
-                  </div>
-                  {appearances.length > 6 && (
-                    <button onClick={() => setActiveTab("gigography")}
-                      className="mt-4 font-display text-sm text-ink underline hover:text-magenta transition-colors">
-                      VIEW ALL {appearances.length} GIGS →
+                      <div className="space-y-2">
+                        {appearances.slice(0, 3).map((gig, i) => (
+                          <div key={i} className="flex items-baseline gap-3 border-b-2 border-ink/10 pb-2 last:border-b-0">
+                            <span className="font-display text-xs text-ink/50 w-10 shrink-0">{gig.year || "—"}</span>
+                            <span className="font-display text-sm text-ink truncate flex-1">{gig.event_name}</span>
+                            <span className={roleTag(gig.role)}>{gig.role.toUpperCase()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="font-display text-xs text-magenta mt-3 underline">SEE FULL GIGOGRAPHY →</p>
                     </button>
                   )}
-                </section>
-              )}
 
-              {/* Connections preview */}
-              {connections.length > 0 && (
+                  {/* Connections preview */}
+                  {connections.length > 0 && (
+                    <button onClick={() => goToTab("connections")} className="text-left border-4 border-ink bg-electric-blue text-cream chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <p className="font-display text-xl uppercase">Connections</p>
+                        <span className="font-display text-xs text-cream/60">→ {connections.length}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {connections.slice(0, 8).map((c, i) => {
+                          const partner = c.artist_a_slug === artist.slug ? c.artist_b_slug : c.artist_a_slug;
+                          return (
+                            <span key={i} className="bg-cream text-ink text-[11px] font-display uppercase px-2 py-1 border border-cream">
+                              {partner.replace(/-/g, " ")}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <p className="font-display text-xs text-acid-yellow mt-3 underline">EXPLORE THE GRAPH →</p>
+                    </button>
+                  )}
+
+                  {/* Journey preview */}
+                  {milestones.length > 0 && (
+                    <button onClick={() => goToTab("journey")} className="text-left border-4 border-ink bg-magenta text-cream chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <p className="font-display text-xl uppercase">Journey</p>
+                        <span className="font-display text-xs text-cream/60">→ {milestones.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {milestones.slice(0, 3).map((m, i) => (
+                          <div key={i} className="flex items-baseline gap-3 border-b-2 border-cream/15 pb-2 last:border-b-0">
+                            <span className="font-display text-xs text-cream/60 w-12 shrink-0">{m.year || m.date.slice(0,4)}</span>
+                            <span className="font-display text-sm truncate flex-1">{m.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="font-display text-xs text-acid-yellow mt-3 underline">SEE THE TIMELINE →</p>
+                    </button>
+                  )}
+
+                  {/* Stats preview */}
+                  {stats.total_gigs > 0 && (
+                    <button onClick={() => goToTab("stats")} className="text-left border-4 border-ink bg-acid-yellow text-ink chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform">
+                      <p className="font-display text-xl uppercase mb-3">By the numbers</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><span className="font-display text-3xl">{stats.total_gigs}</span><p className="font-display text-[10px] uppercase text-ink/60">GIGS</p></div>
+                        <div><span className="font-display text-3xl">{stats.total_cities}</span><p className="font-display text-[10px] uppercase text-ink/60">CITIES</p></div>
+                        <div><span className="font-display text-3xl">{stats.total_venues}</span><p className="font-display text-[10px] uppercase text-ink/60">VENUES</p></div>
+                        <div><span className="font-display text-3xl">{stats.total_connections}</span><p className="font-display text-[10px] uppercase text-ink/60">CONNECTIONS</p></div>
+                      </div>
+                      <p className="font-display text-xs text-magenta mt-3 underline">DEEP-DIVE →</p>
+                    </button>
+                  )}
+
+                  {/* EPK preview */}
+                  <button onClick={() => goToTab("epk")} className="text-left border-4 border-ink bg-cream text-ink chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform">
+                    <p className="font-display text-xl uppercase mb-3">Press kit</p>
+                    <p className="text-ink/70 text-sm leading-relaxed mb-3">
+                      Bio, contact, links and downloadable assets — everything a venue or promoter needs.
+                    </p>
+                    <p className="font-display text-xs text-magenta underline">OPEN EPK →</p>
+                  </button>
+
+                  {/* Book preview */}
+                  {isBookable && (
+                    <button onClick={() => goToTab("book")} className="text-left border-4 border-ink bg-ink text-cream chunk-shadow p-5 hover:translate-x-[3px] hover:translate-y-[3px] hover:shadow-none transition-transform col-span-full">
+                      <div className="flex items-baseline justify-between mb-3">
+                        <p className="font-display text-2xl uppercase">Book {artist.name.split(" ")[0]}</p>
+                        <span className="bg-magenta text-cream font-display text-[10px] uppercase px-2 py-1 border-2 border-acid-yellow">BOOKINGS OPEN</span>
+                      </div>
+                      <p className="text-cream/80 text-sm leading-relaxed mb-3 max-w-xl">
+                        Send a direct booking request — no middleman, no commission. Reply lands in their inbox the same day.
+                        {hasOpenSlot && " They have open slots in the calendar this season."}
+                      </p>
+                      <p className="font-display text-sm text-acid-yellow underline">SEND A REQUEST →</p>
+                    </button>
+                  )}
+                </div>
+              </section>
+
+              {/* Upcoming dates ribbon */}
+              {upcomingDates.length > 0 && (
                 <section>
-                  <h2 className="font-display text-3xl text-ink mb-4">CONNECTIONS</h2>
-                  <div className="flex flex-wrap gap-2">
-                    {connections.slice(0, 8).map((conn, i) => {
-                      const partner = conn.artist_a_slug === artist.slug ? conn.artist_b_slug : conn.artist_a_slug;
-                      return (
-                        <Link key={i} href={`/artists/${partner}`}
-                          className="border-4 border-ink bg-cream chunk-shadow px-4 py-2 font-display text-sm text-ink hover:bg-acid-yellow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
-                          {partner.replace(/-/g, " ").toUpperCase()}
-                          <span className="ml-2 font-sans text-xs text-ink/50 normal-case">{conn.connection_type}</span>
-                        </Link>
-                      );
-                    })}
+                  <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-3">/ UPCOMING DATES</p>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {upcomingDates.slice(0, 8).map((d) => (
+                      <div key={d.id} className="shrink-0 border-4 border-ink bg-cream chunk-shadow px-4 py-3 min-w-[200px]">
+                        <p className="font-display text-sm uppercase text-ink">{formatDateLine(d.event_date)}</p>
+                        <p className="font-display text-base text-ink mt-0.5">{d.city}</p>
+                        {d.venue && <p className="text-xs text-ink/60">{d.venue}</p>}
+                        <span className={`inline-block mt-1 font-display text-[10px] uppercase px-1.5 py-0.5 border ${
+                          d.status === "confirmed" ? "bg-magenta text-cream border-ink"
+                          : d.status === "tentative" ? "bg-acid-yellow text-ink border-ink"
+                          : "bg-lime text-ink border-ink"
+                        }`}>{d.status}</span>
+                      </div>
+                    ))}
                   </div>
                 </section>
               )}
             </div>
           )}
 
-          {/* GIGOGRAPHY */}
+          {/* ════════════ GIGOGRAPHY ════════════ */}
           {activeTab === "gigography" && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-3">
@@ -472,7 +857,7 @@ export default function ArtistDetailPage() {
             </div>
           )}
 
-          {/* CONNECTIONS */}
+          {/* ════════════ CONNECTIONS ════════════ */}
           {activeTab === "connections" && (
             <div className="space-y-6">
               <h2 className="font-display text-3xl text-ink">CONNECTIONS</h2>
@@ -480,7 +865,7 @@ export default function ArtistDetailPage() {
             </div>
           )}
 
-          {/* JOURNEY */}
+          {/* ════════════ JOURNEY ════════════ */}
           {activeTab === "journey" && (
             <div className="space-y-6">
               <h2 className="font-display text-3xl text-ink">JOURNEY</h2>
@@ -523,7 +908,7 @@ export default function ArtistDetailPage() {
             </div>
           )}
 
-          {/* STATS */}
+          {/* ════════════ STATS ════════════ */}
           {activeTab === "stats" && (
             <div className="space-y-8">
               <h2 className="font-display text-3xl text-ink">STATS</h2>
@@ -549,12 +934,9 @@ export default function ArtistDetailPage() {
                       </div>
                     ))}
                   </div>
-                  {/* Gig history chart */}
                   <div className="max-w-2xl">
                     <ArtistGigChart appearances={appearances} />
                   </div>
-
-                  {/* Top cities */}
                   {(() => {
                     const counts = appearances.reduce((acc: Record<string, number>, a) => { if (a.city) acc[a.city] = (acc[a.city] || 0) + 1; return acc; }, {});
                     const top = Object.entries(counts).sort((x, y) => y[1] - x[1]).slice(0, 6);
@@ -581,12 +963,11 @@ export default function ArtistDetailPage() {
             </div>
           )}
 
-          {/* EPK */}
+          {/* ════════════ EPK ════════════ */}
           {activeTab === "epk" && (
             <div className="space-y-8 max-w-3xl">
               <h2 className="font-display text-3xl text-ink">ELECTRONIC PRESS KIT</h2>
 
-              {/* Header card */}
               <div className="border-4 border-ink bg-cream chunk-shadow p-6 flex gap-5">
                 {artist.photo_url && (
                   <img src={artist.photo_url} alt={artist.name} className="w-24 h-24 object-cover border-4 border-ink shrink-0" />
@@ -605,7 +986,6 @@ export default function ArtistDetailPage() {
                 </div>
               </div>
 
-              {/* Booking */}
               <div className="border-4 border-ink bg-orange chunk-shadow p-5">
                 <p className="font-display text-lg text-ink mb-3">BOOKING & CONTACT</p>
                 <div className="space-y-2">
@@ -625,9 +1005,12 @@ export default function ArtistDetailPage() {
                     </a>
                   )}
                 </div>
+                <button onClick={() => goToTab("book")}
+                  className="mt-4 inline-flex items-center gap-2 bg-ink text-cream font-display text-xs uppercase px-4 py-2 border-2 border-ink hover:bg-magenta transition-colors">
+                  Or send a marketplace request →
+                </button>
               </div>
 
-              {/* Fee */}
               {(artist.fee_min_inr || artist.fee_max_inr) && (
                 <div className="border-4 border-ink bg-acid-yellow chunk-shadow p-5">
                   <p className="font-display text-lg text-ink mb-1">FEE RANGE</p>
@@ -639,13 +1022,112 @@ export default function ArtistDetailPage() {
                 </div>
               )}
 
-              {/* Availability */}
               <div className="border-4 border-ink bg-cream chunk-shadow p-5">
                 <p className="font-display text-lg text-ink mb-2">AVAILABILITY</p>
-                <p className="font-display text-sm text-ink">{artist.open_to_bookings ? "✓ OPEN FOR BOOKINGS" : "✗ NOT TAKING BOOKINGS"}</p>
+                <p className="font-display text-sm text-ink">{isBookable ? "✓ OPEN FOR BOOKINGS" : "✗ NOT TAKING BOOKINGS"}</p>
                 {artist.available_cities.length > 0 && (
                   <p className="text-sm text-ink/60 mt-1">Available in: {artist.available_cities.join(", ")}</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ════════════ BOOK (inline form) ════════════ */}
+          {activeTab === "book" && (
+            <div ref={bookSectionRef} className="space-y-8 max-w-4xl">
+              <div>
+                <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-2">/ DIRECT BOOKING</p>
+                <h2 className="font-display text-4xl md:text-5xl text-ink uppercase">Book {artist.name}</h2>
+                <p className="text-ink/70 mt-2 max-w-xl">
+                  Direct booking inquiry. The artist replies via email — no middleman, no commission.
+                </p>
+              </div>
+
+              {!isBookable ? (
+                <div className="border-4 border-ink bg-magenta chunk-shadow p-6 max-w-md">
+                  <p className="font-display text-2xl text-cream uppercase mb-2">Not currently booking</p>
+                  <p className="text-cream/80 text-sm">
+                    {artist.name} has marked themselves as not taking bookings right now. Try the
+                    <Link href="/book" className="underline ml-1">marketplace</Link> for similar artists.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-[1fr_1.4fr] gap-6">
+                  {/* Side panel: availability + cities + fee */}
+                  <aside className="space-y-4">
+                    <div className="border-4 border-ink bg-cream chunk-shadow p-5">
+                      <p className="font-display text-xs uppercase text-ink/60 tracking-widest mb-2">Status</p>
+                      <p className="font-display text-2xl text-ink">◉ BOOKINGS OPEN</p>
+                      {hasOpenSlot && (
+                        <p className="text-sm text-magenta font-display mt-1">
+                          OPEN SLOTS THIS SEASON
+                        </p>
+                      )}
+                    </div>
+
+                    {artist.available_cities.length > 0 && (
+                      <div className="border-4 border-ink bg-acid-yellow chunk-shadow p-5">
+                        <p className="font-display text-xs uppercase text-ink/60 tracking-widest mb-2">Available cities</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {artist.available_cities.map(c => (
+                            <span key={c} className="bg-ink text-cream font-display text-xs uppercase px-2 py-1 border-2 border-ink">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(artist.fee_min_inr || artist.fee_max_inr) && (
+                      <div className="border-4 border-ink bg-electric-blue text-cream chunk-shadow p-5">
+                        <p className="font-display text-xs uppercase text-cream/70 tracking-widest mb-1">Fee range</p>
+                        <p className="font-display text-2xl">
+                          {artist.fee_min_inr && artist.fee_max_inr
+                            ? `₹${artist.fee_min_inr.toLocaleString("en-IN")} – ₹${artist.fee_max_inr.toLocaleString("en-IN")}`
+                            : "On request"}
+                        </p>
+                      </div>
+                    )}
+
+                    {artist.booking_email && (
+                      <div className="border-4 border-ink bg-cream chunk-shadow p-5">
+                        <p className="font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Or email direct</p>
+                        <a href={`mailto:${artist.booking_email}?subject=Booking enquiry — ${artist.name}`}
+                          className="font-display text-sm text-ink underline break-all">
+                          {artist.booking_email}
+                        </a>
+                      </div>
+                    )}
+                  </aside>
+
+                  {/* Inline form */}
+                  <div className="space-y-5">
+                    <InlineBookingForm artist={artist} />
+                    <p className="text-xs text-ink/50">
+                      Submitting goes to <code className="bg-ink/10 px-1">/api/booking-inquiry</code> →
+                      stored in the booking_requests table → visible to the artist in their portal.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Calendar strip */}
+              <section>
+                <h3 className="font-display text-xl text-ink uppercase mb-3">Live Calendar</h3>
+                <p className="text-sm text-ink/60 mb-4">
+                  The artist updates their calendar from the portal. Days marked busy or
+                  tentative typically aren't bookable; days marked as open slots are looking for a show.
+                </p>
+                <AvailabilityStrip dates={upcomingDates} />
+              </section>
+
+              {/* Browse other artists */}
+              <div className="border-4 border-ink bg-ink text-cream chunk-shadow p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-display text-xl uppercase">Looking for someone else?</p>
+                  <p className="text-cream/60 text-sm mt-1">Browse the full marketplace — filter by city, genre, and budget.</p>
+                </div>
+                <Link href="/book" className="bg-acid-yellow text-ink font-display px-5 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+                  BROWSE MARKETPLACE →
+                </Link>
               </div>
             </div>
           )}
@@ -660,6 +1142,16 @@ export default function ArtistDetailPage() {
       />
       <Marquee bg="bg-ink" />
       <Footer />
+
+      {/* ─── STICKY MOBILE CTA ─── */}
+      {isBookable && activeTab !== "book" && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-magenta border-t-4 border-ink p-3 md:hidden">
+          <button onClick={() => goToTab("book")}
+            className="w-full bg-cream text-ink font-display text-base uppercase py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+            BOOK {artist.name.split(" ")[0].toUpperCase()} →
+          </button>
+        </div>
+      )}
     </main>
   );
 }

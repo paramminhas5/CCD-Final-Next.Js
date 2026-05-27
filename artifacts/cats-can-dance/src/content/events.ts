@@ -1,18 +1,20 @@
 /**
- * Per-event editorial content.
+ * Per-event editorial content + static fallback rows.
  *
- * The Supabase `events` row gives us the dynamic stuff (title, date,
- * lineup, status). Rich copy — vibe pillars, schedule, venue address,
- * partners — lives here so it can be reviewed in PRs and stays in sync
- * with the brand voice.
+ * Two halves:
  *
- * To add rich content for a new event:
- *   1. Add an entry to EVENT_CONTENT keyed by the event slug.
- *   2. Anything you omit falls back to type-driven defaults.
+ *   1. EVENT_ROWS    — minimal `EventRow` shape per slug. Acts as the
+ *                      static fallback when Supabase is empty / unreachable.
+ *                      Source of truth = ccdxsocial-seed.sql; keep in sync.
  *
- * To add a brand-new event entirely:
- *   1. Insert a row into Supabase `events` (or extend ccdxsocial-seed.sql).
- *   2. Optionally add an entry here for the rich copy.
+ *   2. EVENT_CONTENT — rich editorial copy (vibe pillars, schedule, venue
+ *                      address, partners). Lives only in source so it can
+ *                      be reviewed in PRs.
+ *
+ * To add a brand-new event:
+ *   1. Add an entry to EVENT_ROWS (slug → core fields).
+ *   2. Optionally add an EVENT_CONTENT entry for rich copy.
+ *   3. Optionally insert a Supabase row (CMS-edits will then take over).
  */
 
 import type {
@@ -36,7 +38,105 @@ const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
   { icon: "🛍️", label: "MARKET", desc: "Curated vendor market: pet-first brands, streetwear, food, and CCD drops." },
 ];
 
-// ──────────────────── Per-slug content ────────────────────
+// ──────────────────── Static fallback rows ────────────────────
+// Mirrors public/ccdxsocial-seed.sql — used by EventDetail when the DB row
+// for a slug isn't available yet (env var missing, seed not run, etc.).
+
+export const EVENT_ROWS: Record<string, EventRow> = {
+  "ccdxsocial-debut": {
+    slug: "ccdxsocial-debut",
+    title: "THE DEBUT",
+    date: "Sat, Jun 21, 2026",
+    city: "Bangalore",
+    venue: "Social, Indiranagar",
+    blurb:
+      "India's first curated pet lifestyle festival meets underground dance music. The Debut is the first chapter — outdoor pet zone from 4PM with activities, vendor market, agility tasters and portrait booth. Then Startdawg and Merman take over for the night.",
+    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 1,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "BROAD · WELCOMING · FIRST IMPRESSION",
+    is_finale: false,
+  },
+
+  "ccdxsocial-groom-room": {
+    slug: "ccdxsocial-groom-room",
+    title: "THE GROOM ROOM",
+    date: "Sat, Jun 28, 2026",
+    city: "Bangalore",
+    venue: "Social, Church Street",
+    blurb:
+      "All about looking good — pets and parents alike. Fashion, grooming, accessories. Live grooming demo on stage, best dressed contest, dedicated style photography corner. Plus Startdawg and Merman keeping the floor moving.",
+    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 2,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "FASHION · GROOMING · STYLE",
+    is_finale: false,
+  },
+
+  "ccdxsocial-zoomies": {
+    slug: "ccdxsocial-zoomies",
+    title: "ZOOMIES",
+    date: "Sun, Jun 29, 2026",
+    city: "Bangalore",
+    venue: "Indiranagar Social",
+    blurb:
+      "The most physical chapter of the series. Outdoor pet zone all afternoon — two agility courses, a timed speed run, performance contest. Any breed, any age, any skill level. Then 8 PM doors flip and Startdawg b2b Merman take the floor through the night.",
+    lineup: ["Startdawg", "Merman", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 3,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "AGILITY · PERFORMANCE · SPEED",
+    is_finale: false,
+  },
+
+  "ccdxsocial-grand-finale": {
+    slug: "ccdxsocial-grand-finale",
+    title: "GRAND FORMAT SHOW",
+    date: "Date TBA · 2026",
+    city: "Bangalore",
+    venue: "Venue TBA",
+    blurb:
+      "The season finale. Everything the series has been building to. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we've ever done. Sponsorship enquiries open now.",
+    lineup: ["Startdawg", "Merman", "Full lineup TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 4,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "SEASON FINALE · GRAND FORMAT",
+    is_finale: true,
+  },
+};
+
+/** Static fallback lookup — used by EventDetail when Supabase is empty. */
+export function getStaticEventRow(slug: string): EventRow | null {
+  return EVENT_ROWS[slug] ?? null;
+}
+
+/** All static rows that share a series — for the SeriesStrip fallback. */
+export function getStaticEventsBySeries(series: string): EventRow[] {
+  return Object.values(EVENT_ROWS)
+    .filter((e) => e.series === series)
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+// ──────────────────── Per-slug rich content ────────────────────
 
 export const EVENT_CONTENT: Record<string, EventContent> = {
   /**
@@ -131,8 +231,16 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
     doors_time: "4 PM (pet zone) · 8 PM (floor)",
     peak_time:  "9 PM — late",
+    venue_address: "Social, Indiranagar, Bengaluru",
     venue_map_url: "https://maps.app.goo.gl/kE9Nar1e54tEhCyd6",
+    venue_embed_url: "https://www.google.com/maps?q=Social+Indiranagar+Bengaluru&output=embed",
     price_text:    "FREE — RSVP only",
+    schedule: [
+      { time: "4:00 PM", what: "Gates open · pet zone · market" },
+      { time: "8:00 PM", what: "Doors flip for the night" },
+      { time: "9:00 PM", what: "Startdawg + Merman", highlight: true },
+      { time: "1:00 AM", what: "Last call" },
+    ],
   },
 
   "ccdxsocial-groom-room": {
@@ -145,7 +253,16 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
     doors_time: "4 PM (pet zone) · 8 PM (floor)",
     peak_time:  "9 PM — late",
+    venue_address: "Social, Church Street, Bengaluru",
+    venue_map_url: "https://maps.app.goo.gl/dUMLoUAuFjETQXBVA",
+    venue_embed_url: "https://www.google.com/maps?q=Social+Church+Street+Bengaluru&output=embed",
     price_text: "FREE — RSVP only",
+    schedule: [
+      { time: "4:00 PM", what: "Pet zone opens · grooming demos begin" },
+      { time: "5:30 PM", what: "Best dressed contest · style booth" },
+      { time: "8:00 PM", what: "Doors flip" },
+      { time: "9:00 PM", what: "Startdawg + Merman take over", highlight: true },
+    ],
   },
 
   "ccdxsocial-grand-finale": {

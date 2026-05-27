@@ -43,7 +43,11 @@ import StickyRsvpBar from "@/components/StickyRsvpBar";
 import { supabase } from "@/lib/supabase-shim";
 import { imgUrl } from "@/lib/img";
 import { getAllPosts } from "@/content/posts";
-import { getEventContent } from "@/content/events";
+import {
+  getEventContent,
+  getStaticEventRow,
+  getStaticEventsBySeries,
+} from "@/content/events";
 import episode1Poster from "@/assets/episode-1-poster.png";
 
 import type { EventRow, MediaItem } from "@/types/events";
@@ -90,30 +94,42 @@ const EventDetail = () => {
   const [lightbox, setLightbox] = useState<MediaItem | null>(null);
 
   // Fetch this event + its series siblings (single round-trip each).
+  // Fall back to the static catalogue in src/content/events.ts when Supabase
+  // is empty / unreachable so the page always renders.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
+      let row: EventRow | null = null;
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("*")
+          .eq("slug", slug)
+          .maybeSingle();
+        row = (data as unknown as EventRow) ?? null;
+      } catch {
+        row = null;
+      }
+      // Static fallback if DB is empty
+      if (!row) row = getStaticEventRow(slug);
       if (cancelled) return;
-      const row = (data as unknown as EventRow) ?? null;
       setEvent(row);
       setLoaded(true);
 
       // If this event is part of a series, fetch the sibling rows in one query.
       const seriesKey = row?.series;
       if (seriesKey) {
-        const { data: sib } = await supabase
-          .from("events")
-          .select("*")
-          .eq("series", seriesKey)
-          .order("sort_order", { ascending: true });
-        if (!cancelled && Array.isArray(sib)) {
-          setSeries(sib as unknown as EventRow[]);
-        }
+        let sib: EventRow[] = [];
+        try {
+          const { data } = await supabase
+            .from("events")
+            .select("*")
+            .eq("series", seriesKey)
+            .order("sort_order", { ascending: true });
+          if (Array.isArray(data) && data.length > 0) sib = data as unknown as EventRow[];
+        } catch { /* fall through to static */ }
+        if (sib.length === 0) sib = getStaticEventsBySeries(seriesKey);
+        if (!cancelled) setSeries(sib);
       } else {
         setSeries([]);
       }
