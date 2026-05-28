@@ -793,7 +793,7 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
           <SeriesStrip
             events={series}
             currentSlug={event.slug}
-            seriesLabel={event.series_label || event.series.toUpperCase()}
+            seriesLabel={event.series_label || (event.series ?? "").toUpperCase()}
           />
         )}
 

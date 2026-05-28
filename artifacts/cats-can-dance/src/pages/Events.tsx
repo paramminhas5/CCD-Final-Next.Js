@@ -107,7 +107,7 @@ const Events = () => {
     const events = all.filter((e) => e.series === upcomingSeries.series);
     return {
       key: upcomingSeries.series,
-      label: upcomingSeries.series_label || upcomingSeries.series.toUpperCase(),
+      label: upcomingSeries.series_label || (upcomingSeries.series ?? "").toUpperCase(),
       events,
     };
   }, [all, upcoming]);
