@@ -4,6 +4,15 @@ import { Link } from "@/lib/compat-router";
 import RsvpDialog from "@/components/RsvpDialog";
 import { supabase } from "@/lib/supabase-shim";
 import type { EventRow } from "@/types/events";
+import { getStaticEventRow, getStaticEventsBySeries } from "@/content/events";
+
+// Static fallback — shown while DB loads or when Supabase is empty/unreachable
+const STATIC_FALLBACK: EventRow[] = [
+  getStaticEventRow("ccdxsocial-01")!,
+  getStaticEventRow("ccdxsocial-02")!,
+  getStaticEventRow("ccdxsocial-03")!,
+  getStaticEventRow("ccdxsocial-mega")!,
+].filter(Boolean);
 
 const resolvePosterUrl = (raw: string | null | undefined): string | null => {
   if (!raw) return null;
@@ -21,15 +30,25 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
 
 const Events = () => {
   const [rsvpOpen, setRsvpOpen] = useState(false);
-  const [events, setEvents] = useState<EventRow[]>([]);
+  const [events, setEvents] = useState<EventRow[]>(STATIC_FALLBACK);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .order("sort_order", { ascending: true });
-      if (data) setEvents(data as unknown as EventRow[]);
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("*")
+          .order("sort_order", { ascending: true });
+        if (data && (data as unknown as EventRow[]).length > 0) {
+          setEvents(data as unknown as EventRow[]);
+        }
+        // If DB returns empty, we keep the static fallback already in state
+      } catch {
+        // Network error — static fallback stays in place
+      } finally {
+        setLoaded(true);
+      }
     })();
   }, []);
 

@@ -708,6 +708,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
+  // ── User role — powers the role-based portal routing in useUserRole hook ────
+  // GET  /api/user-role?user_id=xxx   → { role, entity_id, entity_slug, entity_name }
+  // POST /api/user-role               → grant a role (admin only)
+  if (path === "user-role" && m === "GET") {
+    const userId = rq.user_id;
+    if (!userId) return res.json({ role: "user", entity_id: null, entity_slug: null, entity_name: null });
+    const rows = await get("user_roles", `?user_id=eq.${encodeURIComponent(userId)}&limit=1`) as any[];
+    if (!rows?.length) return res.json({ role: "user", entity_id: null, entity_slug: null, entity_name: null });
+    return res.json(rows[0]);
+  }
+  if (path === "user-role" && m === "POST") {
+    if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+    const now = new Date().toISOString();
+    const existing = await get("user_roles", `?user_id=eq.${encodeURIComponent(body.user_id)}&limit=1`) as any[];
+    if (existing.length) {
+      const { ok } = await patch("user_roles", pq(eqf("user_id", body.user_id)), { ...body, updated_at: now });
+      return ok ? res.json({ ok: true, action: "updated" }) : res.status(400).json({ error: "Failed" });
+    }
+    const { ok, data } = await ins("user_roles", { ...body, created_at: now, updated_at: now });
+    return ok ? res.json({ ok: true, action: "created", data }) : res.status(400).json({ error: "Failed" });
+  }
+
   // ── Site settings ───────────────────────────────────────────────────────────
   if (path === "site-settings") {
     if (m === "GET") {
@@ -733,6 +755,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!name || !email || !message) return res.status(400).json({ error: "name, email, message required" });
     const { ok } = await ins("contact_messages", { name, email, message, created_at: new Date().toISOString() });
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+  }
+
+  // ── Booking inquiry (public — artist BOOK tab) ───────────────────────────────
+  // POST /api/booking-inquiry — saves to booking_requests, fires email if RESEND set
+  if (path === "booking-inquiry" && m === "POST") {
+    const {
+      artist_slug, artist_name,
+      requester_name, requester_email, requester_phone,
+      purpose, event_date, venue, budget, notes,
+    } = body;
+    if (!artist_slug || !artist_name || !requester_email || !requester_name) {
+      return res.status(400).json({ error: "artist_slug, artist_name, requester_name, requester_email required" });
+    }
+    // Resolve artist for notification email
+    const artistRows = await get("artists", pq(eqf("slug", artist_slug))) as any[];
+    const artistBookingEmail = artistRows?.[0]?.booking_email ?? null;
+    const now = new Date().toISOString();
+    const purposeStr = [purpose, event_date ? `Date: ${event_date}` : null, venue ? `Venue: ${venue}` : null, budget ? `Budget: ${budget}` : null, notes].filter(Boolean).join(" | ") || null;
+    const { ok, data } = await ins("booking_requests", {
+      artist_id: artistRows?.[0]?.id ?? null,
+      artist_id_resolved: artistRows?.[0]?.id ?? null,
+      artist_name,
+      requester_name: requester_name.trim(),
+      requester_email: requester_email.toLowerCase().trim(),
+      requester_phone: requester_phone ?? null,
+      purpose: purposeStr,
+      event_date: event_date ?? null,
+      venue_name: venue ?? null,
+      budget_inr: budget ? Number(budget.toString().replace(/[^0-9]/g, "")) || null : null,
+      notes: notes ?? null,
+      status: "new",
+      source: "artist_page",
+      forward_requested: true,
+      user_agent: req.headers["user-agent"] ?? null,
+      ip_hash: null,
+      created_at: now,
+      updated_at: now,
+    });
+    if (!ok) return res.status(500).json({ error: "Failed to save booking request" });
+    // Fire notification email to artist (non-blocking)
+    if (artistBookingEmail && process.env.RESEND_API_KEY) {
+      const bookingId = Array.isArray(data) ? data[0]?.id : data?.id;
+      const FROM_EMAIL = process.env.EMAIL_FROM ?? "hello@catscandance.com";
+      const html = `<p>New booking inquiry for <strong>${artist_name}</strong> from <strong>${requester_name}</strong> (${requester_email}).</p>${purposeStr ? `<p>${purposeStr}</p>` : ""}<p>Log in to review at <a href="https://catscandance.com/dashboard">catscandance.com/dashboard</a></p>`;
+      fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: `Cats Can Dance <${FROM_EMAIL}>`, to: [artistBookingEmail], subject: `New booking inquiry — ${requester_name}`, html }),
+      }).catch(err => console.error("[booking-inquiry email]", err));
+    }
+    return res.json({ ok: true, message: "Booking inquiry submitted. The artist will be in touch." });
   }
 
   if (path === "early-access" && m === "POST") {
@@ -2156,9 +2229,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
     const allowed = ["company_name","contact_name","bio","logo_url","website","instagram",
                      "primary_city","cities","genre_focus"];
-    const patch: Record<string,any> = { updated_at: new Date().toISOString() };
-    for (const k of allowed) { if (body[k] !== undefined) patch[k] = body[k]; }
-    const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), patch);
+    const patchBody: Record<string,any> = { updated_at: new Date().toISOString() };
+    for (const k of allowed) { if (body[k] !== undefined) patchBody[k] = body[k]; }
+    const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), patchBody);
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Update failed" });
   }
 

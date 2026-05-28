@@ -600,8 +600,7 @@ const Admin = () => {
             <div className="mt-6 border-t-4 border-ink/20 pt-4">
               <p className="font-display text-xs text-ink/50 uppercase tracking-widest mb-2">Troubleshooting</p>
               <ul className="text-xs text-ink/60 space-y-1">
-                <li>• Default password: <code className="font-mono bg-acid-yellow/30 px-1">84838281</code></li>
-                <li>• Set <code className="font-mono">ADMIN_PASSWORD</code> in Vercel env vars to change it</li>
+                <li>• Set <code className="font-mono">ADMIN_PASSWORD</code> in Vercel env vars</li>
                 <li>• If panel loads blank, check <a href="/api/health" target="_blank" rel="noreferrer" className="underline text-magenta">API health</a></li>
               </ul>
             </div>

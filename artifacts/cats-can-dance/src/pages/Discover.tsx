@@ -261,7 +261,7 @@ function UniversalSearch() {
     setLoadingArtists(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/artists?limit=5`);
+        const res = await fetch(`/api/artists?limit=100`);
         const data = await res.json();
         if (!Array.isArray(data)) return;
         const filtered = data
