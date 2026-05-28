@@ -311,14 +311,18 @@ Self-service profile editing, tour dates, booking requests inbox
 
 ## Known Issues
 
-| Issue | Status | Fix |
+| Issue | Status | Fix needed |
 |---|---|---|
-| Shop products empty | 🔴 Open | Verify Shopify Storefront token in Shopify Admin |
-| Instagram feed empty | 🟡 Needs env | Set `INSTAGRAM_ACCESS_TOKEN` |
-| YouTube videos empty | 🟡 Needs env | Set `YOUTUBE_API_KEY` |
-| Booking OTP emails not sent | 🟡 Needs env | Set `RESEND_API_KEY` |
-| Artist enrichment no-op | 🟡 Needs env | Set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY` |
-| Disco Mode audio CORS | 🟡 Dev only | Move audio file to CDN for production |
+| **Shop products empty** | 🔴 Needs config | Verify Shopify Storefront token in Shopify Admin → Apps → Storefront API. Confirm products are published to the Storefront channel |
+| **Ticketing DB tables not created** | 🔴 Must do before ticketing works | Run `pnpm --filter @workspace/db push` against your Supabase DB to create the 9 ticketing tables |
+| **Ticket emails not sending** | 🟡 Needs env | Set `RESEND_API_KEY` in api-server. Without it, tickets are shown inline in the UI (QR links) but no email goes out |
+| **Razorpay not wired** | 🟡 Needs env | Set `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` + `RAZORPAY_WEBHOOK_SECRET`. Free tickets work without this |
+| **Instagram feed empty** | 🟡 Needs env | Set `INSTAGRAM_ACCESS_TOKEN` (long-lived token from Meta Graph API) |
+| **YouTube videos empty** | 🟡 Needs env | Set `YOUTUBE_API_KEY` |
+| **Booking OTP emails not sent** | 🟡 Needs env | Set `RESEND_API_KEY` |
+| **Artist enrichment no-op** | 🟡 Needs env | Set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY` |
+| **Disco Mode audio CORS** | 🟡 Dev only | Move audio file to CDN (or Supabase Storage) for production |
+| **Admin panel ghost routes** | 🟡 Partial | `AdminPanel.tsx` role-application routes call `/api/role-applications` which is handled by the Supabase proxy. Works when `SUPABASE_SERVICE_KEY` is set |
 
 ---
 
@@ -444,34 +448,127 @@ border-4 border-ink + chunk-shadow
 
 ---
 
-## Roadmap
+## Roadmap & Next Steps
 
-### ✅ Done
-- Full events discovery platform (city pages, genre pages, global scenes)
-- Artist directory + rich profile pages (gigography, connections, stats, EPK)
-- Curated events feed + recommendation engine
-- First-party ticketing: direct sale, RSVP-invite, free RSVP
-- QR tickets, email confirmations, face-value transfers
-- Promoter portal (no Clerk required — token-based auth)
-- Door check-in app
-- Admin panel (15 tabs, password-gated)
-- Artist portal (profile editing, tour dates, booking inbox)
-- Shopify merch store
-- Blog + author pages
-- SEO (JSON-LD, sitemap, OG tags)
+### 🚀 To go live — do these first (in order)
 
-### 🔜 Next
-- [ ] **Mobile QR scanner** on door check-in page (`html5-qrcode`)
-- [ ] **Apple Wallet / Google Wallet** passes for tickets (`passkit-generator`)
-- [ ] **Razorpay Routes** — auto-split payout to promoter at payment time
+These are the only things standing between "local dev" and "production":
+
+**1. Run the DB migration**
+```bash
+pnpm --filter @workspace/db push
+```
+Creates all 30 tables in Supabase. Run this once after first deploy, and again whenever schema changes land.
+
+**2. Set env vars in Vercel + Railway**
+
+Minimum to go live:
+```
+# Vercel (frontend)
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_KEY
+ADMIN_PASSWORD         ← change from default "84838281"
+NEXT_PUBLIC_API_URL    ← your Railway API server URL
+
+# Railway (api-server)
+DATABASE_URL
+ADMIN_PASSWORD         ← same as frontend
+NEXT_PUBLIC_SITE_URL   ← https://catscandance.com
+```
+
+**3. Change the default admin password**
+
+Default is `84838281`. Set `ADMIN_PASSWORD` in both Vercel and Railway env vars to something strong before going live.
+
+**4. Test the full ticketing loop**
+1. Visit `/promoter/apply` — submit a test application
+2. Open `/admin` → Ticketing → Applications → Approve → copy the token
+3. Open `/promoter` → paste token → enable ticketing on an event → add a free tier
+4. Visit that event → RSVP → confirm tickets appear at `/my-tickets`
+
+**5. Wire Resend for real emails**
+```
+RESEND_API_KEY=re_...
+EMAIL_FROM=tickets@catscandance.com
+```
+Without this, ticket QR links appear inline in the UI but no email goes out. Works fine for testing; not for production.
+
+---
+
+### 💳 When you're ready for paid tickets (Layer 3)
+
+1. Create a Razorpay account at [dashboard.razorpay.com](https://dashboard.razorpay.com)
+2. Get API keys → Settings → API Keys → Generate Test Key
+3. Set env vars:
+   ```
+   RAZORPAY_KEY_ID=rzp_test_...          # api-server + frontend
+   RAZORPAY_KEY_SECRET=...               # api-server only
+   RAZORPAY_WEBHOOK_SECRET=...           # api-server only
+   NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_...  # frontend
+   ```
+4. Add webhook in Razorpay Dashboard → Webhooks:
+   - URL: `https://catscandance.com/api/ticketing/webhooks/razorpay`
+   - Events: `payment.captured`, `refund.processed`
+5. Switch from test keys (`rzp_test_`) to live keys (`rzp_live_`) when going live
+
+---
+
+### 🧩 Feature backlog — prioritised by impact
+
+#### High impact, relatively quick
+- [ ] **Mobile QR scanner** on door check-in page
+  Use `html5-qrcode` (already planned). Right now door staff paste tokens manually — this makes it a real scanner app. ~2 hours work.
+  
 - [ ] **Ticket reminder emails** — 24h before event
-- [ ] **WhatsApp share** — pre-filled message with event poster + RSVP link
-- [ ] **Post-event "Heard At"** — crowd-sourced track ID submissions
+  A simple cron job (`pages/api/cron/ticket-reminders.ts`) that queries `issued_tickets` for events tomorrow and sends via Resend. Same pattern as `weekly-digest.ts`. ~3 hours.
+
+- [ ] **WhatsApp share on tickets**
+  The share button on `/my-tickets` already uses `navigator.share`. Add a dedicated WhatsApp button: `https://wa.me/?text=I'm+going+to+${eventTitle}+%F0%9F%8E%B6+${ticketUrl}`. Huge in India. 30 minutes.
+
+- [ ] **Event ticketing setup from admin-cms**
+  Currently only promoters with a portal account can enable ticketing. Add a shortcut in `/admin-cms` → Events tab so admin can also enable it directly with an `event_ticketing` upsert. ~2 hours.
+
+#### Medium impact
+- [ ] **Razorpay Routes — auto-split payout**
+  Right now CCD collects 100% and manually pays promoters. Razorpay Routes splits the payment at capture time (promoter gets paid automatically, CCD keeps commission). Requires promoters to create Razorpay accounts and link them. [Docs](https://razorpay.com/docs/route/).
+
+- [ ] **Apple Wallet / Google Wallet passes**
+  Use `passkit-generator` (npm) to create `.pkpass` files for Apple Wallet. Attach to confirmation email. Very high perceived quality — feels like a real ticket. ~1 day.
+
+- [ ] **OTP-based ticket access** (alternative to email lookup)
+  Instead of "enter email → see tickets", add "enter email → receive OTP → see tickets". Reuses the `booking_otp_codes` table already in the DB. ~3 hours.
+
+- [ ] **Post-event "Heard At" track IDs**
+  After check-in, fans can submit "what was that track at 1am?". Simple form → `heard_at_submissions` table. Brilliant for CCD's curation brand.
+
+#### Longer term
 - [ ] **User profiles** — follow artists, save events, attendance history
-- [ ] **Weekly digest email** — "What's on in your cities this week"
-- [ ] **PWA** — offline ticket view, push notifications for followed artists
+  The `user_taste_profiles` and `schema_user_event_interactions` tables already exist and are populated by the recommendation engine. The profile UI at `/profile` just needs building on top.
+
+- [ ] **Weekly digest email**
+  `pages/api/cron/weekly-digest.ts` already exists and sends personalised event digests. Just needs the Vercel cron enabled and `RESEND_API_KEY` set.
+
+- [ ] **PWA** — offline ticket view, push notifications
+  Service worker to cache `/my-tickets/[token]` after first load. Works offline at the venue. Web Push API for "new event from followed artist" notifications.
+
+- [ ] **Artist verified badge** — paid subscription for verified status + analytics access
+
+- [ ] **Razorpay Smart Collect** — UPI payment links for RSVP-invite mode
+  Currently the payment link opens a Razorpay checkout page. Smart Collect generates a UPI ID / payment link that fans can pay directly from their UPI app. More native India experience.
+
+---
+
+### 🔒 Before going fully public
+
+- [ ] Change `ADMIN_PASSWORD` from default `84838281`
+- [ ] Set `NEXT_PUBLIC_SITE_URL` to production domain
+- [ ] Rotate Supabase service key (regenerate in Supabase Dashboard → Settings → API)
+- [ ] Enable Supabase RLS policies on ticketing tables
+- [ ] Set up Razorpay webhook with real secret (not the dummy placeholder)
+- [ ] Review `CORS` origins in `artifacts/api-server/src/app.ts` — currently `origin: true` (accepts all)
 
 ---
 
 *Built with ❤️ by Cats Can Dance — Bengaluru's underground crew.*
-*Platform built by Kiro AI in collaboration with the CCD team.*
+*Platform engineered by Kiro AI in collaboration with the CCD team.*
