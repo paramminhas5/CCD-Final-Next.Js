@@ -1879,6 +1879,388 @@ const emptyCurated = (): CuratedRow => ({
   url: "", source: "manual", blurb: "", genre: [], is_featured: false,
 });
 
+// ── District JSON Import ────────────────────────────────────────────────────
+// ── Lineup Manager (per curated event) ─────────────────────────────────────
+interface LineupRow {
+  id?: string;
+  curated_event_id: string;
+  artist_name: string;
+  artist_slug?: string;
+  role: string;
+  set_time?: string;
+  sort_order: number;
+  is_featured: boolean;
+}
+
+const LINEUP_ROLES = ["headliner", "performer", "b2b", "support", "live", "dj"];
+
+function LineupManager({ event, pwd, onClose }: { event: CuratedRow; pwd: string; onClose: () => void }) {
+  const [lineup, setLineup] = useState<LineupRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<Partial<LineupRow>>({ role: "performer", sort_order: 0, is_featured: false });
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/event-artist-lineups?curated_event_id=${event.id}`, {
+        headers: { "x-admin-password": pwd },
+      });
+      if (res.ok) setLineup(await res.json());
+    } catch { /* skip */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { if (event.id) load(); }, [event.id]);
+
+  const add = async () => {
+    if (!draft.artist_name?.trim()) { toast.error("Artist name required"); return; }
+    if (!event.id) { toast.error("Save event first"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/event-artist-lineups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({
+          curated_event_id: event.id,
+          artist_name: draft.artist_name.trim(),
+          artist_slug: draft.artist_slug?.trim() || null,
+          role: draft.role || "performer",
+          set_time: draft.set_time?.trim() || null,
+          sort_order: lineup.length,
+          is_featured: draft.is_featured ?? false,
+          source: "manual",
+        }),
+      });
+      if (res.ok) {
+        toast.success("Artist added");
+        setDraft({ role: "performer", sort_order: 0, is_featured: false });
+        load();
+      } else {
+        toast.error("Failed to add");
+      }
+    } finally { setSaving(false); }
+  };
+
+  const remove = async (id: string) => {
+    const res = await fetch(`/api/event-artist-lineups?id=${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-password": pwd },
+    });
+    if (res.ok) { toast.success("Removed"); load(); }
+    else toast.error("Failed");
+  };
+
+  const toggleFeatured = async (row: LineupRow) => {
+    const res = await fetch(`/api/event-artist-lineups?id=${row.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ is_featured: !row.is_featured }),
+    });
+    if (res.ok) load();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+      <div className="bg-cream border-4 border-ink w-full max-w-2xl max-h-[90vh] overflow-y-auto chunk-shadow">
+        {/* Header */}
+        <div className="sticky top-0 bg-ink text-cream px-6 py-4 flex items-center justify-between border-b-4 border-ink">
+          <div>
+            <p className="font-display text-xs uppercase text-cream/50">Lineup</p>
+            <h3 className="font-display text-xl uppercase truncate">{event.title}</h3>
+          </div>
+          <button onClick={onClose} className="font-display text-xs uppercase bg-cream text-ink px-4 py-2 border-2 border-cream hover:bg-acid-yellow transition-colors">
+            Close
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Existing lineup */}
+          <div>
+            <p className="font-display text-sm uppercase text-ink mb-3">Current Lineup ({lineup.length})</p>
+            {loading ? (
+              <div className="h-20 bg-ink/5 animate-pulse border-4 border-ink" />
+            ) : lineup.length === 0 ? (
+              <p className="text-ink/40 text-sm font-display uppercase border-4 border-dashed border-ink/20 p-4 text-center">
+                No artists added yet
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {lineup
+                  .slice()
+                  .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                  .map((row) => (
+                    <div key={row.id} className="flex items-center gap-3 border-4 border-ink bg-cream p-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display text-sm text-ink uppercase">{row.artist_name}</p>
+                        <p className="text-xs text-ink/60">
+                          {row.role}{row.set_time ? ` · ${row.set_time}` : ""}{row.artist_slug ? ` · /${row.artist_slug}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleFeatured(row)}
+                        className={`font-display text-[10px] uppercase px-2 py-1 border-2 border-ink transition-colors ${row.is_featured ? "bg-acid-yellow text-ink" : "bg-cream text-ink/50 hover:bg-acid-yellow"}`}
+                      >
+                        {row.is_featured ? "★ Headliner" : "Headliner?"}
+                      </button>
+                      {row.id && (
+                        <button onClick={() => remove(row.id!)} className="font-display text-[10px] uppercase px-2 py-1 border-2 border-magenta text-magenta hover:bg-magenta hover:text-cream transition-colors">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add artist form */}
+          <div className="border-4 border-ink p-5 space-y-3">
+            <p className="font-display text-sm uppercase text-ink">Add Artist</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Artist Name *</label>
+                <input
+                  value={draft.artist_name || ""}
+                  onChange={e => setDraft(d => ({ ...d, artist_name: e.target.value }))}
+                  placeholder="e.g. Kohra"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Artist Slug (from /artists/)</label>
+                <input
+                  value={draft.artist_slug || ""}
+                  onChange={e => setDraft(d => ({ ...d, artist_slug: e.target.value }))}
+                  placeholder="e.g. kohra"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Role</label>
+                <select
+                  value={draft.role || "performer"}
+                  onChange={e => setDraft(d => ({ ...d, role: e.target.value }))}
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-sm focus:outline-none"
+                >
+                  {LINEUP_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block font-display text-[10px] uppercase text-ink/50 mb-1">Set Time</label>
+                <input
+                  value={draft.set_time || ""}
+                  onChange={e => setDraft(d => ({ ...d, set_time: e.target.value }))}
+                  placeholder="e.g. 10 PM – 12 AM"
+                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm focus:outline-none focus:bg-acid-yellow"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 font-display text-xs uppercase text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.is_featured ?? false}
+                onChange={e => setDraft(d => ({ ...d, is_featured: e.target.checked }))}
+                className="w-4 h-4 accent-magenta"
+              />
+              Mark as headliner
+            </label>
+            <button
+              onClick={add}
+              disabled={saving}
+              className="bg-magenta text-cream font-display text-sm uppercase px-6 py-2.5 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {saving ? "Adding…" : "+ Add Artist"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DistrictJsonImport({ pwd, onImported }: { pwd: string; onImported: () => void }) {
+  const [open, setOpen]       = useState(false);
+  const [jsonText, setJsonText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult]   = useState<string | null>(null);
+
+  const doImport = async () => {
+    setResult(null);
+    let parsed: any[];
+    try {
+      parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) throw new Error("Must be a JSON array");
+    } catch (e: any) {
+      toast.error(`Invalid JSON: ${e.message}`);
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await fetch("/api/admin/import-district-json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({ events: parsed }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult(`✓ Imported ${data.upserted} of ${data.total} events (${data.skipped} skipped / already exist)`);
+        toast.success(`District import done: ${data.upserted} upserted`);
+        setJsonText("");
+        onImported();
+      } else {
+        toast.error(data.error ?? "Import failed");
+      }
+    } catch {
+      toast.error("Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors"
+      >
+        <span>📥 Import District JSON</span>
+        <span className="text-ink/40">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t-4 border-ink p-5 space-y-3">
+          <p className="text-sm text-ink/60">
+            Paste a JSON array of District events. Each object needs at minimum: <code className="bg-ink/10 px-1">title</code>, <code className="bg-ink/10 px-1">url</code>. Optional: <code className="bg-ink/10 px-1">event_date</code>, <code className="bg-ink/10 px-1">city</code>, <code className="bg-ink/10 px-1">venue</code>, <code className="bg-ink/10 px-1">genre</code> (array).
+          </p>
+          <textarea
+            rows={8}
+            value={jsonText}
+            onChange={e => setJsonText(e.target.value)}
+            placeholder={'[\n  {\n    "title": "Boiler Room Delhi",\n    "url": "https://district.in/event/...",\n    "event_date": "2026-07-05",\n    "city": "Delhi",\n    "venue": "Studio 326",\n    "genre": ["Techno", "House"]\n  }\n]'}
+            className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-mono text-xs focus:outline-none focus:bg-acid-yellow resize-y"
+          />
+          {result && <p className="font-display text-sm text-ink">{result}</p>}
+          <button
+            onClick={doImport}
+            disabled={importing || !jsonText.trim()}
+            className="bg-electric-blue text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+          >
+            {importing ? "IMPORTING…" : "IMPORT EVENTS"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pending Promoter Submissions ────────────────────────────────────────────
+function PendingSubmissions({ pwd, onApproved }: { pwd: string; onApproved: () => void }) {
+  const [open, setOpen]       = useState(false);
+  const [pending, setPending] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/pending-events", {
+        headers: { "x-admin-password": pwd },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPending(data.events ?? []);
+      }
+    } catch { /* skip */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (open) loadPending();
+  }, [open]);
+
+  const approve = async (id: string) => {
+    const res = await fetch("/api/admin/pending-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ id, action: "approve" }),
+    });
+    if (res.ok) {
+      toast.success("Event approved and published");
+      setPending(p => p.filter(e => e.id !== id));
+      onApproved();
+    } else {
+      toast.error("Approve failed");
+    }
+  };
+
+  const reject = async (id: string) => {
+    if (!confirm("Reject and delete this submission?")) return;
+    const res = await fetch("/api/admin/pending-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ id, action: "reject" }),
+    });
+    if (res.ok) {
+      toast.success("Submission rejected");
+      setPending(p => p.filter(e => e.id !== id));
+    } else {
+      toast.error("Reject failed");
+    }
+  };
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 font-display text-sm uppercase text-ink hover:bg-acid-yellow transition-colors"
+      >
+        <span>⏳ Pending Promoter Submissions</span>
+        <span className="text-ink/40">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="border-t-4 border-ink p-5">
+          {loading ? (
+            <div className="animate-pulse h-16 bg-ink/5" />
+          ) : pending.length === 0 ? (
+            <p className="text-ink/50 font-display text-sm uppercase">No pending submissions</p>
+          ) : (
+            <div className="space-y-3">
+              {pending.map((ev: any) => (
+                <div key={ev.id} className="border-4 border-ink p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-sm text-ink uppercase">{ev.title}</p>
+                      <p className="text-xs text-ink/60">{ev.event_date} · {ev.city} · {ev.venue ?? "—"}</p>
+                      <p className="text-xs text-ink/50 mt-0.5">
+                        by <strong>{ev.promoter_slug ?? "unknown"}</strong> ·{" "}
+                        <a href={ev.url} target="_blank" rel="noreferrer" className="underline">View event ↗</a>
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => approve(ev.id)}
+                        className="font-display text-xs uppercase bg-lime text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors"
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => reject(ev.id)}
+                        className="font-display text-xs uppercase bg-cream text-magenta px-3 py-1.5 border-2 border-magenta hover:bg-magenta hover:text-cream transition-colors"
+                      >
+                        ✗ Reject
+                      </button>
+                    </div>
+                  </div>
+                  {ev.blurb && <p className="text-xs text-ink/60 italic">"{ev.blurb}"</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CURATED_SOURCES = [
   { key: "skillboxes", label: "Skillbox" },
   { key: "sortmyscene", label: "SortMyScene" },
@@ -1914,6 +2296,7 @@ function CuratedEventsTab() {
   const [filterSource, setFilterSource] = useState<string>("all");
   const [filterCity, setFilterCity] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("date-asc");
+  const [lineupEvent, setLineupEvent] = useState<CuratedRow | null>(null);
 
   const projectUrl = "/api";
   const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
@@ -1989,25 +2372,26 @@ function CuratedEventsTab() {
   };
 
   const runFullNightly = async () => {
-    if (!confirm("Run the full nightly scraper now? This crawls all sources × all cities and may take 2–5 minutes.")) return;
+    if (!confirm("Run the full nightly scraper now? This crawls Skillbox, District, Insider and HighApe — may take 2–5 minutes.")) return;
     setRefreshing(true);
     setLastRun(null);
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/scheduled-curate`, {
+      // Call the ACTUAL cron handler, not the stub
+      const res = await fetch(`/api/cron/scrape-events`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pwd },
         body: JSON.stringify({}),
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Nightly run complete: ${data.total_upserted ?? 0} upserted, ${data.featured ?? 0} featured, ${data.deduped ?? 0} deduped`);
-        setLastRun({ runs: data.runs ?? [] });
+        toast.success(`Scraper complete: ${data.upserted ?? 0} new events upserted (scored ${data.accepted ?? 0} of ${data.scraped ?? 0} scraped)`);
+        setLastRun({ log: data.log ?? [], upserted: data.upserted ?? 0, scraped: data.scraped ?? 0, accepted: data.accepted ?? 0 });
         load();
       } else {
-        toast.error(data.error ?? "Nightly run failed");
+        toast.error(data.error ?? "Scraper failed");
       }
     } catch {
-      toast.error("Nightly run failed (likely timed out — it may still be running server-side)");
+      toast.error("Scraper timed out — it may still be running server-side. Check back in a few minutes.");
     } finally {
       setRefreshing(false);
     }
@@ -2015,12 +2399,19 @@ function CuratedEventsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Lineup manager modal */}
+      {lineupEvent && (
+        <LineupManager
+          event={lineupEvent}
+          pwd={pwd}
+          onClose={() => setLineupEvent(null)}
+        />
+      )}
       <div className="flex flex-wrap justify-between items-end gap-3">
         <div>
           <h3 className="font-display text-2xl text-ink">CURATED EVENTS</h3>
           <p className="text-ink/70 font-medium text-sm">
-            Hand-picked events shown on /events. Add manually below or use the refresh buttons to trigger scraping
-            (requires FIRECRAWL_API_KEY env var — if not set, manual entry is the way).
+            Events on /discover. Add manually, run the scraper (Skillbox/District/Insider/HighApe — needs ANTHROPIC_API_KEY for scoring), or import a District JSON dump.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -2063,7 +2454,7 @@ function CuratedEventsTab() {
 
       {lastRun?.runs?.length > 0 && (
         <div className="bg-cream border-4 border-ink p-4 space-y-2 text-sm">
-          {lastRun.runs.map((r: any, i: number) => (
+          {lastRun.runs?.map((r: any, i: number) => (
             <div key={i} className="font-mono text-ink">
               <strong>{r.source}</strong> — candidates: {r.candidateLinks} · scraped: {r.scrapedPages} · extracted: {r.extracted} · saved: <strong>{r.upserted}</strong>
               {r.errors?.length > 0 && (
@@ -2074,8 +2465,22 @@ function CuratedEventsTab() {
               )}
             </div>
           ))}
+          {lastRun.log?.map((line: string, i: number) => (
+            <div key={i} className="font-mono text-ink/70 text-xs">{line}</div>
+          ))}
+          {lastRun.upserted !== undefined && (
+            <div className="font-mono text-ink font-bold">
+              ✓ Done — {lastRun.upserted} new events upserted ({lastRun.accepted} accepted from {lastRun.scraped} scraped)
+            </div>
+          )}
         </div>
       )}
+
+      {/* ── District JSON Import ── */}
+      <DistrictJsonImport pwd={pwd} onImported={load} />
+
+      {/* ── Pending Promoter Submissions ── */}
+      <PendingSubmissions pwd={pwd} onApproved={load} />
 
       <div className="bg-cream border-4 border-ink chunk-shadow p-6 space-y-3">
         <h4 className="font-display text-xl text-ink">ADD MANUALLY</h4>
@@ -2183,6 +2588,13 @@ function CuratedEventsTab() {
                   className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink"
                 >
                   {r.is_featured ? "UNFEATURE" : "FEATURE"}
+                </button>
+                <button
+                  onClick={() => r.id && setLineupEvent(r)}
+                  className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink"
+                  title="Manage lineup"
+                >
+                  🎛 LINEUP
                 </button>
                 <button onClick={() => r.id && remove(r.id)} className="bg-destructive text-cream font-display px-4 py-2">DELETE</button>
               </div>

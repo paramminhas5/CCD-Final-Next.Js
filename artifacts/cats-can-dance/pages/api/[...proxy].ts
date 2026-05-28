@@ -7,11 +7,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
-// SK: env var takes priority; fallback allows proxy to function before Vercel env vars are configured
-const SK = process.env.SUPABASE_SERVICE_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yemd5aXBwenR6ZW5veXJ0c3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTExNjAzOCwiZXhwIjoyMDk0NjkyMDM4fQ.79dS5Y1Ov1P51veAR62fKEX4m-okHqSAg6huzTTL2C4";
-// ADMIN_PW: must be set in Vercel env vars — no hardcoded fallback for security
-const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "84838281";
+// SUPABASE_SERVICE_KEY must be set in Vercel env vars.
+// Without it the proxy returns empty arrays — admin panel and scraper will not function.
+const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
+// ADMIN_PASSWORD must be set in Vercel env vars.
+// Without it all admin routes return 401.
+const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "";
 
 const H = () => ({
   Authorization: `Bearer ${SK}`,
@@ -627,7 +628,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (path === "event-rsvp" && m === "POST") {
     const { event_slug, name, email, plus_ones } = body;
     if (!event_slug || !name || !email) return res.status(400).json({ error: "event_slug, name, email required" });
-    // Only pass known columns (strip website honeypot)
     const { ok } = await ins("event_rsvps", {
       event_slug,
       name,
@@ -635,7 +635,90 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       plus_ones: Number(plus_ones) || 0,
       created_at: new Date().toISOString(),
     });
-    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+    if (!ok) return res.status(500).json({ error: "Failed" });
+
+    // ── Send RSVP confirmation email via Resend ────────────────────────────
+    const RESEND_KEY  = process.env.RESEND_API_KEY ?? "";
+    const FROM_EMAIL  = process.env.EMAIL_FROM ?? "hello@catscandance.com";
+    const SITE_URL    = process.env.NEXT_PUBLIC_SITE_URL ?? "https://catscandance.com";
+
+    if (RESEND_KEY) {
+      // Fetch event details for the email (best-effort, non-blocking)
+      const eventRows = await get("events", pq(eqf("slug", event_slug))) as any[];
+      const ev = eventRows[0] ?? null;
+      const eventName  = ev?.title ? `Cats Can Dance — ${ev.title}` : "Cats Can Dance";
+      const eventDate  = ev?.date  ?? "";
+      const eventVenue = ev?.venue ?? "";
+      const eventCity  = ev?.city  ?? "";
+      const eventUrl   = `${SITE_URL}/events/${event_slug}`;
+      const plusStr    = Number(plus_ones) > 0 ? ` (+${plus_ones} guest${Number(plus_ones) > 1 ? "s" : ""})` : "";
+
+      const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>You're on the list</title></head>
+<body style="background:#f5f0e8;margin:0;padding:20px;font-family:sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;">
+    <tr>
+      <td style="background:#1a1a1a;padding:22px 28px;border:4px solid #1a1a1a;">
+        <div style="font-family:'Courier New',monospace;font-weight:bold;font-size:22px;color:#f5f0e8;text-transform:uppercase;letter-spacing:2px;">
+          CATS<span style="color:#e040fb;">.</span>CAN<span style="color:#e040fb;">.</span>DANCE
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background:#f5e642;padding:18px 28px;border-left:4px solid #1a1a1a;border-right:4px solid #1a1a1a;border-bottom:4px solid #1a1a1a;">
+        <div style="font-family:'Courier New',monospace;font-weight:bold;font-size:20px;text-transform:uppercase;color:#1a1a1a;">
+          ✓ You're On The List${plusStr}
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background:#f5f0e8;padding:24px 28px;border-left:4px solid #1a1a1a;border-right:4px solid #1a1a1a;border-bottom:4px solid #1a1a1a;">
+        <p style="font-family:'Courier New',monospace;font-size:16px;color:#1a1a1a;text-transform:uppercase;margin:0 0 6px;">
+          ${eventName}
+        </p>
+        ${eventDate  ? `<p style="color:#555;font-size:13px;margin:0 0 4px;">📅 ${eventDate}</p>` : ""}
+        ${eventVenue ? `<p style="color:#555;font-size:13px;margin:0 0 4px;">📍 ${eventVenue}${eventCity ? `, ${eventCity}` : ""}</p>` : ""}
+        <p style="color:#888;font-size:12px;margin:16px 0 0;">
+          Name on the door: <strong style="color:#1a1a1a;">${name}${plusStr}</strong>
+        </p>
+        <div style="margin-top:20px;">
+          <a href="${eventUrl}"
+            style="display:inline-block;background:#1a1a1a;color:#f5f0e8;font-family:'Courier New',monospace;font-weight:bold;font-size:12px;padding:12px 20px;text-decoration:none;text-transform:uppercase;border:4px solid #1a1a1a;">
+            EVENT DETAILS →
+          </a>
+        </div>
+        <p style="color:#aaa;font-size:11px;margin:20px 0 0;">
+          Capacity is controlled. Arrive on time — latecomers may not get in.<br>
+          Share the night: <a href="${SITE_URL}/discover" style="color:#e040fb;">catscandance.com/discover</a>
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="background:#1a1a1a;padding:16px 28px;border:4px solid #1a1a1a;text-align:center;">
+        <div style="color:#555;font-size:11px;">
+          Questions? Reply to this email or DM <a href="https://instagram.com/catscandance" style="color:#e040fb;">@catscandance</a>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      // Fire-and-forget — don't block the RSVP response
+      fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: `Cats Can Dance <${FROM_EMAIL}>`,
+          to: [email],
+          subject: `✓ You're on the list — ${eventName}`,
+          html,
+        }),
+      }).catch(err => console.error("[rsvp-email]", err));
+    }
+
+    return res.json({ ok: true });
   }
 
   // ── Artist submissions (public) ─────────────────────────────────────────────
@@ -848,6 +931,99 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (path === "admin-roles" && m === "GET") {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
     return res.json(await get("user_roles", pq(ord("created_at", false))));
+  }
+
+  // ── Event artist lineups — admin CRUD + public read ───────────────────────
+  // GET  /api/event-artist-lineups?curated_event_id=xxx  → array of lineup rows
+  // POST /api/event-artist-lineups                       → insert (admin)
+  // PATCH /api/event-artist-lineups?id=xxx              → update field (admin)
+  // DELETE /api/event-artist-lineups?id=xxx             → delete (admin)
+  if (path === "event-artist-lineups") {
+    if (m === "GET") {
+      const f: Record<string,string> = { ...ord("sort_order") };
+      if (rq.curated_event_id) f["curated_event_id"] = `eq.${rq.curated_event_id}`;
+      if (rq.artist_slug) f["artist_slug"] = `eq.${rq.artist_slug}`;
+      return res.json(await get("event_artist_lineups", pq(f)));
+    }
+    if (m === "POST") {
+      if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+      const now = new Date().toISOString();
+      const { ok, data } = await ins("event_artist_lineups", { ...body, created_at: now });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
+    }
+    if (m === "PATCH") {
+      if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+      const id = rq.id ?? body.id;
+      if (!id) return res.status(400).json({ error: "id required" });
+      const { ok } = await patch("event_artist_lineups", pq(eqf("id", id)), body);
+      return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
+    }
+    if (m === "DELETE") {
+      if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
+      const id = rq.id ?? body.id;
+      if (!id) return res.status(400).json({ error: "id required" });
+      await del("event_artist_lineups", pq(eqf("id", id)));
+      return res.json({ ok: true });
+    }
+  }
+
+  // ── Promoter claiming — POST /api/promoters/:slug/claim ──────────────────
+  // Links a Clerk user_id to a promoter profile (claimed_by field).
+  // Auth: must be signed in. Cannot claim an already-claimed profile.
+  if (segs[0] === "promoters" && segs[2] === "claim" && m === "POST") {
+    const slug = segs[1];
+    const { user_id } = body;
+    if (!user_id) return res.status(400).json({ error: "user_id required" });
+    const rows = await get("promoters", pq(eqf("slug", slug))) as any[];
+    if (!rows?.length) return res.status(404).json({ error: "Promoter not found" });
+    if (rows[0].claimed_by) return res.status(409).json({ error: "Already claimed" });
+    const { ok } = await patch("promoters", pq(eqf("slug", slug)), {
+      claimed_by: user_id,
+      updated_at: new Date().toISOString(),
+    });
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
+  }
+
+  // ── Promoter by user — GET /api/promoters/by-user?user_id=xxx ───────────
+  // Returns the promoter profile claimed by this Clerk user (or null).
+  if (path === "promoters/by-user" && m === "GET") {
+    const userId = rq.user_id;
+    if (!userId) return res.json(null);
+    const rows = await get("promoters", pq(eqf("claimed_by", userId))) as any[];
+    return res.json(rows[0] ?? null);
+  }
+
+  // ── Curated events by promoter — GET /api/curated-events/by-promoter?promoter_slug=xxx ──
+  // Returns all events (any status) submitted by a specific promoter — used in PromoterPortal.
+  if (path === "curated-events/by-promoter" && m === "GET") {
+    const slug = rq.promoter_slug;
+    if (!slug) return res.json({ events: [] });
+    const rows = await get("curated_events", pq({
+      ...eqf("promoter_slug", slug),
+      ...ord("created_at", false),
+    })) as any[];
+    return res.json({ events: rows });
+  }
+
+  // ── Curated event delete by owner — DELETE /api/curated-events/:id ────────
+  // Promoter can delete their own; admin can delete any.
+  if (segs[0] === "curated-events" && segs[1] && m === "DELETE") {
+    const id = segs[1];
+    if (isAdmin(req)) {
+      await del("curated_events", pq(eqf("id", id)));
+      return res.json({ ok: true });
+    }
+    const userId = body?.user_id ?? rq.user_id;
+    if (userId) {
+      const rows = await get("curated_events", pq(eqf("id", id))) as any[];
+      if (!rows?.length) return res.status(404).json({ error: "Not found" });
+      if (rows[0]?.submitted_by === userId) {
+        await del("curated_events", pq(eqf("id", id)));
+        return res.json({ ok: true });
+      }
+      return res.status(403).json({ error: "Not your event" });
+    }
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   // ════════════════════════════════════════════════════════════════════════════

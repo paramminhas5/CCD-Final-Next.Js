@@ -18,7 +18,7 @@ import Nav from "@/components/Nav";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 
-const ADMIN_PW_DEFAULT = "84838281";
+const ADMIN_PW_DEFAULT = "";  // No hardcoded fallback — set ADMIN_PASSWORD in Vercel
 const PASS_KEY = "ccd_admin_pass";
 
 function getStoredPw(): string {
@@ -27,7 +27,7 @@ function getStoredPw(): string {
 }
 
 async function adminFetch(path: string, method = "GET", body?: object) {
-  const pw = getStoredPw() || ADMIN_PW_DEFAULT;
+  const pw = getStoredPw();
   return fetch(path, {
     method,
     headers: { "Content-Type": "application/json", "x-admin-password": pw },
@@ -35,7 +35,7 @@ async function adminFetch(path: string, method = "GET", body?: object) {
   }).then(r => r.ok ? r.json() : null);
 }
 
-const ADMIN_PW = ADMIN_PW_DEFAULT; // legacy ref used by existing tabs below
+// Use the stored password for all inline fetch calls in sub-components
 
 /* ── Types ── */
 type Application = {
@@ -69,7 +69,7 @@ function ApplicationsTab({ userId }: { userId: string }) {
   const load = () => {
     setLoading(true);
     const q = filter === "pending" ? "?status=eq.pending" : "";
-    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": ADMIN_PW } })
+    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setApps(Array.isArray(d) ? d : []); setLoading(false); });
   };
@@ -78,7 +78,7 @@ function ApplicationsTab({ userId }: { userId: string }) {
   const review = async (id: string, status: "approved" | "rejected") => {
     const res = await fetch(`/api/role-applications/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": ADMIN_PW },
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
       body: JSON.stringify({ status, reviewer_id: userId }),
     });
     if (res.ok) {
@@ -171,7 +171,7 @@ function RolesTab({ userId }: { userId: string }) {
   const [form, setForm] = useState({ user_id: "", email: "", display_name: "", role: "artist", entity_slug: "" });
 
   useEffect(() => {
-    fetch("/api/admin-roles", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/admin-roles", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setRoles(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -180,7 +180,7 @@ function RolesTab({ userId }: { userId: string }) {
     if (!form.user_id || !form.email) { toast.error("user_id and email required"); return; }
     const res = await fetch("/api/user-role", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": ADMIN_PW },
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
       body: JSON.stringify({ ...form, granted_by: userId, granted_at: new Date().toISOString() }),
     });
     if (res.ok) {
@@ -275,7 +275,7 @@ function ArtistsTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/artists?limit=100", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/artists?limit=100", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setArtists(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -348,7 +348,7 @@ function XPTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setFans(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -403,7 +403,7 @@ function SystemTab() {
     setRunning(true);
     const res = await fetch("/api/cron/scrape-events", {
       method: "POST",
-      headers: { "x-admin-password": ADMIN_PW },
+      headers: { "x-admin-password": getStoredPw() },
     });
     const data = res.ok ? await res.json() : { error: "Failed" };
     setScraperStatus(data);
@@ -469,7 +469,7 @@ const AdminPanel = () => {
   useEffect(() => {
     if (!isAuthed) return;
     fetch("/api/role-applications?status=eq.pending", {
-      headers: { "x-admin-password": getStoredPw() || ADMIN_PW_DEFAULT },
+      headers: { "x-admin-password": getStoredPw() },
     })
       .then(r => r.ok ? r.json() : [])
       .then(d => setPendingCount(Array.isArray(d) ? d.length : 0))
@@ -541,8 +541,7 @@ const AdminPanel = () => {
             </button>
           </form>
           <p className="text-xs text-ink/50 mt-3">
-            Set <code className="font-mono bg-acid-yellow/30 px-1">ADMIN_PASSWORD</code> in Vercel env vars.
-            Falls back to <code className="font-mono bg-acid-yellow/30 px-1">{ADMIN_PW_DEFAULT}</code>.
+            Set <code className="font-mono bg-acid-yellow/30 px-1">ADMIN_PASSWORD</code> in Vercel env vars — no default exists.
           </p>
         </div>
 
