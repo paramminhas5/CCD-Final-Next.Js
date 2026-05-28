@@ -3,15 +3,18 @@
  * Lives at /ccdxsocial
  *
  * Structure:
- *   1. Hero            — Series identity, cat illustration, RSVP + SPONSOR CTAs
- *   2. Concept         — What is CCD × SOCIAL
- *   3. Series timeline — CCDXSOCIAL 01 / 02 / 03 + MEGA finale
- *   4. What to expect  — Pet zone · DJ floor · Market
- *   5. Sponsor strip   — CTA to /ccdxsocial/sponsor
- *   6. Proposal strip  — CTA to /ccdxsocial/proposal (B2B)
+ *   1. Hero            — Series identity, countdown to next show, CTAs
+ *   2. Marquee
+ *   3. Concept         — Two communities, one room + stats
+ *   4. Series timeline — Sequential 4-step journey with YOU ARE HERE
+ *   5. What to expect  — Pet zone · DJ floor · Market
+ *   6. Sponsor strip
+ *   7. Proposal strip
  */
 
-import Head from "next/head";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -20,9 +23,36 @@ import SEO from "@/components/SEO";
 import catDjHero from "@/assets/cat-dj-hero.png";
 import { imgUrl } from "@/lib/img";
 
-// ─── Show data ────────────────────────────────────────────────────────────────
+// ── Countdown ─────────────────────────────────────────────────────────────────
+const NEXT_SHOW_DATE = new Date("2026-06-29T14:30:00Z"); // 8 PM IST
+
+function useCountdown(target: Date) {
+  const calc = () => {
+    const diff = target.getTime() - Date.now();
+    if (diff <= 0) return { days: 0, hours: 0, mins: 0, secs: 0, over: true };
+    const s = Math.floor(diff / 1000);
+    return {
+      days: Math.floor(s / 86400),
+      hours: Math.floor((s % 86400) / 3600),
+      mins: Math.floor((s % 3600) / 60),
+      secs: s % 60,
+      over: false,
+    };
+  };
+  const [t, setT] = useState(calc);
+  useEffect(() => {
+    const id = setInterval(() => setT(calc()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return t;
+}
+
+const Pad = (n: number) => String(n).padStart(2, "0");
+
+// ── Show data ─────────────────────────────────────────────────────────────────
 const SHOWS = [
   {
+    step: 1,
     num: "01",
     slug: "ccdxsocial-01",
     name: "CCDXSOCIAL 01",
@@ -34,53 +64,59 @@ const SHOWS = [
     bg: "bg-electric-blue",
     text: "text-cream",
     accent: "text-acid-yellow",
-    status: "upcoming",
     isNext: true,
+    isMega: false,
   },
   {
+    step: 2,
     num: "02",
     slug: "ccdxsocial-02",
     name: "CCDXSOCIAL 02",
     date: "Sun, 27 Jul 2026",
     venue: "Social BLR (TBC)",
     tagline: "Style · Fashion · Midsummer Energy",
-    desc: "The style chapter. Midsummer, outdoors, everyone at their best. Live grooming demo, best-dressed contest, and a dedicated photography corner.",
+    desc: "The style chapter. Midsummer, outdoors, everyone at their best. Live grooming demo, best-dressed contest, dedicated photography corner.",
     activities: ["✂️ Live Grooming Demo", "👗 Best-Dressed Contest", "📸 Style Photo Corner", "🎧 Startdawg b2b Merman"],
     bg: "bg-magenta",
     text: "text-cream",
     accent: "text-acid-yellow",
-    status: "upcoming",
     isNext: false,
+    isMega: false,
   },
   {
+    step: 3,
     num: "03",
     slug: "ccdxsocial-03",
     name: "CCDXSOCIAL 03",
     date: "Sun, 30 Aug 2026",
     venue: "Social BLR (TBC)",
-    tagline: "Agility · Finale Preview · One More",
-    desc: "The most physical show. Two agility courses, timed speed runs, performance contest. MEGA tickets drop exclusively here.",
+    tagline: "Agility · Performance · Pre-Finale",
+    desc: "The most physical show. Two agility courses, timed speed runs, performance contest. MEGA tickets drop exclusively at this event.",
     activities: ["🏃 Two Agility Courses", "⚡ Timed Speed Run", "🎟️ MEGA Ticket Drop", "🎧 Startdawg b2b Merman"],
     bg: "bg-ink",
     text: "text-cream",
     accent: "text-acid-yellow",
-    status: "upcoming",
     isNext: false,
+    isMega: false,
+  },
+  {
+    step: 4,
+    num: "★",
+    slug: "ccdxsocial-mega",
+    name: "MEGA",
+    date: "October 2026",
+    venue: "TBA — Large Format",
+    tagline: "Grand Finale · Season Closer",
+    desc: "Everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. The whole pack in one place.",
+    activities: ["🎪 Full Outdoor Stage", "🐾 Pet Runway", "🏆 Agility Finals", "🎧 Full Lineup TBA"],
+    bg: "bg-acid-yellow",
+    text: "text-ink",
+    accent: "text-magenta",
+    isNext: false,
+    isMega: true,
   },
 ];
 
-const MEGA = {
-  slug: "ccdxsocial-mega",
-  name: "MEGA",
-  date: "October 2026",
-  venue: "TBA — Large Format",
-  tagline: "Grand Finale · Season Closer",
-  desc: "Everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. The whole pack in one place.",
-  bg: "bg-acid-yellow",
-  text: "text-ink",
-};
-
-// ─── What to expect ───────────────────────────────────────────────────────────
 const PILLARS = [
   {
     icon: "🐾",
@@ -105,7 +141,6 @@ const PILLARS = [
   },
 ];
 
-// ─── Stats ────────────────────────────────────────────────────────────────────
 const STATS = [
   { val: "3", label: "Mini shows" },
   { val: "1", label: "Grand finale" },
@@ -115,8 +150,10 @@ const STATS = [
   { val: "🐾", label: "Pets welcome" },
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function CcdxSocialSeries() {
+  const cd = useCountdown(NEXT_SHOW_DATE);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "EventSeries",
@@ -154,11 +191,10 @@ export default function CcdxSocialSeries() {
       <main className="bg-cream text-ink">
         <Nav />
 
-        {/* ── HERO ── */}
+        {/* ── HERO ──────────────────────────────────────────────────────────── */}
         <section className="bg-ink pt-28 pb-0 md:pt-36 border-b-4 border-ink overflow-hidden">
           <div className="container">
             <div className="grid lg:grid-cols-2 gap-8 items-end">
-              {/* Text */}
               <div className="pb-16 md:pb-20">
                 <div className="flex flex-wrap items-center gap-2 mb-5">
                   <span className="inline-block font-display text-xs uppercase px-3 py-1 border-2 border-acid-yellow text-acid-yellow">
@@ -184,12 +220,40 @@ export default function CcdxSocialSeries() {
                   Underground dance music after dark. Three shows. One grand finale.
                 </p>
 
-                {/* NEXT SHOW callout */}
-                <div className="bg-acid-yellow border-4 border-cream p-4 mb-6 inline-block">
-                  <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ NEXT SHOW</p>
-                  <p className="font-display text-ink text-2xl leading-none">CCDXSOCIAL 01</p>
-                  <p className="font-display text-ink/70 text-sm mt-1">Sun, 29 Jun 2026 · Indiranagar Social</p>
-                </div>
+                {/* Live countdown block */}
+                {!cd.over ? (
+                  <div className="bg-acid-yellow border-4 border-cream p-4 mb-6 inline-block min-w-[280px]">
+                    <p className="font-display text-ink text-[10px] uppercase tracking-[0.3em] mb-3">
+                      ▶ CCDXSOCIAL 01 IN
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5 text-center mb-3">
+                      {[
+                        { val: cd.days, label: "DAYS" },
+                        { val: cd.hours, label: "HRS" },
+                        { val: cd.mins, label: "MIN" },
+                        { val: cd.secs, label: "SEC" },
+                      ].map(({ val, label }) => (
+                        <div key={label} className="bg-ink px-2 py-2">
+                          <p className="font-display text-acid-yellow text-2xl leading-none tabular-nums">
+                            {Pad(val)}
+                          </p>
+                          <p className="font-display text-acid-yellow/50 text-[9px] uppercase mt-0.5">
+                            {label}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="font-display text-ink/70 text-xs">
+                      SUN 29 JUN · INDIRANAGAR SOCIAL
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-acid-yellow border-4 border-cream p-4 mb-6 inline-block">
+                    <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ NEXT SHOW</p>
+                    <p className="font-display text-ink text-2xl leading-none">CCDXSOCIAL 01</p>
+                    <p className="font-display text-ink/70 text-sm mt-1">Sun, 29 Jun 2026 · Indiranagar Social</p>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-3">
                   <Link
@@ -207,7 +271,6 @@ export default function CcdxSocialSeries() {
                 </div>
               </div>
 
-              {/* Cat illustration */}
               <div className="flex justify-end items-end self-end">
                 <img
                   src={imgUrl(catDjHero)}
@@ -223,7 +286,7 @@ export default function CcdxSocialSeries() {
         {/* ── MARQUEE ── */}
         <Marquee
           bg="bg-magenta"
-          items={["CCDXSOCIAL 01", "CCDXSOCIAL 02", "CCDXSOCIAL 03", "MEGA", "PETS WELCOME", "DOORS LATE", "9 PM SHARP", "FREE RSVP"]}
+          items={["CCDXSOCIAL 01", "29 JUN · NEXT UP", "CCDXSOCIAL 02", "27 JUL", "CCDXSOCIAL 03", "30 AUG", "MEGA · OCT", "PETS WELCOME", "FREE RSVP", "9 PM SHARP"]}
         />
 
         {/* ── CONCEPT ── */}
@@ -240,12 +303,10 @@ export default function CcdxSocialSeries() {
                 worth leaving the house for.
               </p>
               <p className="text-ink/70 font-medium leading-relaxed">
-                Pet zone opens at 4 PM. Floor opens at 8 PM. The outdoor space is theirs until then.
+                Pet zone opens at 4 PM. Floor opens at 8 PM.
                 It's not a gimmick — it's a different kind of Sunday.
               </p>
             </div>
-
-            {/* Stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {STATS.map((s) => (
                 <div
@@ -260,95 +321,138 @@ export default function CcdxSocialSeries() {
           </div>
         </section>
 
-        {/* ── SERIES TIMELINE ── */}
-        <section className="bg-ink border-y-4 border-ink py-16 md:py-24">
+        {/* ── SERIES TIMELINE — Sequential journey ─────────────────────────── */}
+        <section className="bg-ink border-y-4 border-ink py-16 md:py-24 overflow-hidden">
           <div className="container">
-            <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">/ THE SEASON</p>
-            <h2 className="font-display text-cream text-4xl md:text-6xl uppercase leading-[0.9] mb-12">
-              THREE SHOWS.<br />ONE MEGA FINALE.
+            <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-2">/ THE SEASON</p>
+            <h2 className="font-display text-cream text-4xl md:text-6xl uppercase leading-[0.9] mb-4">
+              THE JOURNEY.
             </h2>
+            <p className="text-cream/50 font-medium max-w-lg mb-14">
+              Four events. One arc. Each show builds on the last — and MEGA closes it all out.
+            </p>
 
-            {/* Mini shows */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {/* ── Step progress bar (desktop) ── */}
+            <div className="hidden md:flex items-center mb-8 px-6">
+              {SHOWS.map((show, i) => (
+                <div key={show.num} className="flex items-center flex-1 last:flex-none">
+                  {/* Step circle */}
+                  <div className={`
+                    w-10 h-10 border-4 flex items-center justify-center font-display text-sm shrink-0 z-10
+                    ${show.isNext
+                      ? "bg-acid-yellow border-acid-yellow text-ink"
+                      : show.isMega
+                        ? "bg-magenta border-magenta text-cream"
+                        : "bg-cream/10 border-cream/30 text-cream/50"}
+                  `}>
+                    {show.isMega ? "★" : show.step}
+                  </div>
+                  {/* Connector line */}
+                  {i < SHOWS.length - 1 && (
+                    <div className={`flex-1 h-[3px] mx-1 ${i === 0 ? "bg-acid-yellow/40" : "bg-cream/10"}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* ── Show cards ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {SHOWS.map((show) => (
                 <div
                   key={show.num}
-                  className={`${show.bg} ${show.text} border-4 ${show.isNext ? "border-acid-yellow" : "border-cream/20"} p-6 flex flex-col relative`}
+                  className={`
+                    relative flex flex-col border-4
+                    ${show.isNext
+                      ? "border-acid-yellow ring-2 ring-acid-yellow/30 ring-offset-4 ring-offset-ink"
+                      : show.isMega
+                        ? "border-magenta"
+                        : "border-cream/15"}
+                    ${show.bg} ${show.text}
+                    p-6
+                  `}
                 >
+                  {/* YOU ARE HERE chip */}
                   {show.isNext && (
-                    <span className="absolute -top-3 left-4 bg-acid-yellow text-ink font-display text-[10px] tracking-widest px-3 py-1 border-2 border-ink">
-                      ▶ NEXT UP
+                    <span className="absolute -top-[15px] left-4 bg-acid-yellow text-ink font-display text-[9px] uppercase tracking-[0.2em] px-3 py-1 border-2 border-ink">
+                      ▶ YOU ARE HERE · NEXT UP
                     </span>
                   )}
-                  <div className="flex items-start justify-between mb-4 mt-2">
-                    <span className={`font-display text-[10px] uppercase tracking-widest ${show.accent}`}>
-                      SHOW {show.num}
+                  {show.isMega && (
+                    <span className="absolute -top-[15px] left-4 bg-magenta text-cream font-display text-[9px] uppercase tracking-[0.2em] px-3 py-1 border-2 border-ink">
+                      ★ GRAND FINALE
                     </span>
-                    <span className="font-display text-[10px] uppercase px-2 py-0.5 border border-current opacity-60">
-                      ~200 pax
+                  )}
+
+                  {/* Step + capacity */}
+                  <div className="flex items-start justify-between mt-2 mb-4">
+                    <span className={`font-display text-[10px] uppercase tracking-widest ${show.accent}`}>
+                      {show.isMega ? "SEASON FINALE" : `SHOW ${show.num}`}
+                    </span>
+                    <span className="font-display text-[10px] uppercase px-2 py-0.5 border border-current opacity-50">
+                      {show.isMega ? "2,000+" : "~200"} pax
                     </span>
                   </div>
 
                   <h3 className="font-display text-3xl md:text-4xl leading-none mb-2">{show.name}</h3>
-                  <p className={`font-display text-xs uppercase tracking-widest mb-3 ${show.accent}`}>
+                  <p className={`font-display text-xs uppercase tracking-widest mb-4 ${show.accent}`}>
                     {show.tagline}
                   </p>
-                  <p className="font-medium text-sm opacity-80 leading-snug mb-4 flex-1">{show.desc}</p>
+                  <p className="font-medium text-sm opacity-80 leading-snug mb-5 flex-1">{show.desc}</p>
 
+                  {/* Activity list */}
                   <div className="space-y-1.5 mb-5">
                     {show.activities.map((a) => (
-                      <p key={a} className="font-display text-xs opacity-70">{a}</p>
+                      <p key={a} className="font-display text-xs opacity-60">{a}</p>
                     ))}
                   </div>
 
-                  <div className="border-t border-current/20 pt-4 flex items-center justify-between">
+                  {/* Date + CTA */}
+                  <div className="border-t border-current/20 pt-4 mt-auto flex items-end justify-between gap-3">
                     <div>
-                      <p className="font-display text-sm">{show.date}</p>
-                      <p className="font-display text-[10px] opacity-60 mt-0.5">{show.venue}</p>
+                      <p className="font-display text-sm leading-none">{show.date}</p>
+                      <p className="font-display text-[10px] opacity-50 mt-1">{show.venue}</p>
                     </div>
                     <Link
                       href={`/events/${show.slug}`}
-                      className="font-display text-xs uppercase px-3 py-1.5 border-2 border-current hover:opacity-80 transition-opacity"
+                      className={`
+                        shrink-0 font-display text-xs uppercase px-3 py-2 border-2 border-current
+                        transition-all hover:opacity-80
+                        ${show.isNext ? "bg-acid-yellow text-ink border-acid-yellow" : ""}
+                      `}
                     >
-                      {show.isNext ? "RSVP →" : "INFO →"}
+                      {show.isNext ? "RSVP FREE →" : show.isMega ? "SEE DETAILS →" : "MORE INFO →"}
                     </Link>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* MEGA Finale */}
-            <div className={`${MEGA.bg} ${MEGA.text} border-4 border-cream/20 p-6 md:p-8`}>
-              <div className="grid md:grid-cols-[1fr_auto] gap-6 items-center">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <span className="font-display text-xs uppercase px-3 py-1 bg-magenta text-cream border-2 border-ink">
-                      ★ GRAND FINALE
-                    </span>
-                    <span className="font-display text-xs uppercase px-3 py-1 border-2 border-ink">
-                      2,000+ pax
-                    </span>
-                  </div>
-                  <h3 className="font-display text-5xl md:text-7xl leading-none mb-2">{MEGA.name}</h3>
-                  <p className="font-display text-sm uppercase tracking-widest text-magenta mb-4">{MEGA.tagline}</p>
-                  <p className="font-medium text-ink/80 max-w-2xl leading-relaxed">{MEGA.desc}</p>
-                </div>
-                <div className="text-center shrink-0 space-y-3">
-                  <p className="font-display text-4xl md:text-6xl text-ink leading-none">{MEGA.date}</p>
-                  <p className="font-display text-xs uppercase text-ink/50 tracking-widest">{MEGA.venue}</p>
-                  <Link
-                    href={`/events/${MEGA.slug}`}
-                    className="inline-block bg-ink text-cream font-display text-sm px-5 py-3 border-4 border-ink chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
-                  >
-                    SEE DETAILS →
-                  </Link>
-                  <Link
-                    href="/ccdxsocial/sponsor"
-                    className="block bg-magenta text-cream font-display text-sm px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
-                  >
-                    SPONSOR THE SERIES ✦
-                  </Link>
-                </div>
+            {/* ── Season progress footer ── */}
+            <div className="mt-10 border-t-2 border-cream/10 pt-8 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-display text-cream/40 text-xs uppercase tracking-widest mb-1">
+                  Season 1 — Jun to Oct 2026
+                </p>
+                <p className="font-display text-cream text-lg">
+                  Show 1 of 4 coming up.{" "}
+                  <span className="text-acid-yellow">
+                    {!cd.over ? `${cd.days} days away.` : "Happening now."}
+                  </span>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/events/ccdxsocial-01"
+                  className="bg-acid-yellow text-ink font-display text-sm px-5 py-2.5 border-4 border-acid-yellow chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+                >
+                  RSVP FOR SHOW 01 →
+                </Link>
+                <Link
+                  href="/ccdxsocial/sponsor"
+                  className="bg-transparent text-cream font-display text-sm px-5 py-2.5 border-4 border-cream/30 hover:border-cream transition-colors"
+                >
+                  SPONSOR THE SERIES ✦
+                </Link>
               </div>
             </div>
           </div>
@@ -374,7 +478,7 @@ export default function CcdxSocialSeries() {
           </div>
         </section>
 
-        {/* ── SPONSOR CTA — prominent full-bleed ── */}
+        {/* ── SPONSOR CTA ── */}
         <section className="bg-magenta border-y-4 border-ink py-16 md:py-24">
           <div className="container grid md:grid-cols-2 gap-10 items-center">
             <div>

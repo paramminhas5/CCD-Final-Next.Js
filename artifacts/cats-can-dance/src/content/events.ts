@@ -39,15 +39,15 @@ const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
 // for a slug isn't available yet (env var missing, seed not run, etc.).
 
 export const EVENT_ROWS: Record<string, EventRow> = {
-  "ccdxsocial-debut": {
-    slug: "ccdxsocial-debut",
-    title: "THE DEBUT",
-    date: "Sat, Jun 21, 2026",
+  "ccdxsocial-01": {
+    slug: "ccdxsocial-01",
+    title: "CCDXSOCIAL 01",
+    date: "Sun, Jun 29, 2026",
     city: "Bangalore",
-    venue: "Social, Indiranagar",
+    venue: "Indiranagar Social",
     blurb:
-      "India's first curated pet lifestyle festival meets underground dance music. The Debut is the first chapter — outdoor pet zone from 4PM with activities, vendor market, agility tasters and portrait booth. Then Startdawg and Merman take over for the night.",
-    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+      "India's first curated pet lifestyle festival meets underground dance music. The first chapter — outdoor pet zone from 4 PM with activities, vendor market, portrait booth, and lookalike contest. Then Startdawg b2b Merman take the floor at 9. The pack meets for the first time.",
+    lineup: ["Startdawg", "Merman", "TBA"],
     status: "upcoming",
     poster_url: null,
     sort_order: 1,
@@ -59,15 +59,15 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     is_finale: false,
   },
 
-  "ccdxsocial-groom-room": {
-    slug: "ccdxsocial-groom-room",
-    title: "THE GROOM ROOM",
-    date: "Sat, Jun 28, 2026",
+  "ccdxsocial-02": {
+    slug: "ccdxsocial-02",
+    title: "CCDXSOCIAL 02",
+    date: "Sun, Jul 27, 2026",
     city: "Bangalore",
-    venue: "Social, Church Street",
+    venue: "Social BLR (TBC)",
     blurb:
-      "All about looking good — pets and parents alike. Fashion, grooming, accessories. Live grooming demo on stage, best dressed contest, dedicated style photography corner. Plus Startdawg and Merman keeping the floor moving.",
-    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+      "The style chapter. Midsummer, outdoors, everyone at their best. Live grooming demo on stage, best-dressed contest for pets and parents, dedicated photography corner. Startdawg b2b Merman bring the floor into the night.",
+    lineup: ["Startdawg", "Merman", "TBA"],
     status: "upcoming",
     poster_url: null,
     sort_order: 2,
@@ -75,18 +75,18 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     series_label: "CCD × SOCIAL",
     event_type: "ccdxsocial",
     pet_friendly: true,
-    series_tagline: "FASHION · GROOMING · STYLE",
+    series_tagline: "STYLE · FASHION · MIDSUMMER ENERGY",
     is_finale: false,
   },
 
-  "ccdxsocial-zoomies": {
-    slug: "ccdxsocial-zoomies",
-    title: "ZOOMIES",
-    date: "Sun, Jun 29, 2026",
+  "ccdxsocial-03": {
+    slug: "ccdxsocial-03",
+    title: "CCDXSOCIAL 03",
+    date: "Sun, Aug 30, 2026",
     city: "Bangalore",
-    venue: "Indiranagar Social",
+    venue: "Social BLR (TBC)",
     blurb:
-      "The most physical chapter of the series. Outdoor pet zone all afternoon — two agility courses, a timed speed run, performance contest. Any breed, any age, any skill level. Then 8 PM doors flip and Startdawg b2b Merman take the floor through the night.",
+      "The most physical show. Two agility courses, timed speed runs, performance contest open to any breed. MEGA tickets drop exclusively at this event. One more show, then everything.",
     lineup: ["Startdawg", "Merman", "TBA"],
     status: "upcoming",
     poster_url: null,
@@ -95,16 +95,16 @@ export const EVENT_ROWS: Record<string, EventRow> = {
     series_label: "CCD × SOCIAL",
     event_type: "ccdxsocial",
     pet_friendly: true,
-    series_tagline: "AGILITY · PERFORMANCE · SPEED",
+    series_tagline: "AGILITY · PERFORMANCE · PRE-FINALE",
     is_finale: false,
   },
 
-  "ccdxsocial-grand-finale": {
-    slug: "ccdxsocial-grand-finale",
-    title: "GRAND FORMAT SHOW",
-    date: "Date TBA · 2026",
+  "ccdxsocial-mega": {
+    slug: "ccdxsocial-mega",
+    title: "MEGA",
+    date: "Oct 2026 — Date TBA",
     city: "Bangalore",
-    venue: "Venue TBA",
+    venue: "Venue TBA — Large Format",
     blurb:
       "The season finale. Everything the series has been building to. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we've ever done. Sponsorship enquiries open now.",
     lineup: ["Startdawg", "Merman", "Full lineup TBA"],

@@ -26,9 +26,34 @@ import CuratedEvents from "@/components/CuratedEvents";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
 import SeriesStrip from "@/components/SeriesStrip";
 
+// ── Countdown hook ──────────────────────────────────────────────────────────
+const NEXT_SHOW_DATE = new Date("2026-06-29T14:30:00Z"); // 8 PM IST
+
+function useCountdown(target: Date) {
+  const calc = () => {
+    const diff = target.getTime() - Date.now();
+    if (diff <= 0) return { days: 0, hours: 0, mins: 0, over: true };
+    const secs = Math.floor(diff / 1000);
+    return {
+      days: Math.floor(secs / 86400),
+      hours: Math.floor((secs % 86400) / 3600),
+      mins: Math.floor((secs % 3600) / 60),
+      over: false,
+    };
+  };
+  const [t, setT] = useState(calc);
+  useEffect(() => {
+    const id = setInterval(() => setT(calc()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  return t;
+}
+
 import { supabase } from "@/lib/supabase-shim";
 import { getEventContent } from "@/content/events";
 import type { EventRow } from "@/types/events";
+
+const Pad = (n: number) => String(n).padStart(2, "0");
 
 // ──────────────────── helpers ────────────────────
 
@@ -50,6 +75,7 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
 
 const Events = () => {
   const [all, setAll] = useState<EventRow[]>([]);
+  const cd = useCountdown(NEXT_SHOW_DATE);
 
   useEffect(() => {
     (async () => {
@@ -196,6 +222,50 @@ const Events = () => {
           bg="bg-acid-yellow"
           items={["CCDXSOCIAL 01 · 29 JUN", "CCDXSOCIAL 02 · 27 JUL", "CCDXSOCIAL 03 · 30 AUG", "MEGA · OCT 2026", "PETS WELCOME", "FREE RSVP", "9 PM SHARP"]}
         />
+
+        {/* ── Jun 29 urgency banner ── */}
+        {!cd.over && (
+          <div className="bg-ink border-b-4 border-ink">
+            <div className="container py-5 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="bg-acid-yellow text-ink font-display text-xs uppercase tracking-widest px-3 py-1 border-2 border-acid-yellow">
+                  ▶ NEXT SHOW
+                </span>
+                <div>
+                  <p className="font-display text-cream text-lg md:text-2xl leading-none">
+                    CCDXSOCIAL 01 — SUN 29 JUN
+                  </p>
+                  <p className="font-display text-cream/50 text-xs uppercase tracking-widest mt-0.5">
+                    Indiranagar Social, Bengaluru · 🐾 Pets Welcome · Free RSVP
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                {/* Mini countdown */}
+                <div className="flex items-center gap-1 font-display text-xs">
+                  <span className="bg-acid-yellow text-ink px-2 py-1 min-w-[2.5rem] text-center text-base">
+                    {Pad(cd.days)}
+                  </span>
+                  <span className="text-cream/40">D</span>
+                  <span className="bg-cream/10 text-cream px-2 py-1 min-w-[2.5rem] text-center text-base">
+                    {Pad(cd.hours)}
+                  </span>
+                  <span className="text-cream/40">H</span>
+                  <span className="bg-cream/10 text-cream px-2 py-1 min-w-[2.5rem] text-center text-base">
+                    {Pad(cd.mins)}
+                  </span>
+                  <span className="text-cream/40">M</span>
+                </div>
+                <Link
+                  to="/events/ccdxsocial-01"
+                  className="bg-acid-yellow text-ink font-display text-sm px-5 py-2.5 border-4 border-acid-yellow chunk-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-transform whitespace-nowrap"
+                >
+                  RSVP NOW →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section className="container py-10 md:py-12">
           <Breadcrumbs items={[{ label: "Home", to: "/" }, { label: "Events" }]} />

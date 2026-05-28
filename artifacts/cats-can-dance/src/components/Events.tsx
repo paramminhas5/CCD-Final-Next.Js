@@ -25,17 +25,18 @@ const Events = () => {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("events").select("*").order("sort_order", { ascending: true });
+      const { data } = await supabase
+        .from("events")
+        .select("*")
+        .order("sort_order", { ascending: true });
       if (data) setEvents(data as unknown as EventRow[]);
     })();
   }, []);
 
   const upcoming = events.filter((e) => e.status === "upcoming");
   const past = events.filter((e) => e.status === "past");
-  // Featured = next upcoming (prefer first series show)
+  // Featured = the very next upcoming event regardless of series
   const nextUp = upcoming[0] ?? events[0];
-  // Series events
-  const seriesEvents = upcoming.filter((e) => e.series === "ccdxsocial");
 
   return (
     <section id="events" className="relative bg-lime py-12 md:py-20 border-b-4 border-ink overflow-hidden">
@@ -55,65 +56,8 @@ const Events = () => {
           </Link>
         </div>
 
-        {/* ── CCD × SOCIAL series strip ── */}
-        {seriesEvents.length > 0 && (
-          <div className="mb-10">
-            <div className="bg-ink border-4 border-ink p-5 mb-4 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-1">/ SERIES · JUN–OCT 2026</p>
-                <h3 className="font-display text-cream text-3xl md:text-4xl leading-none">CCD × SOCIAL</h3>
-                <p className="text-cream/60 font-medium text-sm mt-1">India's first pet-friendly dance series. Outdoor pet zone + underground music.</p>
-              </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
-                <Link
-                  to="/events/ccdxsocial-01"
-                  className="bg-acid-yellow text-ink font-display text-sm px-5 py-2 border-4 border-cream chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-                >
-                  RSVP NOW →
-                </Link>
-                <Link
-                  to="/ccdxsocial"
-                  className="bg-transparent text-cream font-display text-sm px-5 py-2 border-4 border-cream/40 hover:border-cream transition-colors"
-                >
-                  ABOUT THE SERIES
-                </Link>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[...seriesEvents.slice(0, 3), upcoming.find(e => e.series === "ccdxsocial" && !!e.is_finale)].filter(Boolean).map((e, i) => {
-                const ev = e as EventRow;
-                const palettes = [
-                  "bg-electric-blue text-cream",
-                  "bg-magenta text-cream",
-                  "bg-ink text-cream",
-                  "bg-acid-yellow text-ink",
-                ];
-                return (
-                  <Link
-                    key={ev.slug}
-                    to={`/events/${ev.slug}`}
-                    className={`block border-4 border-ink chunk-shadow p-4 hover:-translate-y-1 hover:translate-x-1 transition-transform ${palettes[i % palettes.length]}`}
-                  >
-                    {ev.is_finale && (
-                      <span className="inline-block text-[9px] font-display uppercase px-2 py-0.5 bg-magenta text-cream border border-ink mb-2">★ MEGA</span>
-                    )}
-                    {i === 0 && !ev.is_finale && (
-                      <span className="inline-block text-[9px] font-display uppercase px-2 py-0.5 bg-acid-yellow text-ink border border-ink mb-2">▶ NEXT UP</span>
-                    )}
-                    <p className="font-display text-xl md:text-2xl leading-none mb-1">{ev.title.toUpperCase()}</p>
-                    <p className="font-display text-xs opacity-70">{ev.date}</p>
-                    {ev.series_tagline && (
-                      <p className="font-display text-[9px] uppercase tracking-wider opacity-50 mt-2">{ev.series_tagline}</p>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Featured next upcoming (if not covered above) ── */}
-        {nextUp && !seriesEvents.length && (() => {
+        {/* ── Featured next upcoming ── */}
+        {nextUp && (() => {
           const featuredPoster = resolvePosterUrl(nextUp.poster_url);
           return (
             <motion.article
@@ -135,26 +79,48 @@ const Events = () => {
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                         onError={(ev) => {
-                          const img = ev.currentTarget as HTMLImageElement;
-                          img.style.display = "none";
+                          (ev.currentTarget as HTMLImageElement).style.display = "none";
                         }}
                       />
                     </div>
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <span className="bg-acid-yellow text-ink text-xs font-bold px-3 py-1 border-2 border-ink uppercase inline-block mb-4">
-                    NEXT UP
-                  </span>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="bg-acid-yellow text-ink text-xs font-bold px-3 py-1 border-2 border-ink uppercase">
+                      ▶ NEXT UP
+                    </span>
+                    {nextUp.series_label && (
+                      <span className="bg-cream/20 text-cream text-xs font-bold px-3 py-1 border-2 border-cream/30 uppercase">
+                        {nextUp.series_label}
+                      </span>
+                    )}
+                    {nextUp.pet_friendly && (
+                      <span className="bg-electric-blue text-cream text-xs font-bold px-3 py-1 border-2 border-cream/30 uppercase">
+                        🐾 PETS WELCOME
+                      </span>
+                    )}
+                  </div>
                   <h3 className="font-display text-4xl md:text-6xl mb-4 leading-[0.9]">
                     {nextUp.title.toUpperCase()}
                   </h3>
                   <div className="grid sm:grid-cols-3 gap-4 my-4">
-                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ DATE</p><p className="font-display text-xl">{nextUp.date}</p></div>
-                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ CITY</p><p className="font-display text-xl">{nextUp.city}</p></div>
-                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ VENUE</p><p className="font-display text-xl">{nextUp.venue}</p></div>
+                    <div>
+                      <p className="font-display text-acid-yellow text-sm mb-1">/ DATE</p>
+                      <p className="font-display text-xl">{nextUp.date}</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-acid-yellow text-sm mb-1">/ CITY</p>
+                      <p className="font-display text-xl">{nextUp.city}</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-acid-yellow text-sm mb-1">/ VENUE</p>
+                      <p className="font-display text-xl">{nextUp.venue}</p>
+                    </div>
                   </div>
-                  <p className="text-cream/90 text-base md:text-lg max-w-2xl mb-6 font-medium">{nextUp.blurb}</p>
+                  <p className="text-cream/90 text-base md:text-lg max-w-2xl mb-6 font-medium">
+                    {nextUp.blurb}
+                  </p>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={() => setRsvpOpen(true)}
@@ -198,18 +164,23 @@ const Events = () => {
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                           onError={(ev) => {
-                            const img = ev.currentTarget as HTMLImageElement;
-                            img.style.display = "none";
+                            (ev.currentTarget as HTMLImageElement).style.display = "none";
                           }}
                         />
                       ) : (
-                        <div className="w-full h-full grid place-items-center bg-lime text-ink font-display text-3xl">★ {e.title}</div>
+                        <div className="w-full h-full grid place-items-center bg-lime text-ink font-display text-3xl">
+                          ★ {e.title}
+                        </div>
                       )}
                     </div>
                     <div className="p-5">
-                      <span className="bg-ink text-cream text-xs font-bold px-2 py-1 inline-block mb-2">{e.title}</span>
+                      <span className="bg-ink text-cream text-xs font-bold px-2 py-1 inline-block mb-2">
+                        {e.title}
+                      </span>
                       <p className="font-display text-2xl text-magenta">{e.city}</p>
-                      <p className="text-ink/70 font-medium text-sm">{e.venue} · {e.date}</p>
+                      <p className="text-ink/70 font-medium text-sm">
+                        {e.venue} · {e.date}
+                      </p>
                     </div>
                   </Link>
                 );
