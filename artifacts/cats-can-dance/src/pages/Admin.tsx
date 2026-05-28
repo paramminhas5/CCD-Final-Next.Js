@@ -53,6 +53,7 @@ type Settings = {
   home_content?: {
     about?: { kicker?: string; title?: string; body?: string; ctaLabel?: string; ctaHref?: string };
     cta?: { title?: string; body?: string; label?: string; href?: string };
+    section_visibility?: { show_scene_map?: boolean; show_pick_your_sound?: boolean; show_featured_artists?: boolean; [key: string]: boolean | undefined };
   };
 };
 type MediaItem = { type: "image" | "video"; url: string; caption?: string };
