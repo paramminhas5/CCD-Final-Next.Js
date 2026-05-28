@@ -14,6 +14,7 @@ const primaryLinks = [
   { to: "/about", label: "About" },
   { to: "/discover", label: "Discover" },
   { to: "/events", label: "Events" },
+  { to: "/ccdxsocial", label: "CCD × SOCIAL" },
   { to: "/artists", label: "Artists" },
   { to: "/shop", label: "Shop" },
 ];

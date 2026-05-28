@@ -41,7 +41,7 @@ const SeriesStrip = ({ events, currentSlug, seriesLabel, variant = "detail" }: P
               </h2>
             </div>
             <Link
-              to={`/${(currentSlug ?? "").startsWith("ccdxsocial") ? "ccdxsocial" : "events"}`}
+              to={`/${(currentSlug ?? "").startsWith("ccdxsocial") || (events[0]?.series === "ccdxsocial") ? "ccdxsocial" : "events"}`}
               className="bg-acid-yellow text-ink font-display text-sm md:text-base px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
             >
               ABOUT THE SERIES →

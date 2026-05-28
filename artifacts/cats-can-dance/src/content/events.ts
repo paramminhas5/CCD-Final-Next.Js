@@ -4,13 +4,13 @@
  * Two halves:
  *
  * CCD × SOCIAL — Season 1 show structure:
- *   Show 01 · 29 Jun 2026 → THE DEBUT         (broad, welcoming, first impression)
- *   Show 02 · 27 Jul 2026 → THE HEAT          (style, fashion, summer energy)
- *   Show 03 · 30 Aug 2026 → LOOSE ENDS        (agility, performance, pre-finale)
- *   Grand Finale · Oct 2026 → THE GATHERING   (large format, season closer)
+ *   Show 01 · 29 Jun 2026 → CCDXSOCIAL 01   (broad, welcoming, first impression)
+ *   Show 02 · 27 Jul 2026 → CCDXSOCIAL 02   (style, fashion, summer energy)
+ *   Show 03 · 30 Aug 2026 → CCDXSOCIAL 03   (agility, performance, pre-finale)
+ *   Grand Finale · Oct 2026 → MEGA          (large format, season closer)
  *
  * Past episodes:
- *   Episode 1 · 2 Apr 2025 → Bar Wild, Indiranagar
+ *   CCD AT BAR WILD · 2 Apr 2025 → Bar Wild, Indiranagar
  */
 
 import type {
@@ -147,13 +147,13 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     price_text: "FREE — RSVP only",
   },
 
-  // ─── CCD × SOCIAL — Show 01: THE DEBUT ───────────────────────────
+  // ─── CCD × SOCIAL — Show 01: CCDXSOCIAL 01 ───────────────────────
 
-  "ccdxsocial-debut": {
+  "ccdxsocial-01": {
     cta_label: "RSVP — IT'S FREE →",
 
     narrative:
-      "THE DEBUT is the first chapter. Wide open — first impression, big tent, easy yes. The afternoon belongs to the animals: portrait booth, lookalike contest, vendor market. Then the room flips at 8 and Startdawg b2b Merman take the floor. The pack meets for the first time.",
+      "CCDXSOCIAL 01 is the first chapter. Wide open — first impression, big tent, easy yes. The afternoon belongs to the animals: portrait booth, lookalike contest, vendor market. Then the room flips at 8 and Startdawg b2b Merman take the floor. The pack meets for the first time.",
 
     vibe_pillars: DEFAULT_VIBE_PILLARS_CCDXSOCIAL,
 
@@ -209,21 +209,21 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
+      "CCDXSOCIAL 01",
       "PETS WELCOME",
-      "DOORS LATE",
+      "29 JUN · INDIRANAGAR SOCIAL",
       "9 PM SHARP",
       "B2B ALL NIGHT",
-      "PACK MOVES TOGETHER",
     ],
   },
 
-  // ─── CCD × SOCIAL — Show 02: THE HEAT ────────────────────────────
+  // ─── CCD × SOCIAL — Show 02: CCDXSOCIAL 02 ───────────────────────
 
-  "ccdxsocial-the-heat": {
+  "ccdxsocial-02": {
     cta_label: "RSVP — IT'S FREE →",
 
     narrative:
-      "THE HEAT is the style chapter — midsummer, outdoors, everyone looking their best. Live grooming demo on stage, a best-dressed contest for pets and parents alike, and a dedicated photography corner. When the sun drops, Startdawg b2b Merman bring the floor into the night.",
+      "CCDXSOCIAL 02 is the style chapter — midsummer, outdoors, everyone looking their best. Live grooming demo on stage, a best-dressed contest for pets and parents alike, and a dedicated photography corner. When the sun drops, Startdawg b2b Merman bring the floor into the night.",
 
     vibe_pillars: [
       { icon: "✂️", label: "STYLE",   desc: "Live grooming demo on stage. Best-dressed contest for pets and parents." },
@@ -275,25 +275,25 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
+      "CCDXSOCIAL 02",
       "MIDSUMMER",
+      "27 JUL · SOCIAL BLR",
       "BEST DRESSED",
       "9 PM SHARP",
-      "STYLE CHAPTER",
-      "PACK MOVES TOGETHER",
     ],
   },
 
-  // ─── CCD × SOCIAL — Show 03: LOOSE ENDS ──────────────────────────
+  // ─── CCD × SOCIAL — Show 03: CCDXSOCIAL 03 ──────────────────────
 
-  "ccdxsocial-loose-ends": {
+  "ccdxsocial-03": {
     cta_label: "RSVP — IT'S FREE →",
 
     narrative:
-      "LOOSE ENDS is the last show before the finale — and the most physical. Two agility courses, a timed speed run, a performance contest open to any breed. The community is fully formed by now. Finale tickets drop exclusively at this event. One more show, then everything.",
+      "CCDXSOCIAL 03 is the last show before the finale — and the most physical. Two agility courses, a timed speed run, a performance contest open to any breed. The community is fully formed by now. Finale tickets drop exclusively at this event. One more show, then everything.",
 
     vibe_pillars: [
       { icon: "🏃", label: "AGILITY",  desc: "Two outdoor courses, timed speed runs, performance contest. Open to any breed, any age." },
-      { icon: "🎟️", label: "FINALE",   desc: "Grand Finale tickets drop exclusively at this show. First access for attendees only." },
+      { icon: "🎟️", label: "FINALE",   desc: "MEGA tickets drop exclusively at this show. First access for attendees only." },
       { icon: "🎧", label: "FLOOR",    desc: "9 PM sharp. Startdawg b2b Merman one last time before the big one." },
     ],
 
@@ -305,12 +305,12 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
       { time: "4:30 PM",  what: "Agility course warm-up · meet the trainers" },
       { time: "5:30 PM",  what: "Timed speed runs · leaderboard goes live" },
       { time: "6:30 PM",  what: "Performance contest · best paw · fastest breed" },
-      { time: "7:00 PM",  what: "🎟️ Grand Finale tickets on sale — attendees only", highlight: true },
+      { time: "7:00 PM",  what: "🎟️ MEGA tickets on sale — attendees only", highlight: true },
       { time: "7:30 PM",  what: "Pet zone wraps · portrait booth final calls" },
       { time: "8:00 PM",  what: "Doors open for the night" },
       { time: "9:00 PM",  what: "Startdawg b2b Merman take the floor", highlight: true },
       { time: "11:00 PM", what: "Special guest set (TBA)" },
-      { time: "1:00 AM",  what: "Last drinks · see you at The Gathering" },
+      { time: "1:00 AM",  what: "Last drinks · see you at MEGA" },
     ],
 
     artist_details: {
@@ -342,21 +342,21 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "LOOSE ENDS",
+      "CCDXSOCIAL 03",
       "AGILITY FINALS",
-      "FINALE TICKETS DROP HERE",
+      "30 AUG · SOCIAL BLR",
+      "MEGA TICKETS DROP HERE",
       "9 PM SHARP",
-      "ONE MORE BEFORE THE BIG ONE",
     ],
   },
 
-  // ─── CCD × SOCIAL — Grand Finale: THE GATHERING ──────────────────
+  // ─── CCD × SOCIAL — Grand Finale: MEGA ──────────────────────────
 
-  "ccdxsocial-the-gathering": {
+  "ccdxsocial-mega": {
     cta_label: "GET TICKETS →",
 
     narrative:
-      "THE GATHERING is the season finale — everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. A complete DJ lineup yet to be announced. The biggest thing we've ever done, and the whole pack in one place.",
+      "MEGA is the season finale — everything the series has been building to. Full outdoor stage. 2,000+ people. Pet runway. Agility finals. A complete DJ lineup yet to be announced. The biggest thing we've ever done, and the whole pack in one place.",
 
     vibe_pillars: [
       { icon: "🎪", label: "SCALE",    desc: "Full outdoor stage. 2,000+ capacity. Pet runway and agility finals." },
@@ -366,7 +366,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
 
     doors_time:  "TBA",
     peak_time:   "TBA",
-    price_text:  "Tickets from The Preview · General on sale soon",
+    price_text:  "Tickets from CCDXSOCIAL 03 · General on sale soon",
     capacity:    2000,
 
     partners: [
@@ -374,7 +374,7 @@ export const EVENT_CONTENT: Record<string, EventContent> = {
     ],
 
     marquee_items: [
-      "THE GATHERING",
+      "MEGA",
       "SEASON FINALE",
       "2000+ PEOPLE",
       "PET RUNWAY",

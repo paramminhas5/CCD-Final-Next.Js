@@ -6,6 +6,7 @@ import Hero from "@/components/Hero";
 import MarqueeBySlot from "@/components/MarqueeBySlot";
 import About from "@/components/About";
 import Events from "@/components/Events";
+import CcdxSocialHomeStrip from "@/components/CcdxSocialHomeStrip";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
 import Catbot from "@/components/Catbot";
@@ -130,6 +131,7 @@ const Index = () => {
         <SectionReveal><About /></SectionReveal>
         <MarqueeBySlot id="above-events" />
         <SectionReveal><Events /></SectionReveal>
+        <SectionReveal><CcdxSocialHomeStrip /></SectionReveal>
         {/* ── Scene Discovery Sections (toggled from Admin > Homepage) ── */}
         {sectionVis.show_scene_map && (
           <SectionReveal><SceneSnapshot /></SectionReveal>
