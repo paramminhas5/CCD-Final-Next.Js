@@ -48,26 +48,38 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 
 ## Current State
 
-> As of May 2026 — `feature/booking-phase1` branch, [PR #10](https://github.com/paramminhas5/CCD-Final-Next.Js/pull/10)
+> As of May 2026 · Branch: [`feature/booking-phase1`](https://github.com/paramminhas5/CCD-Final-Next.Js/tree/feature/booking-phase1) · [PR #10 open](https://github.com/paramminhas5/CCD-Final-Next.Js/pull/10) · Vercel preview building
 
+### What's live right now
 | Module | Status | Notes |
 |--------|--------|-------|
 | Homepage, Discover, Scene/Genre pages | ✅ Live | Full editorial content |
-| Artists directory + detail pages | ✅ Live | Gigography, connections, stats, EPK |
+| Artists directory + detail pages | ✅ Live | Gigography, connections, stats, EPK, BOOK tab |
 | Events (CCD own + curated) | ✅ Live | Cron scraper needs scheduling |
-| Shop (Shopify) | 🔴 Broken | Storefront token needs verification |
-| Admin CMS | 🟡 Partial | Needs `SUPABASE_SERVICE_KEY` in Vercel |
-| Artist Portal — profile + dates | ✅ Live | |
-| Artist Portal — Calendar (Airbnb-style) | ✅ Live | **PR #10** |
-| Artist Portal — Packages | ✅ Live | **PR #10** |
-| Artist Portal — Booking Inbox (state machine) | ✅ Live | **PR #10** |
-| Booking Marketplace `/book` (date+city search) | ✅ Live | **PR #10** |
-| Promoter Dashboard `/promoter/dashboard` | ✅ Live | **PR #10** |
-| Talent Directory `/talent` | ✅ Live | **PR #10** |
-| Transactional emails (booking events) | 🟡 Ready | Set `RESEND_API_KEY` to activate |
-| Hold expiry cron | 🟡 Ready | Add to `vercel.json` (see below) |
-| First-party ticketing | 🔜 Phase 7 | |
-| Community profiles | 🔜 Phase 8 | |
+| Blog, About, Partnership pages | ✅ Live | |
+| Shop (Shopify) | 🔴 Broken | Storefront token needs re-verification |
+| Admin CMS (14 tabs) | 🟡 Partial | Set `SUPABASE_SERVICE_KEY` in Vercel → fully live |
+
+### Booking module — code shipped, needs activation
+| Feature | Code Status | To Activate |
+|---------|-------------|-------------|
+| Artist calendar (Airbnb-style) | ✅ Shipped | Run migrations 001–002 |
+| Artist packages | ✅ Shipped | Run migrations 001–003 |
+| Booking inbox + state machine | ✅ Shipped | Run migration 003 |
+| `/book` marketplace (date+city) | ✅ Shipped | No migration needed |
+| Promoter Dashboard | ✅ Shipped | Run migrations 004–006 |
+| Talent Directory `/talent` | ✅ Shipped | No migration needed |
+| Transactional emails (7 templates) | ✅ Shipped | Set `RESEND_API_KEY` |
+| Hold expiry cron | ✅ Shipped | Add to `vercel.json` |
+
+### Coming next
+| Feature | Phase | Notes |
+|---------|-------|-------|
+| Admin booking panel + promoter verifications | Phase 4 | |
+| Artist enrichment pipeline (Firecrawl) | Phase 5 | |
+| Event crawler scheduling | Phase 6 | |
+| First-party ticketing (Stripe) | Phase 7 | |
+| Community profiles + follow | Phase 8 | |
 
 
 
@@ -80,29 +92,29 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 ├── artifacts/
 │   ├── cats-can-dance/              ← Next.js 14 frontend (Pages Router)
 │   │   ├── pages/
-│   │   │   ├── api/[...proxy].ts    ← All API routes (Supabase proxy)
-│   │   │   ├── api/cron/            ← Vercel cron jobs
-│   │   │   ├── artist/dashboard.tsx ← Artist portal
-│   │   │   ├── promoter/dashboard.tsx ← Promoter dashboard  ← NEW
-│   │   │   └── talent/              ← Talent directory + profiles  ← NEW
+│   │   │   ├── api/[...proxy].ts    ← All API routes (Supabase proxy, ~1700 lines)
+│   │   │   ├── api/cron/            ← Vercel cron jobs (expire-holds, scrape-events, weekly-digest)
+│   │   │   ├── artist/dashboard.tsx ← Artist portal (Clerk-gated)
+│   │   │   ├── promoter/dashboard.tsx ← Promoter dashboard (Clerk-gated)
+│   │   │   └── talent/              ← Talent directory + profile aliases
 │   │   └── src/
 │   │       ├── components/
-│   │       │   ├── booking/         ← BookingForm (shared)  ← NEW
-│   │       │   └── portal/          ← CalendarManager, PackagesManager  ← NEW
+│   │       │   ├── booking/         ← BookingForm (shared across /book + artist profiles)
+│   │       │   └── portal/          ← CalendarManager, PackagesManager
 │   │       ├── lib/
-│   │       │   ├── booking-email.ts ← Resend email helper  ← NEW
-│   │       │   └── talent-config.ts ← Talent kinds + package templates  ← NEW
-│   │       └── pages/               ← Page components
-│   └── api-server/                  ← Express 5 REST API server
+│   │       │   ├── booking-email.ts ← Resend transactional email helper (7 templates)
+│   │       │   └── talent-config.ts ← Talent kind metadata + default package templates
+│   │       └── pages/               ← Full page components (SPA-style, lazy-loaded via dynamic())
+│   └── api-server/                  ← Express 5 REST API server (supplementary; main logic in proxy)
 ├── lib/
 │   ├── db/
-│   │   ├── src/schema/              ← Drizzle ORM schema
-│   │   └── migrations/              ← SQL migration files  ← NEW (001–006)
+│   │   ├── src/schema/              ← Drizzle ORM schema (core tables)
+│   │   └── migrations/              ← SQL migration files (001–006, all idempotent)
 │   ├── api-spec/                    ← OpenAPI 3.1 YAML
 │   ├── api-client-react/            ← Auto-generated TanStack Query hooks
 │   └── api-zod/                     ← Auto-generated Zod schemas
 ├── scripts/                         ← Seed scripts
-├── .migration-backup/               ← Original Vite/React SPA (reference only)
+├── .migration-backup/               ← Original Vite/React SPA (reference only, do not edit)
 └── pnpm-workspace.yaml
 ```
 
@@ -166,8 +178,8 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 
 ### Install
 ```bash
-git clone https://github.com/paramminhas5/ccdkiroedit.git
-cd ccdkiroedit
+git clone https://github.com/paramminhas5/CCD-Final-Next.Js.git
+cd CCD-Final-Next.Js
 pnpm install
 ```
 
@@ -435,9 +447,6 @@ FAL_KEY=...                      # AI poster generation (already wired)
 ---
 
 
----
-
-
 ## Known Issues / Broken
 
 ### 🔴 Broken — fix before launch
@@ -470,9 +479,6 @@ FAL_KEY=...                      # AI poster generation (already wired)
 | `public/sitemap.xml` conflicting with dynamic `pages/sitemap.xml.tsx` | ✅ |
 | Booking inbox showed raw blob text | ✅ — structured columns + status machine |
 | Availability strip only read individual gig dates | ✅ — now reads merged calendar API (blocks + gigs) |
-
----
-
 
 ---
 
@@ -556,9 +562,12 @@ supabase db push
 
 > **After running migrations**, add `RESEND_API_KEY` to Vercel env vars and the hold-expiry cron to `vercel.json` — the booking module is then fully live.
 
+---
 
 
-Base URL: `/api` (proxied through Next.js → Express 5 server)
+## API Reference
+
+Base URL: `/api` (proxied through Next.js → Supabase REST via `pages/api/[...proxy].ts`)
 
 ### Artists
 | Method | Route | Description |
@@ -682,31 +691,61 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 
 ---
 
-### 🔥 Next Up — Phase 4: Ops & Polish
+### 🔥 Phase 4 — Ops & Polish (next up)
 
-These are the highest-leverage remaining items. No new features — make everything that exists work perfectly.
+Everything in this phase is already built. This is purely activation, wiring, and polish — no new feature work required.
 
-**4a — Activate what's already built (hours, not days)**
-- [ ] Set `RESEND_API_KEY` in Vercel → booking emails go live instantly
-- [ ] Add hold-expiry cron to `vercel.json` → holds expire automatically
-- [ ] Set `SUPABASE_SERVICE_KEY` in Vercel → admin panel fully operational
-- [ ] Run `lib/db/migrations/001–006` in Supabase → booking module fully live
-- [ ] Verify Shopify Storefront token → shop goes live
+---
 
-**4b — Admin experience**
-- [ ] Remove or wire the ghost routes in `AdminPanel.tsx` (`/api/role-applications` doesn't exist)
-- [ ] Add "Booking Requests" tab to admin panel — view all pending inquiries across all artists
-- [ ] Add "Promoter Verifications" tab — one-click verify promoter accounts
-- [ ] Booking revenue summary in admin (confirmed bookings count + total quoted INR)
+**🟢 4a — Activate in under an hour** *(just env vars + config)*
 
-**4c — Artist onboarding**
-- [ ] Email to admin when an artist submits a claim request
-- [ ] Welcome email to artist when their profile is approved
-- [ ] "Complete your profile" nudge in portal if packages = 0 or calendar has no blocks
+```bash
+# 1. In Vercel project settings, add these env vars:
+RESEND_API_KEY=re_...           # booking emails fire immediately
+SUPABASE_SERVICE_KEY=eyJ...    # admin panel goes fully live
 
-**4d — Quality of life**
-- [ ] `.env.example` file documenting every variable (currently only in README)
-- [ ] Schedule `curate-events` cron in `vercel.json` — events auto-populate without manual admin seeding
+# 2. In vercel.json, add the hold-expiry cron:
+{
+  "crons": [{ "path": "/api/cron/expire-holds", "schedule": "0 * * * *" }]
+}
+
+# 3. In Supabase SQL Editor, run in order:
+lib/db/migrations/001_artist_packages.sql
+lib/db/migrations/002_artist_availability_blocks.sql
+lib/db/migrations/003_extend_artist_dates_and_booking_requests.sql
+lib/db/migrations/004_promoter_profiles.sql
+lib/db/migrations/005_booking_messages.sql
+lib/db/migrations/006_booking_shortlist.sql
+
+# 4. Verify Shopify Storefront token in Shopify Admin → Apps → Storefront API
+```
+
+After these 4 steps: booking emails, admin panel, all 3 booking phases, and the shop are fully live.
+
+---
+
+**🔧 4b — Admin panel wiring** *(1–2 days)*
+
+- [ ] Remove or fix the ghost tab in `AdminPanel.tsx` that calls `/api/role-applications` (route doesn't exist → causes silent 404)
+- [ ] Add **"Booking Requests"** tab to admin — view all `booking_requests` across every artist, filter by status, see total pipeline value
+- [ ] Add **"Promoter Verifications"** tab — table of pending `promoter_profiles` with one-click verify button (sets `is_verified = true`, triggers welcome email)
+- [ ] Revenue summary widget in admin header — count of confirmed bookings this month + total `quoted_inr`
+
+---
+
+**📬 4c — Artist & talent onboarding emails** *(half a day — Resend templates only)*
+
+- [ ] Email to admin when an artist submits a claim request (`/api/artist-submissions` → `POST`)
+- [ ] Welcome email to artist when their claim is approved in the admin panel
+- [ ] **"Complete your profile" nudge** — when an artist logs into the portal with `packages.length === 0` or no availability blocks, show a dismissible banner: *"You have 0 packages — promoters can't see your pricing. Add one →"*
+
+---
+
+**🧹 4d — Dev quality of life** *(1–2 hrs)*
+
+- [ ] Create `.env.example` at repo root documenting every required + optional variable (currently only in README)
+- [ ] Add `curate-events` to `vercel.json` crons so curated events auto-populate without manual admin seeding
+- [ ] Fix `Getting Started` clone URL — currently points to `ccdkiroedit`, should be `CCD-Final-Next.Js`
 
 ---
 
@@ -841,26 +880,6 @@ chore(readme): update roadmap and known issues
 2. `npx tsc --noEmit --skipLibCheck` inside `artifacts/cats-can-dance` — check for new errors
 3. Verify the pages you changed render correctly in browser (`pnpm dev`)
 4. Run relevant SQL migrations in Supabase if schema changed
-
----
-
-## Known Issues Log
-
-| Date | Issue | Status |
-|------|-------|--------|
-| 2026-05 | Shop products not visible — Shopify token needs verification | 🔴 Open |
-| 2026-05 | Admin panel not loading — `SUPABASE_SERVICE_KEY` not set in Vercel | 🔴 Open |
-| 2026-05 | AdminPanel.tsx calls `/api/role-applications` (doesn't exist) | 🟡 Needs wiring or removal |
-| 2026-05 | Instagram feed returns `[]` — no access token | 🟡 Needs `INSTAGRAM_ACCESS_TOKEN` |
-| 2026-05 | YouTube videos empty — no API key | 🟡 Needs `YOUTUBE_API_KEY` |
-| 2026-05 | Artist enrichment stub — Firecrawl not wired | 🟡 Needs keys + implementation |
-| 2026-05 | Booking emails silent — `RESEND_API_KEY` not set | 🟡 Just needs env var |
-| 2026-05 | Hold expiry not running — cron not added to `vercel.json` | 🟡 Just needs config |
-| 2026-05 | Curated events only appear when manually seeded | 🟡 Cron not scheduled |
-| 2026-05 | `ArtistGigChart` duplicate `</div>` breaking build | ✅ Fixed |
-| 2026-05 | `public/sitemap.xml` conflicting with `pages/sitemap.xml.tsx` | ✅ Fixed |
-| 2026-05 | Booking inbox showed raw purpose blob | ✅ Fixed — structured fields + state machine |
-| 2026-05 | AvailabilityStrip only read individual gig dates | ✅ Fixed — now reads merged calendar API |
 
 ---
 
