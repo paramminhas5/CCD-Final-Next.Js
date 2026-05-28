@@ -2296,7 +2296,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
     const allowed = ["company_name","contact_name","bio","logo_url","website","instagram",
                      "primary_city","cities","genre_focus"];
-    // NOTE: named patchBody (not patch) to avoid shadowing the outer patch() helper
+    // patchBody: avoids shadowing the module-level patch() helper function
     const patchBody: Record<string,any> = { updated_at: new Date().toISOString() };
     for (const k of allowed) { if (body[k] !== undefined) patchBody[k] = body[k]; }
     const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), patchBody);
