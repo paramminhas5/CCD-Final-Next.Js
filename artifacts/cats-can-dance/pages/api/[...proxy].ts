@@ -2297,9 +2297,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allowed = ["company_name","contact_name","bio","logo_url","website","instagram",
                      "primary_city","cities","genre_focus"];
     // patchBody: avoids shadowing the module-level patch() helper function
-    const patchBody: Record<string,any> = { updated_at: new Date().toISOString() };
-    for (const k of allowed) { if (body[k] !== undefined) patchBody[k] = body[k]; }
-    const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), patchBody);
+    const profilePatch: Record<string,any> = { updated_at: new Date().toISOString() };
+    for (const k of allowed) { if (body[k] !== undefined) profilePatch[k] = body[k]; }
+    const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), profilePatch);
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Update failed" });
   }
 
