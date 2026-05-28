@@ -1,11 +1,11 @@
 /**
  * CCD × SOCIAL — Public-facing series landing page.
- * Lives at /ccdxsocial (the old private proposal moved to /ccdxsocial/proposal).
+ * Lives at /ccdxsocial
  *
  * Structure:
- *   1. Hero            — Series identity, cat illustration, RSVP CTA
+ *   1. Hero            — Series identity, cat illustration, RSVP + SPONSOR CTAs
  *   2. Concept         — What is CCD × SOCIAL
- *   3. Series timeline — 3 shows + grand finale with dates/names
+ *   3. Series timeline — CCDXSOCIAL 01 / 02 / 03 + MEGA finale
  *   4. What to expect  — Pet zone · DJ floor · Market
  *   5. Sponsor strip   — CTA to /ccdxsocial/sponsor
  *   6. Proposal strip  — CTA to /ccdxsocial/proposal (B2B)
@@ -24,24 +24,23 @@ import { imgUrl } from "@/lib/img";
 const SHOWS = [
   {
     num: "01",
-    slug: "ccdxsocial-debut",
-    name: "THE DEBUT",
+    slug: "ccdxsocial-01",
+    name: "CCDXSOCIAL 01",
     date: "Sun, 29 Jun 2026",
     venue: "Indiranagar Social, BLR",
     tagline: "Broad · Welcoming · First Impression",
-    desc: "The first chapter. Portrait booth, lookalike contest, vendor market in the afternoon. Startdawg b2b Merman take the floor at 9.",
+    desc: "The first chapter. Portrait booth, lookalike contest, vendor market in the afternoon. Startdawg b2b Merman take the floor at 9. The pack meets for the first time.",
     activities: ["🎨 Pet Portrait Booth", "👯 Lookalike Contest", "🛍️ Vendor Market", "🎧 Startdawg b2b Merman"],
     bg: "bg-electric-blue",
     text: "text-cream",
     accent: "text-acid-yellow",
-    chipBg: "bg-acid-yellow",
-    chipText: "text-ink",
     status: "upcoming",
+    isNext: true,
   },
   {
     num: "02",
-    slug: "ccdxsocial-the-heat",
-    name: "THE HEAT",
+    slug: "ccdxsocial-02",
+    name: "CCDXSOCIAL 02",
     date: "Sun, 27 Jul 2026",
     venue: "Social BLR (TBC)",
     tagline: "Style · Fashion · Midsummer Energy",
@@ -50,31 +49,29 @@ const SHOWS = [
     bg: "bg-magenta",
     text: "text-cream",
     accent: "text-acid-yellow",
-    chipBg: "bg-acid-yellow",
-    chipText: "text-ink",
     status: "upcoming",
+    isNext: false,
   },
   {
     num: "03",
-    slug: "ccdxsocial-loose-ends",
-    name: "LOOSE ENDS",
+    slug: "ccdxsocial-03",
+    name: "CCDXSOCIAL 03",
     date: "Sun, 30 Aug 2026",
     venue: "Social BLR (TBC)",
     tagline: "Agility · Finale Preview · One More",
-    desc: "The most physical show. Two agility courses, timed speed runs, performance contest. Finale tickets drop exclusively here.",
-    activities: ["🏃 Two Agility Courses", "⚡ Timed Speed Run", "🎟️ Finale Ticket Drop", "🎧 Startdawg b2b Merman"],
+    desc: "The most physical show. Two agility courses, timed speed runs, performance contest. MEGA tickets drop exclusively here.",
+    activities: ["🏃 Two Agility Courses", "⚡ Timed Speed Run", "🎟️ MEGA Ticket Drop", "🎧 Startdawg b2b Merman"],
     bg: "bg-ink",
     text: "text-cream",
     accent: "text-acid-yellow",
-    chipBg: "bg-acid-yellow",
-    chipText: "text-ink",
     status: "upcoming",
+    isNext: false,
   },
 ];
 
-const FINALE = {
-  slug: "ccdxsocial-the-gathering",
-  name: "THE GATHERING",
+const MEGA = {
+  slug: "ccdxsocial-mega",
+  name: "MEGA",
   date: "October 2026",
   venue: "TBA — Large Format",
   tagline: "Grand Finale · Season Closer",
@@ -113,7 +110,7 @@ const STATS = [
   { val: "3", label: "Mini shows" },
   { val: "1", label: "Grand finale" },
   { val: "~200", label: "Pax per show" },
-  { val: "2,000+", label: "At the finale" },
+  { val: "2,000+", label: "At MEGA" },
   { val: "Free", label: "Entry — RSVP only" },
   { val: "🐾", label: "Pets welcome" },
 ];
@@ -148,7 +145,7 @@ export default function CcdxSocialSeries() {
     <>
       <SEO
         title="CCD × SOCIAL — India's First Pet-Friendly Dance Series | Cats Can Dance"
-        description="3 shows + a grand finale. Underground dance music meets outdoor pet lifestyle. Jun–Oct 2026 at Social BLR. Free RSVP."
+        description="3 shows + MEGA grand finale. Underground dance music meets outdoor pet lifestyle. Jun–Oct 2026 at Social BLR. Free RSVP."
         path="/ccdxsocial"
         keywords="CCD social bangalore, pet friendly dance event india, cats can dance social, underground music pets bangalore"
         jsonLd={jsonLd}
@@ -187,18 +184,25 @@ export default function CcdxSocialSeries() {
                   Underground dance music after dark. Three shows. One grand finale.
                 </p>
 
+                {/* NEXT SHOW callout */}
+                <div className="bg-acid-yellow border-4 border-cream p-4 mb-6 inline-block">
+                  <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ NEXT SHOW</p>
+                  <p className="font-display text-ink text-2xl leading-none">CCDXSOCIAL 01</p>
+                  <p className="font-display text-ink/70 text-sm mt-1">Sun, 29 Jun 2026 · Indiranagar Social</p>
+                </div>
+
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    href="/events"
+                    href="/events/ccdxsocial-01"
                     className="bg-acid-yellow text-ink font-display text-lg px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
                   >
-                    RSVP TO A SHOW →
+                    RSVP NOW →
                   </Link>
                   <Link
                     href="/ccdxsocial/sponsor"
-                    className="bg-transparent text-cream font-display text-lg px-6 py-3 border-4 border-cream/40 hover:border-cream transition-colors"
+                    className="bg-magenta text-cream font-display text-lg px-6 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
                   >
-                    SPONSOR THE SERIES
+                    SPONSOR THE SERIES ✦
                   </Link>
                 </div>
               </div>
@@ -219,7 +223,7 @@ export default function CcdxSocialSeries() {
         {/* ── MARQUEE ── */}
         <Marquee
           bg="bg-magenta"
-          items={["THE DEBUT", "THE HEAT", "LOOSE ENDS", "THE GATHERING", "PETS WELCOME", "DOORS LATE", "9 PM SHARP", "FREE RSVP"]}
+          items={["CCDXSOCIAL 01", "CCDXSOCIAL 02", "CCDXSOCIAL 03", "MEGA", "PETS WELCOME", "DOORS LATE", "9 PM SHARP", "FREE RSVP"]}
         />
 
         {/* ── CONCEPT ── */}
@@ -237,7 +241,7 @@ export default function CcdxSocialSeries() {
               </p>
               <p className="text-ink/70 font-medium leading-relaxed">
                 Pet zone opens at 4 PM. Floor opens at 8 PM. The outdoor space is theirs until then.
-                It's not a gimmick — it's a different kind of Saturday.
+                It's not a gimmick — it's a different kind of Sunday.
               </p>
             </div>
 
@@ -261,7 +265,7 @@ export default function CcdxSocialSeries() {
           <div className="container">
             <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">/ THE SEASON</p>
             <h2 className="font-display text-cream text-4xl md:text-6xl uppercase leading-[0.9] mb-12">
-              THREE SHOWS.<br />ONE GRAND FINALE.
+              THREE SHOWS.<br />ONE MEGA FINALE.
             </h2>
 
             {/* Mini shows */}
@@ -269,13 +273,18 @@ export default function CcdxSocialSeries() {
               {SHOWS.map((show) => (
                 <div
                   key={show.num}
-                  className={`${show.bg} ${show.text} border-4 border-cream/20 p-6 flex flex-col`}
+                  className={`${show.bg} ${show.text} border-4 ${show.isNext ? "border-acid-yellow" : "border-cream/20"} p-6 flex flex-col relative`}
                 >
-                  <div className="flex items-start justify-between mb-4">
+                  {show.isNext && (
+                    <span className="absolute -top-3 left-4 bg-acid-yellow text-ink font-display text-[10px] tracking-widest px-3 py-1 border-2 border-ink">
+                      ▶ NEXT UP
+                    </span>
+                  )}
+                  <div className="flex items-start justify-between mb-4 mt-2">
                     <span className={`font-display text-[10px] uppercase tracking-widest ${show.accent}`}>
                       SHOW {show.num}
                     </span>
-                    <span className={`font-display text-[10px] uppercase px-2 py-0.5 border border-current opacity-60`}>
+                    <span className="font-display text-[10px] uppercase px-2 py-0.5 border border-current opacity-60">
                       ~200 pax
                     </span>
                   </div>
@@ -299,17 +308,17 @@ export default function CcdxSocialSeries() {
                     </div>
                     <Link
                       href={`/events/${show.slug}`}
-                      className={`font-display text-xs uppercase px-3 py-1.5 border-2 border-current hover:opacity-80 transition-opacity`}
+                      className="font-display text-xs uppercase px-3 py-1.5 border-2 border-current hover:opacity-80 transition-opacity"
                     >
-                      RSVP →
+                      {show.isNext ? "RSVP →" : "INFO →"}
                     </Link>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Grand Finale */}
-            <div className={`${FINALE.bg} ${FINALE.text} border-4 border-cream/20 p-6 md:p-8`}>
+            {/* MEGA Finale */}
+            <div className={`${MEGA.bg} ${MEGA.text} border-4 border-cream/20 p-6 md:p-8`}>
               <div className="grid md:grid-cols-[1fr_auto] gap-6 items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -320,18 +329,24 @@ export default function CcdxSocialSeries() {
                       2,000+ pax
                     </span>
                   </div>
-                  <h3 className="font-display text-5xl md:text-7xl leading-none mb-2">{FINALE.name}</h3>
-                  <p className="font-display text-sm uppercase tracking-widest text-magenta mb-4">{FINALE.tagline}</p>
-                  <p className="font-medium text-ink/80 max-w-2xl leading-relaxed">{FINALE.desc}</p>
+                  <h3 className="font-display text-5xl md:text-7xl leading-none mb-2">{MEGA.name}</h3>
+                  <p className="font-display text-sm uppercase tracking-widest text-magenta mb-4">{MEGA.tagline}</p>
+                  <p className="font-medium text-ink/80 max-w-2xl leading-relaxed">{MEGA.desc}</p>
                 </div>
-                <div className="text-center shrink-0">
-                  <p className="font-display text-4xl md:text-6xl text-ink leading-none mb-1">{FINALE.date}</p>
-                  <p className="font-display text-xs uppercase text-ink/50 tracking-widest mb-4">{FINALE.venue}</p>
+                <div className="text-center shrink-0 space-y-3">
+                  <p className="font-display text-4xl md:text-6xl text-ink leading-none">{MEGA.date}</p>
+                  <p className="font-display text-xs uppercase text-ink/50 tracking-widest">{MEGA.venue}</p>
                   <Link
-                    href="/ccdxsocial/sponsor"
+                    href={`/events/${MEGA.slug}`}
                     className="inline-block bg-ink text-cream font-display text-sm px-5 py-3 border-4 border-ink chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
                   >
-                    SPONSORSHIP ENQUIRY →
+                    SEE DETAILS →
+                  </Link>
+                  <Link
+                    href="/ccdxsocial/sponsor"
+                    className="block bg-magenta text-cream font-display text-sm px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+                  >
+                    SPONSOR THE SERIES ✦
                   </Link>
                 </div>
               </div>
@@ -359,40 +374,50 @@ export default function CcdxSocialSeries() {
           </div>
         </section>
 
-        {/* ── SPONSOR CTA ── */}
-        <section className="bg-electric-blue border-y-4 border-ink py-16 md:py-20">
+        {/* ── SPONSOR CTA — prominent full-bleed ── */}
+        <section className="bg-magenta border-y-4 border-ink py-16 md:py-24">
           <div className="container grid md:grid-cols-2 gap-10 items-center">
             <div>
               <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">/ FOR BRANDS</p>
-              <h2 className="font-display text-cream text-4xl md:text-6xl uppercase leading-[0.9] mb-4">
+              <h2 className="font-display text-cream text-4xl md:text-6xl uppercase leading-[0.9] mb-4 drop-shadow-[4px_4px_0_hsl(var(--ink))]">
                 SPONSOR<br />THE SERIES.
               </h2>
-              <p className="text-cream/80 font-medium text-lg leading-relaxed max-w-lg">
-                3 shows + the Grand Finale. Urban 24–45 crowd, deeply passionate about their
+              <p className="text-cream/90 font-medium text-lg leading-relaxed max-w-lg mb-6">
+                3 shows + MEGA. Urban 24–45 crowd, deeply passionate about their
                 pets and their music. Your brand is not a banner — it's part of the room.
               </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/ccdxsocial/sponsor"
+                  className="bg-acid-yellow text-ink font-display text-xl px-8 py-4 border-4 border-ink chunk-shadow-lg hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+                >
+                  SEE SPONSOR TIERS →
+                </Link>
+                <a
+                  href="mailto:hello@catscandance.com?subject=CCD×SOCIAL Sponsorship"
+                  className="bg-transparent text-cream font-display text-xl px-8 py-4 border-4 border-cream hover:bg-ink transition-colors"
+                >
+                  EMAIL US
+                </a>
+              </div>
             </div>
             <div className="space-y-4">
               {[
-                { label: "Series Partner", desc: "All 3 shows + Grand Finale — headline presence everywhere" },
+                { label: "Series Partner", desc: "All 3 shows + MEGA — headline presence everywhere" },
                 { label: "Show Sponsor", desc: "Own a single night end to end" },
                 { label: "Community Supporter", desc: "Light touch across all shows" },
               ].map((t) => (
-                <div
+                <Link
                   key={t.label}
-                  className="bg-cream border-4 border-ink chunk-shadow p-4 flex items-center justify-between gap-4"
+                  href="/ccdxsocial/sponsor"
+                  className="bg-cream border-4 border-ink chunk-shadow p-4 flex items-center justify-between gap-4 hover:bg-acid-yellow transition-colors block"
                 >
                   <div>
                     <p className="font-display text-ink text-lg">{t.label}</p>
                     <p className="text-ink/60 text-sm font-medium">{t.desc}</p>
                   </div>
-                  <Link
-                    href="/ccdxsocial/sponsor"
-                    className="shrink-0 bg-ink text-cream font-display text-xs px-4 py-2 border-2 border-ink hover:bg-magenta transition-colors"
-                  >
-                    ENQUIRE →
-                  </Link>
-                </div>
+                  <span className="shrink-0 font-display text-ink text-sm">ENQUIRE →</span>
+                </Link>
               ))}
             </div>
           </div>

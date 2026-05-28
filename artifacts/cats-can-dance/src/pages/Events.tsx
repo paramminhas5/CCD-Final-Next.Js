@@ -194,7 +194,7 @@ const Events = () => {
 
         <Marquee
           bg="bg-acid-yellow"
-          items={["DOORS OPEN LATE", "BRING YOUR PACK", "NO DRESS CODE — MOVE", "SOLD-OUT IS A LOVE LANGUAGE"]}
+          items={["CCDXSOCIAL 01 · 29 JUN", "CCDXSOCIAL 02 · 27 JUL", "CCDXSOCIAL 03 · 30 AUG", "MEGA · OCT 2026", "PETS WELCOME", "FREE RSVP", "9 PM SHARP"]}
         />
 
         <section className="container py-10 md:py-12">

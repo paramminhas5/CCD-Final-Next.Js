@@ -11,7 +11,6 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
   if (!v) return null;
   if (v.startsWith("http://") || v.startsWith("https://")) return v;
   if (v.startsWith("/")) return v;
-  // Treat as Supabase Storage object in the `event-posters` bucket
   try {
     const { data } = supabase.storage.from("event-posters").getPublicUrl(v);
     return data?.publicUrl ?? `/${v}`;
@@ -31,177 +30,201 @@ const Events = () => {
     })();
   }, []);
 
-  const featured = events.find((e) => e.status === "upcoming") ?? events[0];
+  const upcoming = events.filter((e) => e.status === "upcoming");
   const past = events.filter((e) => e.status === "past");
+  // Featured = next upcoming (prefer first series show)
+  const nextUp = upcoming[0] ?? events[0];
+  // Series events
+  const seriesEvents = upcoming.filter((e) => e.series === "ccdxsocial");
 
   return (
     <section id="events" className="relative bg-lime py-12 md:py-20 border-b-4 border-ink overflow-hidden">
       <div className="container relative z-10">
-        <p className="font-display text-magenta text-lg md:text-xl mb-3">/ EVENTS</p>
-        <h2 className="font-display text-ink text-4xl md:text-6xl mb-8 leading-[0.85]">
-          CATCH<br/>US LIVE
-        </h2>
-
-        {featured && (() => {
-          const featuredPoster = resolvePosterUrl(featured.poster_url);
-          return (
-          <motion.article
-            initial={{ opacity: 0, y: 60, rotate: -1 }}
-            whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ type: "spring", stiffness: 140, damping: 18 }}
-            className="bg-magenta text-cream border-4 border-ink chunk-shadow-lg p-6 md:p-10 mb-12"
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+          <div>
+            <p className="font-display text-magenta text-lg md:text-xl mb-2">/ EVENTS</p>
+            <h2 className="font-display text-ink text-4xl md:text-6xl leading-[0.85]">
+              CATCH<br />US LIVE
+            </h2>
+          </div>
+          <Link
+            to="/events"
+            className="font-display text-ink text-base underline decoration-4 decoration-magenta underline-offset-4 hover:text-magenta transition"
           >
-            <div className={`flex flex-col ${featuredPoster ? "md:flex-row" : ""} gap-6 md:gap-10`}>
-              {featuredPoster && (
-                <div className="md:w-[40%] shrink-0">
-                  <div className="aspect-[3/4] bg-ink border-4 border-ink overflow-hidden chunk-shadow">
-                    <img
-                      src={featuredPoster}
-                      alt={`${featured.title} poster`}
-                      loading="lazy"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                      onError={(ev) => {
-                        const img = ev.currentTarget as HTMLImageElement;
-                        img.style.display = "none";
-                        const parent = img.parentElement;
-                        if (parent && !parent.querySelector("[data-poster-fallback]")) {
-                          const div = document.createElement("div");
-                          div.setAttribute("data-poster-fallback", "");
-                          div.className = "w-full h-full grid place-items-center bg-lime text-ink font-display text-3xl text-center px-4";
-                          div.innerHTML = `★ ${featured.title}`;
-                          parent.appendChild(div);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-3 mb-6">
-                  <span className="bg-acid-yellow text-ink text-xs font-bold px-3 py-1 border-2 border-ink uppercase">
-                    {featured.title} · {featured.status.toUpperCase()}
-                  </span>
-                  {featured.status === "upcoming" && (
-                    <span className="bg-cream text-ink text-xs font-bold px-3 py-1 border-2 border-ink uppercase">RSVP</span>
-                  )}
-                </div>
-                <h3 className="font-display text-4xl md:text-6xl mb-4 leading-[0.9] drop-shadow-[6px_6px_0_hsl(var(--ink))]">
-                  CATS CAN DANCE<br/>{featured.title}
-                </h3>
-                <div className="grid sm:grid-cols-3 gap-4 my-6">
-                  <div>
-                    <p className="font-display text-acid-yellow text-sm mb-1">/ DATE</p>
-                    <p className="font-display text-xl md:text-2xl">{featured.date}</p>
-                  </div>
-                  <div>
-                    <p className="font-display text-acid-yellow text-sm mb-1">/ CITY</p>
-                    <p className="font-display text-xl md:text-2xl">{featured.city}</p>
-                  </div>
-                  <div>
-                    <p className="font-display text-acid-yellow text-sm mb-1">/ VENUE</p>
-                    <p className="font-display text-xl md:text-2xl">{featured.venue}</p>
-                  </div>
-                </div>
-                <p className="text-cream/90 text-base md:text-lg max-w-2xl mb-6 font-medium">{featured.blurb}</p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {featured.status === "upcoming" && (
-                    <button
-                      onClick={() => setRsvpOpen(true)}
-                      className="bg-acid-yellow text-ink font-display text-xl px-8 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-                    >
-                      RSVP NOW →
-                    </button>
-                  )}
-                  <Link
-                    to={`/events/${featured.slug}`}
-                    className="bg-cream text-ink font-display text-xl px-8 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center"
-                  >
-                    VIEW DETAILS
-                  </Link>
-                </div>
+            All events →
+          </Link>
+        </div>
+
+        {/* ── CCD × SOCIAL series strip ── */}
+        {seriesEvents.length > 0 && (
+          <div className="mb-10">
+            <div className="bg-ink border-4 border-ink p-5 mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-1">/ SERIES · JUN–OCT 2026</p>
+                <h3 className="font-display text-cream text-3xl md:text-4xl leading-none">CCD × SOCIAL</h3>
+                <p className="text-cream/60 font-medium text-sm mt-1">India's first pet-friendly dance series. Outdoor pet zone + underground music.</p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Link
+                  to="/events/ccdxsocial-01"
+                  className="bg-acid-yellow text-ink font-display text-sm px-5 py-2 border-4 border-cream chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                >
+                  RSVP NOW →
+                </Link>
+                <Link
+                  to="/ccdxsocial"
+                  className="bg-transparent text-cream font-display text-sm px-5 py-2 border-4 border-cream/40 hover:border-cream transition-colors"
+                >
+                  ABOUT THE SERIES
+                </Link>
               </div>
             </div>
-          </motion.article>
-          );
-        })()}
-
-        {past.length > 0 && (
-          <div>
-            <p className="font-display text-ink text-xl mb-4">/ PAST EPISODES</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {past.map((e) => {
-                const src = resolvePosterUrl(e.poster_url);
-                const isGif = !!src && src.toLowerCase().includes(".gif");
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[...seriesEvents.slice(0, 3), upcoming.find(e => e.series === "ccdxsocial" && !!e.is_finale)].filter(Boolean).map((e, i) => {
+                const ev = e as EventRow;
+                const palettes = [
+                  "bg-electric-blue text-cream",
+                  "bg-magenta text-cream",
+                  "bg-ink text-cream",
+                  "bg-acid-yellow text-ink",
+                ];
                 return (
-                <Link
-                  key={e.slug}
-                  to={`/events/${e.slug}`}
-                  className="bg-cream border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform block"
-                >
-                  <div className="relative aspect-video bg-ink border-b-4 border-ink overflow-hidden">
-                    {src ? (
+                  <Link
+                    key={ev.slug}
+                    to={`/events/${ev.slug}`}
+                    className={`block border-4 border-ink chunk-shadow p-4 hover:-translate-y-1 hover:translate-x-1 transition-transform ${palettes[i % palettes.length]}`}
+                  >
+                    {ev.is_finale && (
+                      <span className="inline-block text-[9px] font-display uppercase px-2 py-0.5 bg-magenta text-cream border border-ink mb-2">★ MEGA</span>
+                    )}
+                    {i === 0 && !ev.is_finale && (
+                      <span className="inline-block text-[9px] font-display uppercase px-2 py-0.5 bg-acid-yellow text-ink border border-ink mb-2">▶ NEXT UP</span>
+                    )}
+                    <p className="font-display text-xl md:text-2xl leading-none mb-1">{ev.title.toUpperCase()}</p>
+                    <p className="font-display text-xs opacity-70">{ev.date}</p>
+                    {ev.series_tagline && (
+                      <p className="font-display text-[9px] uppercase tracking-wider opacity-50 mt-2">{ev.series_tagline}</p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Featured next upcoming (if not covered above) ── */}
+        {nextUp && !seriesEvents.length && (() => {
+          const featuredPoster = resolvePosterUrl(nextUp.poster_url);
+          return (
+            <motion.article
+              initial={{ opacity: 0, y: 60, rotate: -1 }}
+              whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ type: "spring", stiffness: 140, damping: 18 }}
+              className="bg-magenta text-cream border-4 border-ink chunk-shadow-lg p-6 md:p-10 mb-12"
+            >
+              <div className={`flex flex-col ${featuredPoster ? "md:flex-row" : ""} gap-6 md:gap-10`}>
+                {featuredPoster && (
+                  <div className="md:w-[40%] shrink-0">
+                    <div className="aspect-[3/4] bg-ink border-4 border-ink overflow-hidden chunk-shadow">
                       <img
-                        src={src}
-                        alt={`${e.title} poster`}
+                        src={featuredPoster}
+                        alt={`${nextUp.title} poster`}
                         loading="lazy"
                         decoding="async"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                         onError={(ev) => {
                           const img = ev.currentTarget as HTMLImageElement;
-                          if (process.env.NODE_ENV === "development") console.warn("[poster] failed", img.src);
-                          // First fallback: if the GIF failed, try the static PNG variant
-                          if (img.src.toLowerCase().endsWith(".gif") && !img.dataset.fellback) {
-                            img.dataset.fellback = "1";
-                            img.src = img.src.replace(/\.gif$/i, ".png");
-                            return;
-                          }
                           img.style.display = "none";
-                          const parent = img.parentElement;
-                          if (parent && !parent.querySelector("[data-poster-fallback]")) {
-                            const div = document.createElement("div");
-                            div.setAttribute("data-poster-fallback", "");
-                            div.className = "w-full h-full grid place-items-center bg-lime text-ink font-display text-2xl text-center px-4";
-                            div.innerHTML = `★ ${e.title}`;
-                            parent.appendChild(div);
-                          }
                         }}
                       />
-                    ) : (
-                      <div className="w-full h-full grid place-items-center bg-lime text-ink font-display text-3xl">★ {e.title}</div>
-                    )}
-                    {isGif && (
-                      <span className="absolute top-2 right-2 bg-acid-yellow text-ink text-[10px] font-bold px-2 py-0.5 border-2 border-ink uppercase">GIF</span>
-                    )}
+                    </div>
                   </div>
-                  <div className="p-5">
-                    <span className="bg-ink text-cream text-xs font-bold px-2 py-1 inline-block mb-2">{e.title}</span>
-                    <p className="font-display text-2xl text-magenta">{e.city}</p>
-                    <p className="text-ink/70 font-medium text-sm">{e.venue} · {e.date}</p>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="bg-acid-yellow text-ink text-xs font-bold px-3 py-1 border-2 border-ink uppercase inline-block mb-4">
+                    NEXT UP
+                  </span>
+                  <h3 className="font-display text-4xl md:text-6xl mb-4 leading-[0.9]">
+                    {nextUp.title.toUpperCase()}
+                  </h3>
+                  <div className="grid sm:grid-cols-3 gap-4 my-4">
+                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ DATE</p><p className="font-display text-xl">{nextUp.date}</p></div>
+                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ CITY</p><p className="font-display text-xl">{nextUp.city}</p></div>
+                    <div><p className="font-display text-acid-yellow text-sm mb-1">/ VENUE</p><p className="font-display text-xl">{nextUp.venue}</p></div>
                   </div>
-                </Link>
+                  <p className="text-cream/90 text-base md:text-lg max-w-2xl mb-6 font-medium">{nextUp.blurb}</p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => setRsvpOpen(true)}
+                      className="bg-acid-yellow text-ink font-display text-xl px-8 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                    >
+                      RSVP NOW →
+                    </button>
+                    <Link
+                      to={`/events/${nextUp.slug}`}
+                      className="bg-cream text-ink font-display text-xl px-8 py-4 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center"
+                    >
+                      VIEW DETAILS
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </motion.article>
+          );
+        })()}
+
+        {/* ── Past episodes ── */}
+        {past.length > 0 && (
+          <div className="mt-6">
+            <p className="font-display text-ink text-xl mb-4">/ PAST EPISODES</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {past.map((e) => {
+                const src = resolvePosterUrl(e.poster_url);
+                return (
+                  <Link
+                    key={e.slug}
+                    to={`/events/${e.slug}`}
+                    className="bg-cream border-4 border-ink chunk-shadow overflow-hidden hover:-translate-y-1 hover:translate-x-1 transition-transform block"
+                  >
+                    <div className="relative aspect-video bg-ink border-b-4 border-ink overflow-hidden">
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={`${e.title} poster`}
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                          onError={(ev) => {
+                            const img = ev.currentTarget as HTMLImageElement;
+                            img.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full grid place-items-center bg-lime text-ink font-display text-3xl">★ {e.title}</div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <span className="bg-ink text-cream text-xs font-bold px-2 py-1 inline-block mb-2">{e.title}</span>
+                      <p className="font-display text-2xl text-magenta">{e.city}</p>
+                      <p className="text-ink/70 font-medium text-sm">{e.venue} · {e.date}</p>
+                    </div>
+                  </Link>
                 );
               })}
             </div>
-            <Link
-              to="/events"
-              className="inline-block mt-6 font-display text-ink text-lg underline decoration-4 decoration-magenta underline-offset-4 hover:text-magenta transition"
-            >
-              See all events →
-            </Link>
           </div>
         )}
       </div>
 
-      {featured && (
+      {nextUp && (
         <RsvpDialog
           open={rsvpOpen}
           onOpenChange={setRsvpOpen}
-          eventSlug={featured.slug}
-          eventTitle={`Cats Can Dance ${featured.title}`}
+          eventSlug={nextUp.slug}
+          eventTitle={`Cats Can Dance — ${nextUp.title}`}
         />
       )}
     </section>

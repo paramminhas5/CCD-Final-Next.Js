@@ -83,9 +83,9 @@ const WHO = [
 
 // ── Series shows data ─────────────────────────────────────────────────────────
 const SHOWS = [
-  { num: "01", name: "THE DEBUT",    date: "Sun, 29 Jun 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream" },
-  { num: "02", name: "THE HEAT",     date: "Sun, 27 Jul 2026", tagline: "STYLE · FASHION · MIDSUMMER ENERGY",   bg: "bg-magenta",       text: "text-cream" },
-  { num: "03", name: "LOOSE ENDS",   date: "Sun, 30 Aug 2026", tagline: "AGILITY · FINALE PREVIEW · ONE MORE",  bg: "bg-ink",           text: "text-cream" },
+  { num: "01", name: "CCDXSOCIAL 01", date: "Sun, 29 Jun 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream", slug: "ccdxsocial-01" },
+  { num: "02", name: "CCDXSOCIAL 02", date: "Sun, 27 Jul 2026", tagline: "STYLE · FASHION · MIDSUMMER ENERGY",   bg: "bg-magenta",       text: "text-cream", slug: "ccdxsocial-02" },
+  { num: "03", name: "CCDXSOCIAL 03", date: "Sun, 30 Aug 2026", tagline: "AGILITY · FINALE PREVIEW · ONE MORE",  bg: "bg-ink",           text: "text-cream", slug: "ccdxsocial-03" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ const CcdxSocialSponsor = () => (
       </div>
     </PageHero>
 
-    <Marquee bg="bg-acid-yellow" items={["3 SHOWS", "1 GRAND FINALE", "JUN–AUG 2026", "SPONSOR A SHOW", "SPONSOR THE SERIES", "ANIMAL LOVERS + DANCE MUSIC"]} />
+    <Marquee bg="bg-acid-yellow" items={["CCDXSOCIAL 01", "CCDXSOCIAL 02", "CCDXSOCIAL 03", "MEGA", "JUN–OCT 2026", "SPONSOR A SHOW", "SPONSOR THE SERIES", "ANIMAL LOVERS + DANCE MUSIC"]} />
 
 
     {/* ── The opportunity ── */}
@@ -174,7 +174,7 @@ const CcdxSocialSponsor = () => (
         <div className="bg-acid-yellow border-4 border-ink chunk-shadow-lg p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
             <span className="inline-block bg-magenta text-cream font-display text-xs px-3 py-1 border-2 border-ink mb-3">SEASON FINALE · DATE TBA</span>
-            <h3 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-2">GRAND FORMAT SHOW</h3>
+          <h3 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-2">MEGA — GRAND FORMAT SHOW</h3>
             <p className="text-ink/70 font-medium max-w-lg">Full outdoor stage. 2,000+ people. Pet runway. Agility finals. Complete DJ lineup TBA. The biggest thing we've ever done — and the best chance for a sponsor to make a mark.</p>
           </div>
           <div className="shrink-0 text-center">
