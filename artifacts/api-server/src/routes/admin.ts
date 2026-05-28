@@ -371,7 +371,7 @@ router.post("/enrich-artists", async (req, res) => {
               signal: AbortSignal.timeout(15_000),
             });
             if (fc.ok) {
-              const fd = await fc.json();
+              const fd: any = await fc.json();
               if (fd?.data?.markdown) scraped.instagram = fd.data.markdown.slice(0, 2000);
             }
           } catch { /* skip if scrape fails */ }
@@ -388,7 +388,7 @@ router.post("/enrich-artists", async (req, res) => {
               signal: AbortSignal.timeout(15_000),
             });
             if (fc.ok) {
-              const fd = await fc.json();
+              const fd: any = await fc.json();
               if (fd?.data?.markdown) scraped.soundcloud = fd.data.markdown.slice(0, 2000);
             }
           } catch { /* skip */ }
@@ -434,7 +434,7 @@ Return ONLY valid JSON. No extra text.`;
         });
 
         if (!oai.ok) throw new Error(`OpenAI ${oai.status}`);
-        const od = await oai.json();
+        const od: any = await oai.json();
         const raw = od?.choices?.[0]?.message?.content ?? "";
 
         // Parse the JSON from the response
@@ -566,7 +566,7 @@ router.post("/curate-events", async (req, res) => {
             continue;
           }
 
-          const fd = await fc.json();
+          const fd: any = await fc.json();
           const markdown = fd?.data?.markdown;
           if (!markdown) continue;
 
@@ -602,7 +602,7 @@ Return ONLY a JSON array. No extra text. If no events found, return [].`,
             });
 
             if (oai.ok) {
-              const od = await oai.json();
+              const od: any = await oai.json();
               const raw = od?.choices?.[0]?.message?.content ?? "[]";
               const match = raw.match(/\[[\s\S]*\]/);
               if (match) {
@@ -729,7 +729,7 @@ router.post("/import-discography", async (req, res) => {
     });
 
     if (!tokenRes.ok) throw new Error(`Spotify token error: ${tokenRes.status}`);
-    const tokenData = await tokenRes.json();
+    const tokenData: any = await tokenRes.json();
     const token = tokenData.access_token;
 
     // Get artist from DB
@@ -752,7 +752,7 @@ router.post("/import-discography", async (req, res) => {
       { headers: { "Authorization": `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) }
     );
     if (!albumsRes.ok) throw new Error(`Spotify albums error: ${albumsRes.status}`);
-    const albumsData = await albumsRes.json();
+    const albumsData: any = await albumsRes.json();
 
     let imported = 0;
     const { inArray } = await import("drizzle-orm");

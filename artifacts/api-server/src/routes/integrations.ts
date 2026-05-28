@@ -25,7 +25,7 @@ router.get("/instagram-feed", async (_req, res) => {
       return res.json([]);
     }
 
-    const data = await r.json();
+    const data: any = await r.json();
     const posts = (data?.data ?? [])
       .filter((p: any) => ["IMAGE", "CAROUSEL_ALBUM"].includes(p.media_type))
       .map((p: any) => ({
@@ -66,7 +66,7 @@ router.get("/youtube-videos", async (req, res) => {
       return res.json([]);
     }
 
-    const channelData = await channelRes.json();
+    const channelData: any = await channelRes.json();
     const uploadsId = channelData?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
 
     if (!uploadsId) return res.json([]);
@@ -82,7 +82,7 @@ router.get("/youtube-videos", async (req, res) => {
       return res.json([]);
     }
 
-    const plData = await plRes.json();
+    const plData: any = await plRes.json();
     const videos = (plData?.items ?? []).map((item: any) => {
       const s = item.snippet;
       const videoId = s?.resourceId?.videoId;
@@ -137,11 +137,11 @@ router.post("/cat-generate", async (req, res) => {
     });
 
     if (!r.ok) {
-      const err = await r.json();
+      const err: any = await r.json();
       throw new Error(err?.error?.message ?? `OpenAI ${r.status}`);
     }
 
-    const data = await r.json();
+    const data: any = await r.json();
     const imageUrl = data?.data?.[0]?.url;
 
     if (!imageUrl) throw new Error("No image URL in response");

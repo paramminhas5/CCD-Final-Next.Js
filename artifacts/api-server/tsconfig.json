@@ -4,7 +4,11 @@
     "outDir": "dist",
     "rootDir": "src",
     "types": ["node"],
-    "noImplicitReturns": false
+    "noImplicitReturns": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": false
   },
   "include": ["src"],
   "references": [
