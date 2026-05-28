@@ -15,6 +15,12 @@ export type HomeContent = {
     label?: string;
     href?: string;
   };
+  section_visibility?: {
+    show_scene_map?: boolean;
+    show_pick_your_sound?: boolean;
+    show_featured_artists?: boolean;
+    [key: string]: boolean | undefined;
+  };
 };
 
 export const HOME_CONTENT_DEFAULTS: HomeContent = {

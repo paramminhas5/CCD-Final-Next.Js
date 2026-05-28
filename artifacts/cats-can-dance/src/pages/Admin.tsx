@@ -53,6 +53,7 @@ type Settings = {
   home_content?: {
     about?: { kicker?: string; title?: string; body?: string; ctaLabel?: string; ctaHref?: string };
     cta?: { title?: string; body?: string; label?: string; href?: string };
+    section_visibility?: { show_scene_map?: boolean; show_pick_your_sound?: boolean; show_featured_artists?: boolean; [key: string]: boolean | undefined };
   };
 };
 type MediaItem = { type: "image" | "video"; url: string; caption?: string };
@@ -1233,9 +1234,50 @@ const Admin = () => {
               {/* HOMEPAGE */}
               <TabsContent value="homepage">
                 <p className="text-ink/70 font-medium mb-4">
-                  Edit copy that appears on the homepage. Leave a field blank to use the default.
+                  Edit copy and control which sections appear on the homepage.
                 </p>
                 <div className="space-y-6">
+
+                  {/* ── Section Visibility Toggles ── */}
+                  <div className="bg-cream border-4 border-ink chunk-shadow p-4">
+                    <p className="font-display text-xl text-ink mb-1">HOMEPAGE SECTIONS</p>
+                    <p className="text-ink/60 text-sm font-medium mb-4">Toggle sections on or off. Changes take effect on next page load.</p>
+                    <div className="space-y-3">
+                      {[
+                        { key: "show_scene_map",        label: "Scene Map",        desc: "India's Cities — 6 city tiles with event counts" },
+                        { key: "show_pick_your_sound",   label: "Pick Your Sound",  desc: "Genre grid — Techno, House, Jungle, UK Garage, Disco, Ambient" },
+                        { key: "show_featured_artists",  label: "Featured Artists", desc: "Artist carousel — pulls from artists with featured=true" },
+                      ].map(({ key, label, desc }) => {
+                        const vis = (settings?.home_content as any)?.section_visibility ?? {};
+                        const checked = !!vis[key];
+                        return (
+                          <label key={key} className={`flex items-start gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (!settings) return;
+                                const currentVis = (settings.home_content as any)?.section_visibility ?? {};
+                                setSettings({
+                                  ...settings,
+                                  home_content: {
+                                    ...(settings.home_content ?? {}),
+                                    section_visibility: { ...currentVis, [key]: e.target.checked },
+                                  },
+                                });
+                              }}
+                              className="w-5 h-5 mt-0.5 accent-magenta shrink-0"
+                            />
+                            <div>
+                              <p className="font-display text-ink text-base">{label}</p>
+                              <p className="text-ink/60 text-xs font-medium">{desc}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="bg-cream border-4 border-ink chunk-shadow p-4">
                     <p className="font-display text-xl text-ink mb-3">ABOUT STRIP</p>
                     {([
@@ -1385,7 +1427,40 @@ const EventEditor = ({
   useEffect(() => { setLineupStr((event.lineup ?? []).join(", ")); }, [event.id]);
   const commitLineup = () => onChange({ ...event, lineup: lineupStr.split(",").map((s) => s.trim()).filter(Boolean) });
   const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
   const projectUrl = "/api";
+
+  // ── AI Poster generation via fal.ai nano-banana-2 ──────────────────────────
+  const generatePoster = async () => {
+    setGenerating(true);
+    setGeneratedPreview(null);
+    try {
+      const res = await fetch(`${projectUrl}/generate-poster`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: event.title,
+          date: event.date,
+          venue: event.venue,
+          city: event.city,
+          lineup: lineupStr,
+          series_label: (event as any).series_label ?? "",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast.error(data.error || data.message || "Generation failed");
+        return;
+      }
+      setGeneratedPreview(data.image_url);
+      toast.success("Poster generated! Click 'USE THIS POSTER' to apply.");
+    } catch (e: any) {
+      toast.error(e.message ?? "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const uploadFile = async (file: File): Promise<{ path: string; publicUrl: string } | null> => {
     const fd = new FormData();
@@ -1498,7 +1573,7 @@ const EventEditor = ({
         </div>
         <div className="sm:col-span-2">
           <label className="block font-display text-sm text-ink mb-1">Poster</label>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
             <input
               type="text"
               placeholder="Paste URL or upload below"
@@ -1520,10 +1595,63 @@ const EventEditor = ({
                 }}
               />
             </label>
+            <button
+              type="button"
+              onClick={generatePoster}
+              disabled={generating}
+              className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform disabled:opacity-60"
+            >
+              {generating ? "✨ GENERATING…" : "✨ AI POSTER"}
+            </button>
             {posterPreview && (
-              <img src={posterPreview} alt="poster preview" className="h-16 w-16 object-cover border-2 border-ink" />
+              <img src={posterPreview} alt="poster preview" className="h-16 w-12 object-cover border-2 border-ink" />
             )}
           </div>
+
+          {/* AI generated poster preview + accept/reject */}
+          {generatedPreview && (
+            <div className="border-4 border-electric-blue p-3 bg-cream flex flex-wrap items-start gap-4">
+              <img
+                src={generatedPreview}
+                alt="AI generated poster"
+                className="h-48 w-36 object-cover border-2 border-ink"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-display text-sm text-ink mb-2">✨ AI GENERATED POSTER</p>
+                <p className="text-ink/60 text-xs mb-4">
+                  Generated by fal.ai Nano Banana 2. Click "Use This Poster" to set it as the event poster, then hit Save.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange({ ...event, poster_url: generatedPreview });
+                      setGeneratedPreview(null);
+                      toast.success("Poster set — hit SAVE EVENT to persist");
+                    }}
+                    className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-sm"
+                  >
+                    ✓ USE THIS POSTER
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generatePoster}
+                    disabled={generating}
+                    className="bg-cream text-ink font-display px-4 py-2 border-4 border-ink hover:bg-electric-blue hover:text-cream transition-colors text-sm disabled:opacity-60"
+                  >
+                    {generating ? "GENERATING…" : "↻ REGENERATE"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeneratedPreview(null)}
+                    className="bg-cream text-ink/50 font-display px-4 py-2 border-4 border-ink/30 hover:border-ink text-sm"
+                  >
+                    ✕ DISCARD
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <Field
           label="Sort order"
@@ -1890,7 +2018,10 @@ function CuratedEventsTab() {
       <div className="flex flex-wrap justify-between items-end gap-3">
         <div>
           <h3 className="font-display text-2xl text-ink">CURATED EVENTS</h3>
-          <p className="text-ink/70 font-medium text-sm">Hand-picked + auto-crawled events shown on /events.</p>
+          <p className="text-ink/70 font-medium text-sm">
+            Hand-picked events shown on /events. Add manually below or use the refresh buttons to trigger scraping
+            (requires FIRECRAWL_API_KEY env var — if not set, manual entry is the way).
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <select

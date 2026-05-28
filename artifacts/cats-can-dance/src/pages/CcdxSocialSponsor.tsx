@@ -83,9 +83,9 @@ const WHO = [
 
 // ── Series shows data ─────────────────────────────────────────────────────────
 const SHOWS = [
-  { num: "01", name: "THE DEBUT",    date: "Sat, Jun 21, 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream" },
-  { num: "02", name: "THE GROOM ROOM", date: "Sat, Jun 28, 2026", tagline: "FASHION · GROOMING · STYLE",        bg: "bg-magenta",       text: "text-cream" },
-  { num: "03", name: "ZOOMIES",      date: "Sat, Jun 29, 2026", tagline: "AGILITY · PERFORMANCE · SPEED",       bg: "bg-ink",           text: "text-cream" },
+  { num: "01", name: "THE DEBUT",    date: "Sun, 29 Jun 2026", tagline: "BROAD · WELCOMING · FIRST IMPRESSION", bg: "bg-electric-blue", text: "text-cream" },
+  { num: "02", name: "THE HEAT",     date: "Sun, 27 Jul 2026", tagline: "STYLE · FASHION · MIDSUMMER ENERGY",   bg: "bg-magenta",       text: "text-cream" },
+  { num: "03", name: "LOOSE ENDS",   date: "Sun, 30 Aug 2026", tagline: "AGILITY · FINALE PREVIEW · ONE MORE",  bg: "bg-ink",           text: "text-cream" },
 ];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -110,13 +110,13 @@ const CcdxSocialSponsor = () => (
         together. Own a show, own the series, or show up everywhere.
       </p>
       <div className="flex flex-wrap gap-3 mt-6">
-        {["200 pax per show", "2,000+ at finale", "Outdoor pet zone", "Startdawg · Merman + more", "End of June 2026"].map((f) => (
+        {["200 pax per show", "2,000+ at finale", "Outdoor pet zone", "Startdawg · Merman + more", "Jun–Oct 2026"].map((f) => (
           <span key={f} className="bg-white/10 border border-white/20 text-cream font-display text-xs px-3 py-1.5">{f}</span>
         ))}
       </div>
     </PageHero>
 
-    <Marquee bg="bg-acid-yellow" items={["3 SHOWS", "1 GRAND FINALE", "END OF JUNE", "SPONSOR A SHOW", "SPONSOR THE SERIES", "ANIMAL LOVERS + DANCE MUSIC"]} />
+    <Marquee bg="bg-acid-yellow" items={["3 SHOWS", "1 GRAND FINALE", "JUN–AUG 2026", "SPONSOR A SHOW", "SPONSOR THE SERIES", "ANIMAL LOVERS + DANCE MUSIC"]} />
 
 
     {/* ── The opportunity ── */}
@@ -136,8 +136,7 @@ const CcdxSocialSponsor = () => (
             Outdoor pet zone from 4PM with activities, vendor market, and a full DJ lineup. 
             Approximately 200 people per show, 2,000+ at the grand finale. 
             Your brand is not a banner — it's part of the experience.
-          </p>
-        </div>
+          </p>        </div>
         <div className="space-y-4">
           {[
             { label: "Per show capacity",  value: "~200 pax",       bg: "bg-acid-yellow" },
@@ -161,8 +160,7 @@ const CcdxSocialSponsor = () => (
         <p className="font-display text-acid-yellow text-xl mb-4">/ THE SERIES</p>
         <h2 className="font-display text-cream text-4xl md:text-6xl leading-[0.9] mb-10">
           THREE SHOWS.<br />ONE GRAND FINALE.
-        </h2>
-        <div className="grid md:grid-cols-3 gap-0 border-4 border-ink overflow-hidden mb-4">
+        </h2>        <div className="grid md:grid-cols-3 gap-0 border-4 border-ink overflow-hidden mb-4">
           {SHOWS.map((s) => (
             <div key={s.num} className={`${s.bg} ${s.text} border-r-4 border-ink last:border-r-0 p-6`}>
               <p className="font-display text-xs opacity-60 mb-2">SHOW {s.num}</p>
