@@ -120,10 +120,15 @@ function verifyRazorpaySignature(orderId: string, paymentId: string, signature: 
 
 // ─── Email helpers (Resend) ───────────────────────────────────────────────────
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   const RESEND_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_KEY) {
-    logger.warn("RESEND_API_KEY not set — skipping email to " + to);
+    // No email provider configured — log to console so devs can see the email
+    // content during development. In production, set RESEND_API_KEY.
+    logger.info({ to, subject }, "📧 [EMAIL — no RESEND_API_KEY] Would send email:");
+    // Extract readable links from HTML for console visibility
+    const links = [...html.matchAll(/href="([^"]+)"/g)].map(m => m[1]).filter(l => l.startsWith("http"));
+    if (links.length) logger.info({ links }, "  Links in email:");
     return;
   }
   const FROM = process.env.EMAIL_FROM ?? "tickets@catscandance.com";
@@ -168,7 +173,7 @@ async function sendTicketConfirmationEmail(
   eventVenue: string,
   tickets: Array<{ tier_name: string; qr_token: string }>,
   baseUrl: string
-) {
+): Promise<void> {
   const ticketRows = tickets.map(t => `
     <div style="border:3px solid #1a1a1a;padding:14px 16px;margin-bottom:10px;background:#fff;">
       <div style="font-family:'Courier New',monospace;font-weight:bold;font-size:13px;color:#e040fb;text-transform:uppercase;">${t.tier_name}</div>
@@ -244,21 +249,66 @@ async function sendTransferEmail(
 
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
+//
+// Three-tier promoter auth (any one is sufficient):
+//   Tier 1  x-promoter-token header  — UUID generated on approval, shared by admin
+//   Tier 2  x-admin-password header  — admin devices / door staff
+//   Tier 3  Clerk session cookie     — when CLERK keys are configured
+//
+// None of these are required to be set up before using the platform.
+// Fan-facing routes (RSVP, buy, view ticket) have NO auth requirement at all.
 
-function requireClerkAuth(req: any, res: any, next: any) {
-  const auth = getAuth(req);
-  if (!auth?.userId) return res.status(401).json({ error: "Authentication required" });
-  (req as any).clerkUserId = auth.userId;
-  next();
-}
+async function requirePromoterAccess(req: any, res: any, next: any) {
+  const adminPw = process.env.ADMIN_PASSWORD ?? "84838281";
 
-async function requirePromoterRole(req: any, res: any, next: any) {
-  const clerkUserId = (req as any).clerkUserId;
-  if (!clerkUserId) return res.status(401).json({ error: "Authentication required" });
-  const rows = await db.select().from(promoterUsersTable).where(eq(promoterUsersTable.clerk_user_id, clerkUserId)).limit(1);
-  if (!rows.length) return res.status(403).json({ error: "Promoter account required", code: "NOT_A_PROMOTER" });
-  (req as any).promoterUser = rows[0];
-  next();
+  // Tier 2 — admin password (always works)
+  if (req.headers["x-admin-password"] === adminPw) {
+    // Promote as a synthetic admin promoter user so downstream code works
+    (req as any).promoterUser = {
+      id: "admin",
+      promoter_id: req.headers["x-promoter-id"] ?? null,
+      clerk_user_id: null,
+      email: "admin",
+      display_name: "Admin",
+      role: "owner",
+      access_token: null,
+    };
+    next();
+    return;
+  }
+
+  // Tier 1 — promoter access token (no Clerk needed)
+  const accessToken = req.headers["x-promoter-token"] as string | undefined;
+  if (accessToken) {
+    const rows = await db.select().from(promoterUsersTable)
+      .where(eq(promoterUsersTable.access_token, accessToken)).limit(1);
+    if (!rows.length) return res.status(401).json({ error: "Invalid promoter token", code: "INVALID_TOKEN" });
+    (req as any).promoterUser = rows[0];
+    next();
+    return;
+  }
+
+  // Tier 3 — Clerk session (optional, only when Clerk keys are configured)
+  try {
+    const auth = getAuth(req);
+    if (auth?.userId) {
+      const rows = await db.select().from(promoterUsersTable)
+        .where(eq(promoterUsersTable.clerk_user_id, auth.userId)).limit(1);
+      if (!rows.length) return res.status(403).json({ error: "Promoter account required", code: "NOT_A_PROMOTER" });
+      (req as any).promoterUser = rows[0];
+      (req as any).clerkUserId = auth.userId;
+      next();
+      return;
+    }
+  } catch {
+    // Clerk not configured — fall through
+  }
+
+  return res.status(401).json({
+    error: "Promoter authentication required",
+    code: "AUTH_REQUIRED",
+    hint: "Use x-promoter-token header (get token from admin) or x-admin-password",
+  });
 }
 
 // ─── Commission calculation ───────────────────────────────────────────────────
@@ -490,7 +540,8 @@ router.post("/orders", async (req, res) => {
         tokens.map(t => ({ tier_name: lineItems[0].tier.name, qr_token: t })),
         baseUrl
       );
-      return res.json({ ok: true, order_id: orderId, free: true, tickets_issued: tokens.length });
+      // Return QR tokens directly so frontend can show tickets even if no email
+      return res.json({ ok: true, order_id: orderId, free: true, tickets_issued: tokens.length, qr_tokens: tokens });
     }
 
     // Paid tickets: create Razorpay order
@@ -616,13 +667,50 @@ router.post("/webhooks/razorpay", async (req, res) => {
   }
 });
 
-// GET /api/ticketing/my-tickets — Clerk-authed buyer's tickets
-router.get("/my-tickets", requireClerkAuth, async (req: any, res) => {
+// GET /api/ticketing/my-tickets — get tickets by Clerk session OR by email
+// No auth required — email is the fallback identifier.
+// ?email=xxx  OR  x-ticket-email header  → returns tickets for that email address.
+// Clerk session (if present) returns tickets by holder_clerk_id for better accuracy.
+router.get("/my-tickets", async (req: any, res) => {
   try {
-    const clerkUserId = req.clerkUserId;
+    // Try Clerk first (most precise — links to a specific account)
+    let clerkUserId: string | null = null;
+    try {
+      const auth = getAuth(req);
+      clerkUserId = auth?.userId ?? null;
+    } catch { /* Clerk not configured */ }
+
+    if (clerkUserId) {
+      const tickets = await db.select().from(issuedTicketsTable)
+        .where(eq(issuedTicketsTable.holder_clerk_id, clerkUserId))
+        .orderBy(desc(issuedTicketsTable.created_at));
+      return res.json(tickets);
+    }
+
+    // Email fallback — no account needed
+    const email = (
+      (req.query.email as string | undefined) ??
+      (req.headers["x-ticket-email"] as string | undefined)
+    )?.toLowerCase().trim();
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email required",
+        hint: "Pass ?email=you@example.com or x-ticket-email header, or sign in with Clerk",
+      });
+    }
+
+    // Return tickets where this email is either the holder or the original buyer
+    const { or } = await import("drizzle-orm");
     const tickets = await db.select().from(issuedTicketsTable)
-      .where(eq(issuedTicketsTable.holder_clerk_id, clerkUserId))
+      .where(
+        or(
+          eq(issuedTicketsTable.holder_email, email),
+          eq(issuedTicketsTable.buyer_email, email)
+        )
+      )
       .orderBy(desc(issuedTicketsTable.created_at));
+
     res.json(tickets);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -645,7 +733,8 @@ router.get("/tickets/:token", async (req, res) => {
 
 
 // POST /api/ticketing/tickets/:token/transfer — initiate ticket transfer
-router.post("/tickets/:token/transfer", requireClerkAuth, async (req: any, res) => {
+// Auth: Clerk (checks holder_clerk_id) OR x-ticket-email header (checks holder_email)
+router.post("/tickets/:token/transfer", async (req: any, res) => {
   try {
     const { to_email, to_name } = req.body;
     if (!to_email) return res.status(400).json({ error: "to_email required" });
@@ -653,7 +742,22 @@ router.post("/tickets/:token/transfer", requireClerkAuth, async (req: any, res) 
     const [ticket] = await db.select().from(issuedTicketsTable)
       .where(eq(issuedTicketsTable.qr_token, req.params.token));
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-    if (ticket.holder_clerk_id !== req.clerkUserId) return res.status(403).json({ error: "Not your ticket" });
+
+    // Verify ownership — Clerk session OR email header
+    let clerkUserId: string | null = null;
+    try { clerkUserId = getAuth(req)?.userId ?? null; } catch { /* no Clerk */ }
+
+    const callerEmail = (req.headers["x-ticket-email"] as string | undefined)?.toLowerCase().trim();
+
+    const ownedByClerk = clerkUserId && ticket.holder_clerk_id === clerkUserId;
+    const ownedByEmail = callerEmail && ticket.holder_email === callerEmail;
+
+    if (!ownedByClerk && !ownedByEmail) {
+      return res.status(403).json({
+        error: "Not your ticket",
+        hint: "Pass x-ticket-email header matching the ticket holder email",
+      });
+    }
     if (ticket.status !== "issued") return res.status(400).json({ error: `Cannot transfer a ${ticket.status} ticket` });
     if (ticket.transfer_count >= 3) return res.status(400).json({ error: "Maximum transfers reached" });
 
@@ -756,12 +860,26 @@ router.post("/transfers/:token/claim", async (req, res) => {
 });
 
 // POST /api/ticketing/transfers/:token/cancel
-router.post("/transfers/:token/cancel", requireClerkAuth, async (req: any, res) => {
+// Auth: Clerk session OR x-ticket-email matching the from_holder_email
+router.post("/transfers/:token/cancel", async (req: any, res) => {
   try {
     const [transfer] = await db.select().from(ticketTransfersTable)
       .where(eq(ticketTransfersTable.claim_token, req.params.token));
     if (!transfer) return res.status(404).json({ error: "Transfer not found" });
     if (transfer.status !== "pending") return res.status(400).json({ error: "Cannot cancel completed transfer" });
+
+    // Verify sender identity
+    let clerkUserId: string | null = null;
+    try { clerkUserId = getAuth(req)?.userId ?? null; } catch { /* no Clerk */ }
+    const callerEmail = (req.headers["x-ticket-email"] as string | undefined)?.toLowerCase().trim();
+
+    const [origTicket] = await db.select().from(issuedTicketsTable).where(eq(issuedTicketsTable.id, transfer.ticket_id));
+    const ownedByClerk = clerkUserId && origTicket?.holder_clerk_id === clerkUserId;
+    const ownedByEmail = callerEmail && transfer.from_holder_email === callerEmail;
+
+    if (!ownedByClerk && !ownedByEmail) {
+      return res.status(403).json({ error: "Not your transfer", hint: "Pass x-ticket-email header" });
+    }
 
     await db.update(ticketTransfersTable)
       .set({ status: "cancelled" })
@@ -785,7 +903,7 @@ router.post("/transfers/:token/cancel", requireClerkAuth, async (req: any, res) 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/ticketing/promoter/me
-router.get("/promoter/me", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.get("/promoter/me", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [promoter] = await db.select().from(promotersTable).where(eq(promotersTable.id, pu.promoter_id));
@@ -796,7 +914,7 @@ router.get("/promoter/me", requireClerkAuth, requirePromoterRole, async (req: an
 });
 
 // POST /api/ticketing/promoter/events — create/enable ticketing for an event
-router.post("/promoter/events", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.post("/promoter/events", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const { event_slug, ticketing_mode, is_free, total_capacity, sale_start, sale_end,
@@ -845,7 +963,7 @@ router.post("/promoter/events", requireClerkAuth, requirePromoterRole, async (re
 });
 
 // PATCH /api/ticketing/promoter/events/:slug
-router.patch("/promoter/events/:slug", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.patch("/promoter/events/:slug", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [cfg] = await db.select().from(eventTicketingTable).where(eq(eventTicketingTable.event_slug, req.params.slug));
@@ -879,7 +997,7 @@ router.patch("/promoter/events/:slug", requireClerkAuth, requirePromoterRole, as
 });
 
 // POST /api/ticketing/promoter/events/:slug/tiers
-router.post("/promoter/events/:slug/tiers", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.post("/promoter/events/:slug/tiers", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [cfg] = await db.select().from(eventTicketingTable).where(eq(eventTicketingTable.event_slug, req.params.slug));
@@ -912,7 +1030,7 @@ router.post("/promoter/events/:slug/tiers", requireClerkAuth, requirePromoterRol
 });
 
 // PATCH /api/ticketing/promoter/tiers/:id
-router.patch("/promoter/tiers/:id", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.patch("/promoter/tiers/:id", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [tier] = await db.select().from(ticketTiersTable).where(eq(ticketTiersTable.id, req.params.id));
@@ -938,7 +1056,7 @@ router.patch("/promoter/tiers/:id", requireClerkAuth, requirePromoterRole, async
 });
 
 // DELETE /api/ticketing/promoter/tiers/:id
-router.delete("/promoter/tiers/:id", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.delete("/promoter/tiers/:id", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [tier] = await db.select().from(ticketTiersTable).where(eq(ticketTiersTable.id, req.params.id));
@@ -959,7 +1077,7 @@ router.delete("/promoter/tiers/:id", requireClerkAuth, requirePromoterRole, asyn
 
 
 // GET /api/ticketing/promoter/events/:slug/orders
-router.get("/promoter/events/:slug/orders", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.get("/promoter/events/:slug/orders", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [cfg] = await db.select({ promoter_id: eventTicketingTable.promoter_id })
@@ -997,7 +1115,7 @@ router.get("/promoter/events/:slug/orders", requireClerkAuth, requirePromoterRol
 });
 
 // GET /api/ticketing/promoter/events/:slug/rsvps
-router.get("/promoter/events/:slug/rsvps", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.get("/promoter/events/:slug/rsvps", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const [cfg] = await db.select({ promoter_id: eventTicketingTable.promoter_id })
@@ -1025,7 +1143,7 @@ router.get("/promoter/events/:slug/rsvps", requireClerkAuth, requirePromoterRole
 });
 
 // POST /api/ticketing/promoter/rsvps/:id/approve
-router.post("/promoter/rsvps/:id/approve", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.post("/promoter/rsvps/:id/approve", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const rsvpId = req.params.id;
@@ -1095,7 +1213,7 @@ router.post("/promoter/rsvps/:id/approve", requireClerkAuth, requirePromoterRole
       await db.update(rsvpExtensionsTable).set({
         status: isFree ? "paid" : "approved",
         order_id: order.id,
-        approved_by: pu.clerk_user_id,
+        approved_by: pu.clerk_user_id ?? pu.email ?? "admin",
         approved_at: new Date(),
         payment_link_sent_at: isFree ? null : new Date(),
         updated_at: new Date(),
@@ -1106,7 +1224,7 @@ router.post("/promoter/rsvps/:id/approve", requireClerkAuth, requirePromoterRole
         event_slug: rsvp.event_slug,
         status: isFree ? "paid" : "approved",
         order_id: order.id,
-        approved_by: pu.clerk_user_id,
+        approved_by: pu.clerk_user_id ?? pu.email ?? "admin",
         approved_at: new Date(),
         payment_link_sent_at: isFree ? null : new Date(),
       });
@@ -1138,7 +1256,7 @@ router.post("/promoter/rsvps/:id/approve", requireClerkAuth, requirePromoterRole
 });
 
 // POST /api/ticketing/promoter/rsvps/:id/decline
-router.post("/promoter/rsvps/:id/decline", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.post("/promoter/rsvps/:id/decline", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const { reason } = req.body;
@@ -1171,7 +1289,7 @@ router.post("/promoter/rsvps/:id/decline", requireClerkAuth, requirePromoterRole
 });
 
 // POST /api/ticketing/promoter/checkin — door QR scan
-router.post("/promoter/checkin", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.post("/promoter/checkin", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const { qr_token, gate } = req.body;
@@ -1180,7 +1298,15 @@ router.post("/promoter/checkin", requireClerkAuth, requirePromoterRole, async (r
     const [ticket] = await db.select().from(issuedTicketsTable).where(eq(issuedTicketsTable.qr_token, qr_token));
 
     if (!ticket) {
-      await db.insert(doorCheckinsTable).values({ ticket_id: "00000000-0000-0000-0000-000000000000" as any, event_slug: "unknown", qr_token, result: "invalid", scanned_by: pu.clerk_user_id, gate: gate ?? null, device_info: req.headers["user-agent"] ?? null });
+      await db.insert(doorCheckinsTable).values({
+        ticket_id: "00000000-0000-0000-0000-000000000000" as any,
+        event_slug: "unknown",
+        qr_token,
+        result: "invalid",
+        scanned_by: pu.clerk_user_id ?? pu.email ?? "door_staff",
+        gate: gate ?? null,
+        device_info: req.headers["user-agent"] ?? null,
+      });
       return res.status(404).json({ result: "invalid", message: "Ticket not found" });
     }
 
@@ -1205,7 +1331,7 @@ router.post("/promoter/checkin", requireClerkAuth, requirePromoterRole, async (r
       await db.update(issuedTicketsTable).set({
         status: "checked_in",
         checked_in_at: new Date(),
-        checked_in_by: pu.clerk_user_id,
+        checked_in_by: pu.clerk_user_id ?? pu.email ?? "door_staff",
         check_in_gate: gate ?? "Main",
         updated_at: new Date(),
       }).where(eq(issuedTicketsTable.id, ticket.id));
@@ -1216,7 +1342,7 @@ router.post("/promoter/checkin", requireClerkAuth, requirePromoterRole, async (r
       event_slug: ticket.event_slug,
       qr_token,
       result,
-      scanned_by: pu.clerk_user_id,
+      scanned_by: pu.clerk_user_id ?? pu.email ?? "door_staff",
       gate: gate ?? "Main",
       device_info: req.headers["user-agent"] ?? null,
     });
@@ -1229,7 +1355,7 @@ router.post("/promoter/checkin", requireClerkAuth, requirePromoterRole, async (r
 });
 
 // GET /api/ticketing/promoter/events — list all events this promoter has configured
-router.get("/promoter/events", requireClerkAuth, requirePromoterRole, async (req: any, res) => {
+router.get("/promoter/events", requirePromoterAccess, async (req: any, res) => {
   try {
     const pu = req.promoterUser;
     const configs = await db.select().from(eventTicketingTable)
@@ -1304,15 +1430,26 @@ router.post("/admin/applications/:id/approve", requireAdmin, async (req, res) =>
       promoterId = newPromoter.id;
     }
 
-    // Link Clerk user to promoter (if clerk_user_id provided)
-    if (clerk_user_id) {
+    // Link Clerk user to promoter (if clerk_user_id provided) — always create a promoter user
+    // record so the access_token is always generated for password-free login
+    const accessToken = crypto.randomUUID();
+    const existingPU = await db.select({ id: promoterUsersTable.id })
+      .from(promoterUsersTable).where(eq(promoterUsersTable.promoter_id, promoterId)).limit(1);
+
+    if (!existingPU.length) {
       await db.insert(promoterUsersTable).values({
-        clerk_user_id,
+        clerk_user_id: clerk_user_id ?? null,
         promoter_id: promoterId,
         email: app.email,
         display_name: app.name,
         role: "owner",
+        access_token: accessToken,
       }).onConflictDoNothing();
+    } else if (clerk_user_id) {
+      // Update existing record with Clerk ID if provided
+      await db.update(promoterUsersTable)
+        .set({ clerk_user_id })
+        .where(eq(promoterUsersTable.promoter_id, promoterId));
     }
 
     await db.update(promoterApplicationsTable).set({
@@ -1321,7 +1458,7 @@ router.post("/admin/applications/:id/approve", requireAdmin, async (req, res) =>
       linked_promoter_id: promoterId,
     }).where(eq(promoterApplicationsTable.id, req.params.id));
 
-    res.json({ ok: true, promoter_id: promoterId });
+    res.json({ ok: true, promoter_id: promoterId, access_token: accessToken });
   } catch (e: any) {
     logger.error(e, "admin approve application error");
     res.status(500).json({ error: e.message });
@@ -1344,14 +1481,44 @@ router.post("/admin/applications/:id/reject", requireAdmin, async (req, res) => 
 });
 
 // POST /api/ticketing/admin/promoter-users — manually link a Clerk user to a promoter
+// Also generates access_token if not already set
 router.post("/admin/promoter-users", requireAdmin, async (req, res) => {
   try {
     const { clerk_user_id, promoter_id, email, display_name, role } = req.body;
-    if (!clerk_user_id || !promoter_id) return res.status(400).json({ error: "clerk_user_id and promoter_id required" });
+    if (!promoter_id || !email) return res.status(400).json({ error: "promoter_id and email required" });
+    const accessToken = crypto.randomUUID();
     const [row] = await db.insert(promoterUsersTable).values({
-      clerk_user_id, promoter_id, email, display_name, role: role ?? "owner",
+      clerk_user_id: clerk_user_id ?? null,
+      promoter_id,
+      email,
+      display_name: display_name ?? null,
+      role: role ?? "owner",
+      access_token: accessToken,
     }).onConflictDoNothing().returning();
-    res.json({ ok: true, row });
+    res.json({ ok: true, row, access_token: row?.access_token ?? accessToken });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/ticketing/admin/promoter-token/regenerate — regenerate access token for a promoter user
+router.post("/admin/promoter-token/regenerate", requireAdmin, async (req, res) => {
+  try {
+    const { promoter_user_id, email } = req.body;
+    if (!promoter_user_id && !email) return res.status(400).json({ error: "promoter_user_id or email required" });
+
+    const newToken = crypto.randomUUID();
+
+    if (promoter_user_id) {
+      await db.update(promoterUsersTable)
+        .set({ access_token: newToken })
+        .where(eq(promoterUsersTable.id, promoter_user_id));
+    } else {
+      await db.update(promoterUsersTable)
+        .set({ access_token: newToken })
+        .where(eq(promoterUsersTable.email, email));
+    }
+    res.json({ ok: true, access_token: newToken });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

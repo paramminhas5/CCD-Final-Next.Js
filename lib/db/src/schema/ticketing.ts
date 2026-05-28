@@ -81,15 +81,24 @@ export const transferStatusEnum = pgEnum("transfer_status", [
 ]);
 
 // ─── Promoter Users (Clerk ↔ promoter profile link) ───────────────────────────
+//
+// Auth tiers (all work independently):
+//   Tier 1 — access_token (UUID, generated on approval, shown in admin panel)
+//             → paste into promoter dashboard, no account needed
+//   Tier 2 — x-admin-password header (for door check-in from admin devices)
+//   Tier 3 — Clerk session (full user accounts, optional)
 
 export const promoterUsersTable = pgTable("promoter_users", {
-  id:           uuid("id").primaryKey().defaultRandom(),
-  clerk_user_id: text("clerk_user_id").notNull().unique(),
-  promoter_id:  uuid("promoter_id").notNull(), // FK → promoters.id
-  email:        text("email").notNull(),
-  display_name: text("display_name"),
-  role:         text("role").notNull().default("owner"), // owner | manager | door_staff
-  created_at:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  id:            uuid("id").primaryKey().defaultRandom(),
+  clerk_user_id: text("clerk_user_id").unique(),   // optional — only set when Clerk is configured
+  promoter_id:   uuid("promoter_id").notNull(),    // FK → promoters.id
+  email:         text("email").notNull(),
+  display_name:  text("display_name"),
+  role:          text("role").notNull().default("owner"), // owner | manager | door_staff
+  // Simple token auth — generated on promoter approval, admin copies it to promoter
+  // Works without Clerk. Treated like a long-lived API key (regeneratable by admin).
+  access_token:  text("access_token").unique(),
+  created_at:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ─── Promoter Applications ────────────────────────────────────────────────────

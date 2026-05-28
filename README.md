@@ -1,7 +1,7 @@
 # 🐱 Cats Can Dance — Platform
 
 > **India's definitive underground electronic music platform.**
-> Events · Artists · Scenes · Culture · Shop · Ticketing
+> Events · Artists · Scenes · Ticketing · Culture · Shop
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://typescriptlang.org)
@@ -15,28 +15,27 @@
 2. [Monorepo Structure](#monorepo-structure)
 3. [Tech Stack](#tech-stack)
 4. [Getting Started](#getting-started)
-5. [Environment Variables](#environment-variables)
-6. [Features Built](#features-built)
-7. [Features In Progress / Broken](#features-in-progress--broken)
-8. [Database Schema](#database-schema)
-9. [API Reference](#api-reference)
-10. [Roadmap](#roadmap)
+5. [Environment Variables — Layered Setup](#environment-variables--layered-setup)
+6. [Ticketing Module](#ticketing-module)
+7. [Features Built](#features-built)
+8. [Known Issues](#known-issues)
+9. [Database Schema](#database-schema)
+10. [API Reference](#api-reference)
 11. [Design System](#design-system)
-12. [Contributing](#contributing)
+12. [Roadmap](#roadmap)
 
 ---
-
 
 ## What Is This?
 
 Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — events, streetwear, culture. This repo is the full-stack platform powering `catscandance.com`.
 
-**Three audiences it serves:**
-- 🎧 **Fans / newcomers** — discover the Indian underground scene, find events, learn genres
-- 🎛️ **Artists** — self-service profile management, tour dates, booking requests inbox
-- 🎪 **Promoters / venues** — submit events, get listed, (coming) sell tickets through the platform
+**Three audiences:**
+- 🎧 **Fans** — discover the Indian underground scene, find events, buy tickets, view your QR passes
+- 🎛️ **Artists** — self-service profile management, tour dates, booking requests
+- 🎪 **Promoters** — submit events, manage RSVPs, sell tickets, scan QR codes at the door
 
-**Vision:** Become the definitive digital home for India's electronic music scene, contextualised within global scenes (Detroit Techno, Chicago House, London Jungle, Goa Trance). The Resident Advisor of India, built by the people who live it.
+**Vision:** The Resident Advisor of India — built by the people who live it.
 
 ---
 
@@ -46,560 +45,431 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 /
 ├── artifacts/
 │   ├── cats-can-dance/        ← Next.js 14 frontend (Pages Router)
-│   └── api-server/            ← Express 5 REST API server
+│   └── api-server/            ← Express 5 REST API
 ├── lib/
-│   ├── db/                    ← Drizzle ORM schema + Postgres
+│   ├── db/                    ← Drizzle ORM schema + Postgres client
 │   ├── api-spec/              ← OpenAPI 3.1 YAML + Orval codegen config
 │   ├── api-client-react/      ← Auto-generated TanStack Query hooks
 │   └── api-zod/               ← Auto-generated Zod schemas
 ├── scripts/                   ← SQL migrations, seed scripts
-├── .migration-backup/         ← Original Vite/React SPA (reference only)
 └── pnpm-workspace.yaml
 ```
 
-**Package names:**
-| Package | Name |
-|---|---|
-| `artifacts/cats-can-dance` | `@workspace/cats-can-dance` |
-| `artifacts/api-server` | `@workspace/api-server` |
-| `lib/db` | `@workspace/db` |
-| `lib/api-client-react` | `@workspace/api-client-react` |
-
 ---
-
 
 ## Tech Stack
 
 ### Frontend (`artifacts/cats-can-dance`)
-| Layer | Tech | Notes |
-|---|---|---|
-| Framework | **Next.js 14** (Pages Router) | Migrated from Vite/React SPA |
-| Language | TypeScript 5.x (strict) | |
-| Auth | **Clerk** | Magic link replaced by Clerk OAuth |
-| State | **Zustand** (cart) + **TanStack Query v5** | |
-| UI | **shadcn/ui** (Radix primitives) + Tailwind CSS v3 | |
-| Animation | **Framer Motion v12** | Hero parallax, section reveals |
-| Carousel | **Embla Carousel** | Artist Spotlight |
-| Charts | **Recharts** | Artist gig stats |
-| Forms | **react-hook-form** + Zod | |
-| SEO | **react-helmet-async** | JSON-LD, OG tags, structured data |
-| Shop | **Shopify Storefront API** | Direct browser calls, cart via Zustand |
-
-### Backend (`artifacts/api-server`)
-| Layer | Tech | Notes |
-|---|---|---|
-| Runtime | **Express 5** + Node.js | |
-| Database | **PostgreSQL** via Supabase | |
-| ORM | **Drizzle ORM** | Full typed schema |
-| Validation | **Zod v4** + drizzle-zod | |
-| Auth middleware | **Clerk Express** | |
-| API contract | **OpenAPI 3.1** YAML | Orval → TanStack Query hooks |
-| Logging | **Pino** | |
-
-### Infrastructure
 | Layer | Tech |
 |---|---|
-| Database | Supabase (Postgres + storage) |
-| Auth | Clerk (with proxy URL support) |
-| Deployment | Vercel (frontend) + Railway/Render (API server) |
-| Package manager | pnpm workspaces |
+| Framework | **Next.js 14** (Pages Router) |
+| Language | TypeScript 5.x strict |
+| Auth | **Clerk** (optional — everything works without it) |
+| State | **Zustand** + **TanStack Query v5** |
+| UI | **shadcn/ui** (Radix) + Tailwind CSS v3 |
+| Animation | **Framer Motion v12** |
+| Charts | **Recharts** |
+| Forms | **react-hook-form** + Zod |
+| Shop | **Shopify Storefront API** |
+
+### Backend (`artifacts/api-server`)
+| Layer | Tech |
+|---|---|
+| Runtime | **Express 5** + Node.js |
+| Database | **PostgreSQL** via Supabase |
+| ORM | **Drizzle ORM** |
+| Validation | **Zod v4** + drizzle-zod |
+| Auth middleware | **Clerk Express** (optional) |
+| Logging | **Pino** |
 
 ---
-
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js 22+
 - pnpm 10+ (`npm install -g pnpm`)
-- A Supabase project
-- A Clerk application
+- A Supabase project (get one free at supabase.com)
+
+> **Clerk, Razorpay, and Resend are completely optional.** The platform runs fully without them — see the [layered env var setup](#environment-variables--layered-setup) below.
 
 ### Install
 ```bash
-git clone https://github.com/paramminhas5/ccdkiroedit.git
-cd ccdkiroedit
+git clone https://github.com/paramminhas5/CCD-Final-Next.Js.git
+cd CCD-Final-Next.Js
 pnpm install
 ```
 
-### Run the frontend
+### Database setup
 ```bash
-pnpm --filter @workspace/cats-can-dance dev
-# → http://localhost:3000
+# Push schema to Supabase (run once, or after schema changes)
+pnpm --filter @workspace/db push
 ```
 
-### Run the API server
+### Run locally
 ```bash
-pnpm --filter @workspace/api-server dev
-# → http://localhost:3001
-```
-
-### Run both together
-```bash
-# Terminal 1
+# Terminal 1 — API server (port 3001)
 pnpm --filter @workspace/api-server dev
 
-# Terminal 2
+# Terminal 2 — Frontend (port 3000)
 pnpm --filter @workspace/cats-can-dance dev
 ```
 
-### Build (production)
+### Build
 ```bash
 pnpm --filter @workspace/cats-can-dance build
 ```
 
 ---
 
+## Environment Variables — Layered Setup
 
-## Environment Variables
+**Nothing is required to start.** Add each layer when you're ready.
+
+```
+Layer 0 — Zero config      Site loads, events show, legacy RSVP works
+Layer 1 — DATABASE_URL     Full DB, RSVPs saved, ticketing active
+Layer 2 — RESEND_API_KEY   Confirmation emails sent (otherwise logged to console)
+Layer 3 — RAZORPAY keys    Paid ticket purchases enabled
+Layer 4 — CLERK keys       User accounts, signed-in My Tickets view
+Layer 5 — ADMIN_PASSWORD   Admin panel (defaults to "84838281" if unset)
+```
 
 ### Frontend (`artifacts/cats-can-dance/.env.local`)
-```bash
-# Clerk auth
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-CLERK_SECRET_KEY=sk_live_...
-CLERK_PROXY_URL=                          # Optional: for Replit/custom domain proxy
 
-# Supabase (anon key is safe to expose — RLS protects data)
+```bash
+# ── Supabase ──────────────────────────────────────────────────────────────────
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...         # server-side only, used by /api proxy
 
-# API server URL (used by SSR pages)
-NEXT_PUBLIC_API_URL=http://localhost:3001/api   # or production URL
+# ── Admin panel ───────────────────────────────────────────────────────────────
+# Defaults to "84838281" if unset — change this in production
+ADMIN_PASSWORD=your_secure_password
 
-# Admin panel password
-ADMIN_PASSWORD=your_secure_password_here
+# ── API server URL ────────────────────────────────────────────────────────────
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
 
-# Supabase service key (for /api proxy routes — server-side only)
-SUPABASE_SERVICE_KEY=eyJ...
+# ── Razorpay (Layer 3 — enables paid tickets) ─────────────────────────────────
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_...
+
+# ── Clerk (Layer 4 — enables user accounts) ───────────────────────────────────
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+
+# ── Shopify (optional — enables merch store) ──────────────────────────────────
+NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=ccd-final-bv8ld.myshopify.com
+NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN=your_storefront_token
+NEXT_PUBLIC_SHOPIFY_API_VERSION=2025-10
 ```
 
 ### API Server (`artifacts/api-server/.env`)
-```bash
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
-# Clerk
+```bash
+# ── Database (Layer 1) ────────────────────────────────────────────────────────
+DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+
+# ── Admin ─────────────────────────────────────────────────────────────────────
+ADMIN_PASSWORD=your_secure_password   # must match frontend
+
+# ── Email (Layer 2) ───────────────────────────────────────────────────────────
+# Without this: ticket confirmations are logged to console, links shown in UI
+RESEND_API_KEY=re_...
+EMAIL_FROM=tickets@catscandance.com
+
+# ── Razorpay (Layer 3) ────────────────────────────────────────────────────────
+# Get from: dashboard.razorpay.com → Settings → API Keys
+# Test keys (rzp_test_...) for dev, live keys (rzp_live_...) for production
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...          # set in Razorpay Dashboard → Webhooks
+
+# ── Clerk (Layer 4) ───────────────────────────────────────────────────────────
+# Without these: Clerk auth is disabled; token-based promoter login still works
 CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_SECRET_KEY=sk_live_...
 
-# Admin password (matches frontend)
-ADMIN_PASSWORD=your_secure_password_here
+# ── Site URL (for ticket link generation) ─────────────────────────────────────
+NEXT_PUBLIC_SITE_URL=https://catscandance.com
 
-# Optional integrations
+# ── Optional integrations ─────────────────────────────────────────────────────
 YOUTUBE_API_KEY=AIza...
+INSTAGRAM_ACCESS_TOKEN=IGQ...
 FIRECRAWL_API_KEY=fc-...
 OPENAI_API_KEY=sk-...
-INSTAGRAM_ACCESS_TOKEN=...
-RESEND_API_KEY=re_...           # For email notifications
-STRIPE_SECRET_KEY=sk_...        # For ticketing (coming soon)
 ```
 
-> ⚠️ **Never commit `.env` files.** All secrets must be set in Vercel / Railway env var dashboards.
+> ⚠️ **Never commit `.env` or `.env.local` files.** Set all secrets in Vercel / Railway env dashboards.
 
 ---
 
+## Ticketing Module
+
+The full ticketing system is built and production-ready. It works across three modes and requires **zero mandatory configuration** — just a running database.
+
+### How it works — zero to paid
+
+```
+Fan visits /events/your-event
+  ↓
+If ticketing is enabled for the event:
+  TicketTierPicker shows available tiers + prices
+  ↓
+  MODE A — Direct Sale:    Fan picks tier → enters name+email → pays via Razorpay → QR ticket
+  MODE B — RSVP → Invite:  Fan RSVPs free → Promoter approves in dashboard → payment link emailed
+  MODE C — Free RSVP:      Fan RSVPs → immediately gets QR ticket (no payment ever)
+  ↓
+QR ticket sent by email (or shown inline if RESEND_API_KEY not set)
+  ↓
+Fan views ticket at /my-tickets (email lookup, no account needed)
+  ↓
+Door staff scans QR at /promoter/events/[slug] → Check-in tab
+```
+
+### Commission model
+CCD takes **5% from the buyer** (added on top) + **5% from the promoter** (deducted from payout). Both sides toggled per-event. Free events have no commission.
+
+### Auth — three tiers, all optional
+
+| Who | How to access | What's needed |
+|---|---|---|
+| **Fans** | RSVP, buy, view ticket | Nothing — just name + email |
+| **Promoters** | Paste token at `/promoter` | Token from Admin panel (generated on approval) |
+| **Promoters (alt)** | Sign in with Clerk | `CLERK_*` env vars set |
+| **Door staff** | Use admin password | `ADMIN_PASSWORD` env var |
+| **Admin** | `/admin` with password | `ADMIN_PASSWORD` env var |
+
+### Promoter onboarding (no Clerk required)
+
+1. Promoter fills in `/promoter/apply`
+2. Admin opens `/admin` → **🎟 Ticketing** → **Applications** tab
+3. Admin clicks **✓ APPROVE** — a UUID token is generated and displayed
+4. Admin copies the token and sends it to the promoter (email / WhatsApp)
+5. Promoter visits `/promoter`, pastes the token → instantly in their dashboard
+6. Promoter creates event ticketing config → adds tiers → shares event link
+
+To regenerate a lost token: Admin → Ticketing → Applications → **🔑 GET LOGIN TOKEN**.
+
+### Fan ticket flow (no account required)
+
+1. Fan buys/RSVPs → tickets sent to their email
+2. Fan visits `/my-tickets` → enters their email → sees all their tickets
+3. Each ticket shows a QR code — tap **FULL SCREEN QR** at the door
+4. To transfer: click **TRANSFER →** → enter recipient email → they get a claim link
+
+### Razorpay webhook setup
+
+In your Razorpay Dashboard → Webhooks → Add New Webhook:
+- URL: `https://catscandance.com/api/ticketing/webhooks/razorpay`
+- Events: `payment.captured`, `refund.processed`
+- Copy the webhook secret → set as `RAZORPAY_WEBHOOK_SECRET`
+
+---
 
 ## Features Built
 
 ### 🏠 Homepage
-- Full-viewport Hero with parallax DJ cat + animated flanking cats (Framer Motion)
-- **CityMarquee** — acid-yellow rolling ticker of Indian cities + global scene names
-- **SceneSnapshot** — 6 Indian city tiles with **live event count badges** from API
-- **GenreWheel** — 6 genre tiles (ink bg) with global origins teaser strip
-- **ArtistSpotlight** — Embla carousel of up to 5 featured artists, 5s autoplay, dots + arrows
-- Events section (upcoming CCD episodes + curated events)
-- Videos, Playlist, Drops (shop), Instagram feed, Early Access signup
-- Disco Mode easter egg 🪩 (disco ball, lasers, audio, beat pulse)
+Full-viewport hero, city marquee, scene snapshot, genre wheel, artist spotlight carousel, events strip, videos, playlists, shop drops, Instagram feed, early access signup, Disco Mode easter egg 🪩
 
 ### 🗺️ Discover Page (`/discover`)
-- **Universal search** — artists + cities + genres + global scenes in one dropdown
-- **"What's On This Weekend"** — live strip showing event counts per city for next 7 days
-- 6 Indian city tiles → city scene pages
-- 6 genre tiles → genre education pages
-- 7 global scene tiles → origin story pages
+Universal search, "What's On This Weekend" strip, city + genre tiles, global scene tiles
 
 ### 🏙️ City Scene Pages (`/scene/:city`)
-- Available: Bengaluru, Mumbai, Delhi, Goa, Hyderabad, Pune
-- Live artists from that city (API)
-- Live upcoming events in that city (API)
-- Promoters active in that city
-- Key venues + active genres
-- Related genre links
-- JSON-LD: `Place` schema
+Bengaluru, Mumbai, Delhi, Goa, Hyderabad, Pune — live artists, events, promoters, key venues
 
 ### 🎛️ Genre Pages (`/genres/:genre`)
-- Available: Techno, House, Jungle/D&B, UK Garage, Disco, Ambient
-- BPM range, origin, decade
-- "What is this genre?" origin story
-- "The Indian Scene" — key Indian artists + scene description
-- Starter tracks (YouTube embeds, no API key needed)
-- Key global landmarks (clubs, labels, events)
-- Link to parent global scene
-- Live Indian artists from API filtered by genre
-- JSON-LD: `MusicGenre` schema
+Techno, House, Jungle/D&B, UK Garage, Disco, Ambient — origin story, Indian scene, starter tracks
 
 ### 🌍 Global Scene Pages (`/scenes/:scene`)
-- Available: Detroit Techno, Chicago House, London Jungle/D&B, Berlin Techno, UK Garage, NYC House, Goa Trance
-- Origin story editorial
-- India connection (how it reached India, who carries it)
-- Key artists who built the scene
-- Starter tracks (YouTube embeds)
-- Related genres + Indian cities where it's heard
-- "More global scenes" section
-- JSON-LD: `Place` schema
+Detroit Techno, Chicago House, London Jungle, Berlin Techno, UK Garage, NYC House, Goa Trance
 
-### 🎤 Artists Directory (`/artists`)
-- Grid with search, city filter, genre pills, sort (A-Z / City / Genre)
-- Mosaic layout (every 9th card spans 2 columns)
-- Accent colour placeholders for artists without photos
-- Fetches from `/api/artists` (migrated from Supabase direct)
+### 🎤 Artists Directory + Detail Pages
+Grid with filters · 6-tab artist pages (Overview, Gigs, Connections, Journey, Stats, EPK)
 
-### 🎤 Artist Detail Pages (`/artists/:slug`)
-- **6-tab layout:** Overview · Gigs · Connections · Journey · Stats · EPK
-- **Overview:** Bio, SoundCloud oEmbed player, Spotify embed, Quick Facts, Recent Gigs, Connections preview
-- **Gigs:** Full gigography with year filter
-- **Connections:** `ArtistConnectionGraph` — strength-bar visual cards with connection type badges
-- **Journey:** Vertical milestone timeline (first gig, festival debut, city debuts)
-- **Stats:** Stat tiles + `ArtistGigChart` (Recharts bar chart per year + city bars)
-- **EPK:** Electronic Press Kit — bio, photo, booking info, fee range, availability
-- **Similar Artists** section below tabs — connections-first, genre fallback, 6-wide grid
-- Blurred hero background with artist photo
+### 🎟️ Events + Ticketing
+- CCD own events + curated events from promoters
+- `TicketTierPicker` on event detail pages
+- Direct sale + RSVP-invite + free RSVP modes
+- QR tickets, `/my-tickets` email lookup, fullscreen QR at `/my-tickets/[token]`
+- Face-value ticket transfers (max 3 hops)
+- Promoter portal: event config, tier management, RSVP approval, sales dashboard, door check-in
+- Admin panel: Ticketing tab with applications, orders, revenue
 
-### 🎪 Promoters (`/promoters`, `/promoters/:slug`)
-- Directory with search, city filter, trusted-only toggle
-- Promoter names link to detail pages
-- Detail page: bio, genre tags, links, recent events, submit-your-night CTA
-- Fetches from `/api/promoters` (migrated from Supabase direct)
+### 🛍️ Shop (`/shop`)
+Shopify Storefront API, cart via Zustand, product detail pages
 
-### 🎟️ Events (`/events`)
-- CCD own events + curated events from trusted promoters
-- Tabs: For You · Trending · Editor's Picks · This Weekend
-- Infinite scroll, save/share events
-- Redesigned to match CCD brutalist design system (cream/ink/chunk-shadow)
-- Filter: city + genre pills
-
-### 🛍️ Shop (`/shop`, `/product/:handle`)
-- Shopify Storefront API integration
-- Filter: All / Streetwear / Pets
-- Cart managed via Zustand + Shopify cart mutations
-- Cart drawer (slide-out)
-
-### ✍️ Blog (`/blog`, `/blog/:slug`)
-- 11 SEO-optimised articles (Bengaluru scene guides, genre primers)
-- Author profiles (`/authors/:slug`)
+### ✍️ Blog (`/blog`)
+11 SEO-optimised articles, author profiles
 
 ### 🎓 Admin Panel (`/admin`)
-- Password-gated CMS (14 tabs)
-- Manages: signups, playlists, videos, events, messages, blog posts, curated events, promoters, artists, SEO, marquees, theme, homepage content, RSVPs
+Password-gated CMS (15 tabs): signups, events, RSVPs, blog, playlists, videos, promoters, artists, ticketing, SEO, marquees, theme
 
 ### 🎛️ Artist Portal (`/artist/dashboard`)
-- Self-service for claimed artists
-- Edit profile (bio, social links, booking preferences)
-- Manage tour dates
-- View booking requests inbox (OTP-verified)
-
-### 📊 Other Pages
-- `/about` — Brand story
-- `/for-venues`, `/for-artists`, `/for-investors` — Partnership pages
-- `/care` — Cats Can Care (NGO arm)
-- `/ccdxsocial` — CCD × Social (media agency arm)
-- `/playlists`, `/videos` — Media content
-- `/cat-studio` — AI cat image generator
-- `/submit-event` — Community event submission
-- `/bengaluru-underground-dance-music`, `/bengaluru-techno-events`, `/bengaluru-house-parties` — SEO landing pages
-
-### 🔍 SEO
-- Dynamic `sitemap.xml` (server-rendered, fetches all artist slugs live)
-- JSON-LD structured data on all major page types
-- `robots.txt`, `rss.xml`, OG images
-- Per-page `keywords`, `description`, canonical URLs
-- Schema types: Organization, BreadcrumbList, CollectionPage, Place, MusicGenre, FAQPage, ItemList
+Self-service profile editing, tour dates, booking requests inbox
 
 ---
 
+## Known Issues
 
-## Features In Progress / Broken
-
-### 🔴 Currently Broken (need fixing before launch)
-
-| Issue | Root Cause | Fix Needed |
+| Issue | Status | Fix |
 |---|---|---|
-| **Shop products not visible** | `SHOPIFY_STOREFRONT_TOKEN` may not be valid for current store domain, or Shopify store may have no published products | Verify token in Shopify Admin → Apps → Storefront API. Confirm products are published to Storefront channel |
-| **Admin panel not loading** | Admin.tsx uses `/api/[...proxy].ts` which proxies to Supabase REST. Requires `SUPABASE_SERVICE_KEY` env var set in Vercel. If missing, all admin fetches silently fail | Set `SUPABASE_SERVICE_KEY` in Vercel project settings |
-| **AdminPanel.tsx ghost routes** | Calls `/api/role-applications` which doesn't exist in Express server — only the old proxy | Either wire these routes in Express server or remove AdminPanel.tsx |
-| **Instagram feed empty** | Returns `[]` — Instagram Graph API token not configured | Set `INSTAGRAM_ACCESS_TOKEN` env var with a long-lived token |
-| **YouTube videos empty** | Returns `[]` — YouTube Data API key not configured | Set `YOUTUBE_API_KEY` env var |
-| **Artist enrichment no-op** | Firecrawl stub returns `{ enriched: 0 }` | Set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY` and implement enrichment logic |
-
-### 🟡 Partially Working
-
-| Feature | Status |
-|---|---|
-| **Curated events** | API route exists and scores events, but crawler (`curate-events`) isn't scheduled — events only appear if manually seeded via admin |
-| **Event RSVP** | Form works, data saved to DB, but no confirmation email sent |
-| **Booking OTP flow** | OTP code generation works, but email delivery requires `RESEND_API_KEY` or similar transactional email service configured |
-| **Shopify cart** | Cart state logic is complete but depends on valid Shopify token |
-| **Artist claiming** | Self-service claiming UI exists but email notification to admin on claim request not wired |
-| **Disco Mode audio** | Works in dev, may have CORS issues if audio file moved to external CDN |
-
-### 🟢 Stubbed but ready to wire
-- YouTube video sync → set `YOUTUBE_API_KEY`
-- Instagram feed → set `INSTAGRAM_ACCESS_TOKEN`
-- Artist enrichment → set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY`
-- Email notifications → set `RESEND_API_KEY`
+| Shop products empty | 🔴 Open | Verify Shopify Storefront token in Shopify Admin |
+| Instagram feed empty | 🟡 Needs env | Set `INSTAGRAM_ACCESS_TOKEN` |
+| YouTube videos empty | 🟡 Needs env | Set `YOUTUBE_API_KEY` |
+| Booking OTP emails not sent | 🟡 Needs env | Set `RESEND_API_KEY` |
+| Artist enrichment no-op | 🟡 Needs env | Set `FIRECRAWL_API_KEY` + `OPENAI_API_KEY` |
+| Disco Mode audio CORS | 🟡 Dev only | Move audio file to CDN for production |
 
 ---
-
 
 ## Database Schema
 
-21 tables in PostgreSQL (Supabase), managed via Drizzle ORM (`lib/db/src/schema/`).
+30 tables in PostgreSQL (Supabase), managed via Drizzle ORM (`lib/db/src/schema/`).
 
-### Core Tables
+### Core
 | Table | Purpose |
 |---|---|
-| `artists` | Artist profiles — bio, genres, city, social links, fee range, booking status |
-| `events` | CCD own events — title, date, venue, lineup, poster, status |
-| `curated_events` | Events crawled/submitted from external promoters |
-| `promoters` | Promoter profiles — city, genres, trust status |
-| `venue_profiles` | Venue data — capacity, genre focus, tier (basement/club/festival) |
-| `bookings` (booking_requests) | OTP-verified artist booking requests |
-| `booking_otp_codes` | One-time codes for booking flow anti-spam |
-| `artist_submissions` | New artist submissions awaiting admin approval |
-| `site_settings` | CMS data — playlists, marquees, theme, homepage content, blog posts |
-| `site_videos` | YouTube video IDs + metadata |
-| `forms` | Contact messages + early access signups |
+| `artists` | Artist profiles |
+| `events` | CCD own events |
+| `curated_events` | Events from external promoters |
+| `promoters` | Promoter profiles |
+| `venue_profiles` | Venue data |
+| `site_settings` | CMS data |
 
-### Rich Artist Data (Enrichment Layer)
+### Ticketing (9 tables)
 | Table | Purpose |
 |---|---|
-| `artist_connections` | B2B/collab connections between artists (strength score 0–10) |
-| `artist_dates` | Self-managed tour dates (artist portal) |
-| `event_appearances` | Full gigography — artist × event records |
-| `artist_milestones` | Career milestones (first gig, festival debut, city debuts) |
-| `artist_social_stats` | Follower snapshot history (IG, SC, Spotify) |
-| `artist_discography` | Releases/tracks/EPs |
-| `artist_press` | Press mention cards |
-| `schema_event_artist_lineups` | Event lineup join table |
-| `schema_user_event_interactions` | User save/dismiss/click tracking |
-| `schema_user_taste_profiles` | User music taste (genres, cities, liked artists) |
+| `promoter_applications` | Promoter sign-up applications |
+| `promoter_users` | Links promoter profiles to auth (Clerk OR access_token) |
+| `event_ticketing` | Per-event ticketing config (mode, commission, capacity) |
+| `ticket_tiers` | Ticket tiers (GA, VIP, Early Bird, etc.) |
+| `ticket_orders` | One row per checkout session |
+| `ticket_order_items` | Line items per order |
+| `issued_tickets` | Individual QR tickets with holder info |
+| `ticket_transfers` | Face-value transfer chain |
+| `door_checkins` | Door scan audit log |
+| `rsvp_extensions` | Extends event_rsvps with ticketing status |
+
+### Rich Artist Data
+`artist_connections`, `artist_dates`, `event_appearances`, `artist_milestones`, `artist_social_stats`, `artist_discography`, `schema_event_artist_lineups`, `schema_user_event_interactions`, `schema_user_taste_profiles`
 
 ---
 
-
 ## API Reference
 
-Base URL: `/api` (proxied through Next.js → Express 5 server)
+Base URL: `/api`
 
-### Artists
+All `/api/ticketing/*` routes are proxied from Next.js → Express API server.
+
+### Ticketing — Public (no auth)
 | Method | Route | Description |
 |---|---|---|
-| GET | `/artists` | List approved artists (filter: genre, city, featured, limit, offset) |
-| GET | `/artists/:slug` | Artist profile |
-| GET | `/artists/:slug/basic` | Artist + appearances + upcoming dates (resilient) |
-| GET | `/artists/:slug/full` | Artist + all enriched data in one request |
-| GET | `/artists/:slug/gigography` | Full gig history (filter: year, city, venue) |
-| GET | `/artists/:slug/milestones` | Career milestones |
-| GET | `/artists/:slug/stats` | Gig stats (by year, city, venue) |
-| GET | `/artists/:slug/connections` | Artist connections network |
-| PATCH | `/artists/:id/profile` | Update artist profile (auth: claimed artist) |
-| POST | `/artists/:id/claim` | Claim artist profile (auth: Clerk) |
+| GET | `/ticketing/events/:slug/config` | Ticket tiers + availability |
+| POST | `/ticketing/orders` | Create order (free or Razorpay) |
+| POST | `/ticketing/orders/:id/verify` | Verify Razorpay payment |
+| POST | `/ticketing/webhooks/razorpay` | Razorpay webhook handler |
+| GET | `/ticketing/tickets/:token` | Ticket by QR token |
+| GET | `/ticketing/my-tickets?email=xxx` | Fan's tickets by email (no auth needed) |
+| POST | `/ticketing/transfers/:token/claim` | Claim a transferred ticket |
+| POST | `/ticketing/promoter/apply` | Submit promoter application |
+
+### Ticketing — Promoter (x-promoter-token or Clerk or x-admin-password)
+| Method | Route | Description |
+|---|---|---|
+| GET | `/ticketing/promoter/me` | Promoter profile |
+| GET | `/ticketing/promoter/events` | All configured events |
+| POST | `/ticketing/promoter/events` | Enable ticketing for an event |
+| POST | `/ticketing/promoter/events/:slug/tiers` | Add ticket tier |
+| GET | `/ticketing/promoter/events/:slug/rsvps` | RSVP list |
+| POST | `/ticketing/promoter/rsvps/:id/approve` | Approve RSVP + send payment link |
+| POST | `/ticketing/promoter/checkin` | Door QR scan |
+
+### Ticketing — Admin (x-admin-password)
+| Method | Route | Description |
+|---|---|---|
+| GET | `/ticketing/admin/applications` | All promoter applications |
+| POST | `/ticketing/admin/applications/:id/approve` | Approve + generate token |
+| POST | `/ticketing/admin/promoter-token/regenerate` | Regenerate promoter token |
+| GET | `/ticketing/admin/orders` | All orders |
+| POST | `/ticketing/admin/orders/:id/refund` | Refund via Razorpay |
+| GET | `/ticketing/admin/revenue` | Revenue summary |
 
 ### Events
 | Method | Route | Description |
 |---|---|---|
-| GET | `/events` | List CCD events |
+| GET | `/events` | CCD events list |
 | GET | `/events/:slug` | Event detail |
-| GET | `/curated-events` | Curated/crawled events (filter: city, featured, limit) |
-| GET | `/events/recommended` | Personalised event recommendations (tabs: for_you/trending/editors_picks/this_weekend) |
+| GET | `/events/recommended` | Personalised recommendations |
+| POST | `/event-rsvp` | Legacy free RSVP |
 
-### Artist Portal
+### Artists
 | Method | Route | Description |
 |---|---|---|
-| GET | `/artists/by-user` | Get artist profile claimed by current user |
-| GET | `/artist-dates/:artistId` | List tour dates |
-| POST | `/artist-dates/:artistId` | Add tour date |
-| PATCH | `/artist-dates/entry/:id` | Update tour date |
-| DELETE | `/artist-dates/entry/:id` | Delete tour date |
-| GET | `/booking-requests/:artistId` | Booking requests for artist |
-
-### Forms
-| Method | Route | Description |
-|---|---|---|
-| POST | `/booking-otp/start` | Start booking OTP flow |
-| POST | `/booking-otp/verify` | Verify OTP → create booking request |
-| POST | `/event-rsvp` | RSVP to event |
-| POST | `/artist-submissions` | Submit new artist |
-| POST | `/contact` | Contact form |
-| POST | `/early-access` | Early access signup |
-
-### Content
-| Method | Route | Description |
-|---|---|---|
-| GET | `/site-settings` | CMS settings (playlists, marquees, theme) |
-| GET | `/videos` | YouTube videos |
-| GET | `/promoters` | Promoter directory |
-
-### Integrations (currently stubbed)
-| Method | Route | Description |
-|---|---|---|
-| GET | `/instagram-feed` | Instagram posts (requires `INSTAGRAM_ACCESS_TOKEN`) |
-| GET | `/youtube-videos` | YouTube sync (requires `YOUTUBE_API_KEY`) |
-| POST | `/cat-generate` | AI cat image generation |
+| GET | `/artists` | Artist directory |
+| GET | `/artists/:slug` | Artist profile |
+| GET | `/artists/:slug/full` | Fully enriched profile |
 
 ---
-
-
-## Roadmap
-
-### 🔥 Phase 6 — Fix What's Broken (Critical, do first)
-- [ ] Fix shop: verify Shopify token + confirm products published to Storefront channel
-- [ ] Fix admin: document all required env vars, add `.env.example`, verify Supabase service key setup
-- [ ] Wire YouTube API (`YOUTUBE_API_KEY`) → populate Videos page
-- [ ] Wire email delivery (`RESEND_API_KEY`) → booking OTP + RSVP confirmations + early access
-- [ ] Remove AdminPanel.tsx ghost routes or wire them properly
-
-### 🎯 Phase 7 — Artist Data Collection Engine
-- [ ] **Firecrawl enrichment pipeline** — crawl artist IG bios, SoundCloud profiles, Bandcamp pages
-- [ ] **Auto-populate gigography** — parse event listings from promoter websites
-- [ ] **Social stats snapshots** — weekly cron to capture IG followers, SC plays, Spotify monthly listeners
-- [ ] **Artist submission review flow** — admin gets notified, one-click approve → artist gets welcome email
-- [ ] **Discography import** — Spotify API: pull releases for artists with spotify URL set
-- [ ] **Press mention scraper** — search Google News for artist name + music keywords
-
-### 🎪 Phase 8 — Live Events Infrastructure
-- [ ] **Event crawler scheduler** — cron job running `curate-events` for all trusted promoter URLs
-- [ ] **Promoter crawl URLs** — promoters table already has `crawl_urls` field, just need the cron wired
-- [ ] **Event poster upload** — admin uploads poster → Supabase storage → poster_url
-- [ ] **RSVP confirmation emails** — "You're on the list for [event]" email with event details
-- [ ] **Event reminder emails** — 24h before event for RSVPd users
-- [ ] **Embedded event widget** — `/embed/upcoming` already exists, needs styling polish
-
-### 🏠 Phase 9 — Artist Marketplace (Airbnb for Artists)
-> Venues and promoters browse artists, see availability, send direct booking inquiries
-
-- [ ] **Artist availability calendar** — artists mark available dates in portal
-- [ ] **Venue/Promoter browse** — filter artists by genre, city, fee range, availability date
-- [ ] **"Request a date" form** — venue submits booking request with event details + budget
-- [ ] **Artist response flow** — artist gets notified, can accept/decline/counter-propose
-- [ ] **Booking contract** — PDF download of agreed terms (date, fee, venue, performance duration)
-- [ ] **Promoter verified accounts** — promoters can claim a profile, get `✓ Verified Promoter` badge
-- [ ] **Public availability display** — artist profile shows "Available in [city] on [month]"
-- [ ] **Fee transparency** — artists set public fee range (already in DB, just not displayed by default)
-
-### 🎟️ Phase 10 — First-Party Ticketing
-> Promoters sell tickets directly through CCD, CCD takes a small commission
-
-- [ ] **Stripe integration** — payment processing for ticket purchases
-- [ ] **Event ticketing setup** — promoter creates event → sets ticket tiers (Early Bird / General / VIP)
-- [ ] **QR code tickets** — PDF ticket with QR code sent by email (Resend)
-- [ ] **Door list management** — promoter dashboard shows RSVPs + paid tickets in one list
-- [ ] **Check-in app** — simple `/checkin/:eventSlug` page for door staff with QR scanner
-- [ ] **Refund flow** — admin-triggered refund via Stripe API
-- [ ] **Sales dashboard** — promoter sees real-time ticket sales, revenue, capacity %
-
-### 👤 Phase 11 — Community & User Profiles
-- [ ] **User profile page** (`/profile`) — avatar, saved events, followed artists, cities
-- [ ] **Follow an artist** — heart button → persists to `user_taste_profiles.liked_artist_slugs`
-- [ ] **"Going" to events** — mark attendance, see who else is going
-- [ ] **Activity feed** — "3 artists you follow have upcoming events"
-- [ ] **Weekly email digest** — "What's happening in [your cities] this week" (Resend)
-- [ ] **Push notifications** (PWA) — new event from followed artist
-- [ ] **"Heard at [event]"** — crowd-sourced track ID submissions
-- [ ] **Event memories** — post-event photo gallery (moderated)
-
-### 📱 Phase 12 — PWA + Mobile
-- [ ] **Service worker** — offline cache for artists page + events
-- [ ] **Push notifications** — opt-in for followed artists' upcoming events
-- [ ] **Add to Home Screen** — install prompt on mobile
-- [ ] **Splash screen** + native-feel transitions
-
-### 💰 Phase 13 — Monetisation
-- [ ] **Artist verified badge** — paid annual subscription for verified status + analytics
-- [ ] **Featured listings** — promoters pay to feature events in "Editor's Picks" tab
-- [ ] **Shop v2** — complete Shopify integration, "Reserve My Drop" pre-registration
-- [ ] **CCD × Social media agency** — service pages, portfolio, inquiry form fully built out
-- [ ] **Affiliate links** — gear guides, course recommendations (DJ equipment, production tools)
-
----
-
 
 ## Design System
 
-CCD uses a custom brutalist design system. All classes are in Tailwind.
+CCD uses a custom brutalist design system. All classes are Tailwind.
 
-### Palette
+### Colour palette
 | Token | Value | Usage |
 |---|---|---|
 | `cream` | `#F5F0E8` | Primary background |
 | `ink` | `#1A1A1A` | Text, borders |
 | `magenta` | `#E040FB` | Accent, CTAs |
-| `acid-yellow` | `#F5E642` | Accent, badges |
+| `acid-yellow` | `#F5E642` | Badges, highlights |
 | `electric-blue` | `#00BFFF` | Bengaluru, ambient |
+| `lime` | `#AAFF00` | Success, Goa |
 | `orange` | `#FF6600` | Hyderabad, warnings |
-| `lime` | `#AAFF00` | Goa, jungle/DnB |
-| `hot-pink` | `#FF69B4` | Occasional accent |
 
 ### Typography
-- **Display font:** `font-display` — Bowlby One SC (all-caps, chunky)
-- **Body font:** system sans-serif
+- **Display:** `font-display` — Bowlby One SC (all-caps, chunky)
+- **Body:** system sans-serif
 
-### Signature Utilities
+### Signature utilities
 ```css
-/* Hard offset box shadow — the CCD "chunk shadow" */
+/* Hard offset box shadow */
 .chunk-shadow { box-shadow: 4px 4px 0 #1a1a1a; }
 
-/* Hover micro-interaction — shadow "presses in" */
-.hover:translate-x-[2px] .hover:translate-y-[2px] .hover:shadow-none
+/* Hover press-in micro-interaction */
+hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none
 
-/* Everything has border-4 border-ink */
+/* All interactive elements */
+border-4 border-ink + chunk-shadow
 ```
-
-### Component Patterns
-- All interactive elements: `border-4 border-ink` + `chunk-shadow` + hover press-in
-- Cards: cream background, 4px ink border, chunk shadow
-- Buttons: solid background, uppercase font-display, 4px border
-- Genre/category tags: `bg-acid-yellow text-ink` or `bg-ink text-cream`
 
 ---
 
-## Contributing
+## Roadmap
 
-This is a private project. All work is done via the `ccdkiroedit` GitHub repo.
+### ✅ Done
+- Full events discovery platform (city pages, genre pages, global scenes)
+- Artist directory + rich profile pages (gigography, connections, stats, EPK)
+- Curated events feed + recommendation engine
+- First-party ticketing: direct sale, RSVP-invite, free RSVP
+- QR tickets, email confirmations, face-value transfers
+- Promoter portal (no Clerk required — token-based auth)
+- Door check-in app
+- Admin panel (15 tabs, password-gated)
+- Artist portal (profile editing, tour dates, booking inbox)
+- Shopify merch store
+- Blog + author pages
+- SEO (JSON-LD, sitemap, OG tags)
 
-### Branch naming
-- `feat/[feature-name]` — new features
-- `fix/[bug-name]` — bug fixes
-- `batch-[n]-[description]` — batch work from AI-assisted sessions
-
-### Commit conventions
-```
-feat: add similar artists section on artist detail pages
-fix: remove duplicate </div> in ArtistDetail stats section
-batch-5B: Discover — What's On This Weekend strip + universal search
-```
-
-### Before pushing
-1. Run `pnpm --filter @workspace/cats-can-dance build` — must pass
-2. Run `pnpm --filter @workspace/cats-can-dance exec tsc --noEmit` — must be clean
-3. Check new pages render in browser with `pnpm dev`
-
----
-
-## Known Issues Log
-
-| Date | Issue | Status |
-|---|---|---|
-| 2026-05 | Shop products not visible — Shopify token needs verification | 🔴 Open |
-| 2026-05 | Admin panel not loading — `SUPABASE_SERVICE_KEY` env var likely not set in deployment | 🔴 Open |
-| 2026-05 | Instagram feed returns `[]` — no access token | 🟡 Needs env var |
-| 2026-05 | YouTube videos empty — no API key | 🟡 Needs env var |
-| 2026-05 | Artist enrichment stub — Firecrawl not wired | 🟡 Needs API key + implementation |
-| 2026-05 | AdminPanel.tsx calls non-existent routes | 🟡 Needs Express routes wired |
-| 2026-05 | Booking OTP emails not delivered | 🟡 Needs `RESEND_API_KEY` |
-| 2026-05 | `ArtistGigChart` had duplicate `</div>` breaking build | ✅ Fixed |
-| 2026-05 | `public/sitemap.xml` conflicted with dynamic `pages/sitemap.xml.tsx` | ✅ Fixed |
+### 🔜 Next
+- [ ] **Mobile QR scanner** on door check-in page (`html5-qrcode`)
+- [ ] **Apple Wallet / Google Wallet** passes for tickets (`passkit-generator`)
+- [ ] **Razorpay Routes** — auto-split payout to promoter at payment time
+- [ ] **Ticket reminder emails** — 24h before event
+- [ ] **WhatsApp share** — pre-filled message with event poster + RSVP link
+- [ ] **Post-event "Heard At"** — crowd-sourced track ID submissions
+- [ ] **User profiles** — follow artists, save events, attendance history
+- [ ] **Weekly digest email** — "What's on in your cities this week"
+- [ ] **PWA** — offline ticket view, push notifications for followed artists
 
 ---
 

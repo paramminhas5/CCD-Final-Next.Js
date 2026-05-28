@@ -7,6 +7,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { useParams } from "@/lib/compat-router";
 import { useSafeUser } from "@/lib/clerk-safe";
+import { getPromoterToken } from "@/lib/promoter-auth";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase-shim";
 import {
@@ -14,6 +15,7 @@ import {
   doorCheckin, createTier, updateTier, deleteTier,
 } from "@/lib/ticketing-api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import PromoterLogin from "@/components/PromoterLogin";
 
 
 type Tab = "overview" | "tickets" | "rsvps" | "checkin";
@@ -56,7 +58,7 @@ export default function PromoterEventManage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (isLoaded && user && slug) load(); }, [isLoaded, user, slug]);
+  useEffect(() => { if (isLoaded && (user || getPromoterToken()) && slug) load(); else if (isLoaded) setLoading(false); }, [isLoaded, user, slug]);
 
   const handleApprove = async (rsvpId: string) => {
     try {
@@ -130,6 +132,11 @@ export default function PromoterEventManage() {
   ];
 
   if (!isLoaded || loading) return <div className="min-h-screen bg-cream"><Nav /></div>;
+
+  // Show login if no Clerk session and no stored token
+  if (!user && !getPromoterToken()) {
+    return <PromoterLogin onSuccess={() => window.location.reload()} />;
+  }
 
 
   return (

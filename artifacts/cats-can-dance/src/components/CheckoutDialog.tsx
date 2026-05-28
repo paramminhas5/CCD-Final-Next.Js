@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import Confetti from "@/components/Confetti";
 import { createOrder, verifyOrder } from "@/lib/ticketing-api";
-import { supabase } from "@/lib/supabase-shim";
 
 declare global {
   interface Window { Razorpay: any; }
@@ -39,8 +38,9 @@ export default function CheckoutDialog({
   const [burst, setBurst] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [orderId, setOrderId] = useState("");
+  const [qrTokens, setQrTokens] = useState<string[]>([]);
 
-  const reset = () => { setStep("info"); setForm({ name: "", email: "", phone: "" }); setOrderId(""); };
+  const reset = () => { setStep("info"); setForm({ name: "", email: "", phone: "" }); setOrderId(""); setQrTokens([]); };
   const close = () => { reset(); onOpenChange(false); };
 
   const totalQty = selections.reduce((a, s) => a + s.quantity, 0);
@@ -63,11 +63,18 @@ export default function CheckoutDialog({
 
     setStep("processing");
 
-    // RSVP-only flow (rsvp_invite) — just save the RSVP, no payment yet
+    // RSVP-only flow (rsvp_invite mode, paid event) — save RSVP via Express API
     if (mode === "rsvp_invite" && !isFree) {
       try {
-        await supabase.functions.invoke("event-rsvp", {
-          body: { event_slug: eventSlug, name: form.name, email: form.email, plus_ones: totalQty - 1 },
+        await fetch("/api/event-rsvp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_slug: eventSlug,
+            name: form.name,
+            email: form.email,
+            plus_ones: Math.max(0, totalQty - 1),
+          }),
         });
         setBurst(true); setTimeout(() => setBurst(false), 1500);
         setStep("rsvp_success");
@@ -91,6 +98,7 @@ export default function CheckoutDialog({
       // Free ticket — issued immediately
       if (orderRes.free) {
         setOrderId(orderRes.order_id);
+        if (orderRes.qr_tokens?.length) setQrTokens(orderRes.qr_tokens as string[]);
         setBurst(true); setTimeout(() => setBurst(false), 1500);
         setStep("success");
         return;
@@ -206,8 +214,25 @@ export default function CheckoutDialog({
           <div className="space-y-4">
             <div className="bg-lime border-4 border-ink p-5">
               <p className="font-display text-2xl text-ink uppercase mb-1">Tickets confirmed!</p>
-              <p className="text-ink/70 text-sm">Check your email for your QR tickets. Show them at the door.</p>
+              <p className="text-ink/70 text-sm">
+                {qrTokens.length
+                  ? "Your tickets are below — save these links or screenshot this screen."
+                  : "Check your email for your QR tickets. Show them at the door."}
+              </p>
             </div>
+            {/* Inline QR links when no email (RESEND_API_KEY not set) */}
+            {qrTokens.length > 0 && (
+              <div className="space-y-2">
+                {qrTokens.map((token, i) => (
+                  <a key={token} href={`/my-tickets/${token}`} target="_blank" rel="noreferrer"
+                    className="flex items-center justify-between border-2 border-ink px-4 py-3 bg-acid-yellow/20 hover:bg-acid-yellow transition-colors">
+                    <span className="font-display text-xs text-ink uppercase">Ticket {i + 1} — View QR →</span>
+                    <span className="font-mono text-[9px] text-ink/40 truncate max-w-[120px]">{token.slice(0, 12)}…</span>
+                  </a>
+                ))}
+                <p className="text-[10px] text-ink/40 text-center">Bookmark these links — they are your tickets</p>
+              </div>
+            )}
             <div className="flex gap-3">
               <a href="/my-tickets" className="flex-1 bg-ink text-cream font-display text-base py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center">
                 VIEW MY TICKETS →

@@ -7,9 +7,11 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { Link } from "@/lib/compat-router";
 import { useSafeUser } from "@/lib/clerk-safe";
+import { getPromoterToken } from "@/lib/promoter-auth";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase-shim";
 import { createEventTicketing, createTier } from "@/lib/ticketing-api";
+import PromoterLogin from "@/components/PromoterLogin";
 
 const MODES = [
   { value: "rsvp_invite", label: "RSVP → Invite", desc: "Fans RSVP, you approve, then send a payment link." },
@@ -73,7 +75,10 @@ export default function PromoterEventNew() {
     finally { setBusy(false); }
   };
 
-  if (!isLoaded || !user) return <div className="min-h-screen bg-cream"><Nav /></div>;
+  if (!isLoaded) return <div className="min-h-screen bg-cream"><Nav /></div>;
+  if (!user && !getPromoterToken()) {
+    return <PromoterLogin onSuccess={() => window.location.reload()} />;
+  }
 
   return (
     <div className="min-h-screen bg-cream">

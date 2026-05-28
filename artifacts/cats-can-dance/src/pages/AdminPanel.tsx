@@ -404,6 +404,8 @@ function TicketingTab() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [clerkInput, setClerkInput] = useState<Record<string, string>>({});
+  const [generatedTokens, setGeneratedTokens] = useState<Record<string, string>>({}); // appId → token
+  const [regenId, setRegenId] = useState<string | null>(null);
 
   const pw = getStoredPw() || ADMIN_PW_DEFAULT;
   const tFetch = (path: string, method = "GET", body?: object) =>
@@ -439,8 +441,14 @@ function TicketingTab() {
       const res = await tFetch(`/api/ticketing/admin/applications/${id}/approve`, "POST", {
         clerk_user_id: clerkInput[id] || undefined,
       });
-      if (res.ok) { toast.success("Application approved — promoter profile created"); load(); }
-      else toast.error(res.error ?? "Failed");
+      if (res.ok) {
+        // Store the generated access token so admin can copy it to the promoter
+        if (res.access_token) {
+          setGeneratedTokens(prev => ({ ...prev, [id]: res.access_token }));
+        }
+        toast.success("Application approved — share the token below with the promoter");
+        load();
+      } else toast.error(res.error ?? "Failed");
     } finally { setApprovingId(null); }
   };
 
@@ -545,7 +553,49 @@ function TicketingTab() {
                     )}
 
                     {app.status === "approved" && app.linked_promoter_id && (
-                      <div className="text-xs text-ink/40 font-mono">{app.linked_promoter_id.slice(0, 8)}…</div>
+                      <div className="min-w-[220px]">
+                        {/* Show generated token after fresh approval */}
+                        {generatedTokens[app.id] && (
+                          <div className="bg-lime border-4 border-ink p-3 mb-2">
+                            <p className="font-display text-[9px] uppercase text-ink mb-1">
+                              🔑 PROMOTER TOKEN — copy & share with {app.name}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <code className="font-mono text-[10px] text-ink bg-white px-2 py-1 border border-ink/20 flex-1 truncate">
+                                {generatedTokens[app.id]}
+                              </code>
+                              <button onClick={() => {
+                                navigator.clipboard.writeText(generatedTokens[app.id]);
+                                toast.success("Token copied!");
+                              }} className="font-display text-[9px] uppercase bg-ink text-cream px-2 py-1 hover:bg-magenta transition-colors shrink-0">
+                                COPY
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-ink/50 mt-1">
+                              Promoter pastes this at <strong>catscandance.com/promoter</strong>
+                            </p>
+                          </div>
+                        )}
+                        {/* Regenerate token for existing approved promoters */}
+                        {!generatedTokens[app.id] && (
+                          <button
+                            disabled={regenId === app.id}
+                            onClick={async () => {
+                              setRegenId(app.id);
+                              try {
+                                const res = await tFetch("/api/ticketing/admin/promoter-token/regenerate", "POST", { email: app.email });
+                                if (res.ok && res.access_token) {
+                                  setGeneratedTokens(p => ({ ...p, [app.id]: res.access_token }));
+                                  toast.success("New token generated");
+                                } else toast.error(res.error ?? "Failed");
+                              } finally { setRegenId(null); }
+                            }}
+                            className="font-display text-[9px] uppercase bg-cream text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors disabled:opacity-50">
+                            {regenId === app.id ? "…" : "🔑 GET LOGIN TOKEN"}
+                          </button>
+                        )}
+                        <p className="text-[9px] text-ink/30 mt-1 font-mono">{app.linked_promoter_id.slice(0, 8)}…</p>
+                      </div>
                     )}
                   </div>
                 </div>
