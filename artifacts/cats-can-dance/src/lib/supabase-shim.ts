@@ -70,8 +70,8 @@ function buildQuery(table: string): QueryBuilder {
     delete() { q._method = "delete"; return q; },
     maybeSingle() { return q._execute().then(({ data }) => ({ data: Array.isArray(data) ? data[0] ?? null : data, error: null })).catch(e => ({ data: null, error: e })); },
     single() { return q._execute().then(({ data }) => ({ data: Array.isArray(data) ? data[0] : data, error: null })).catch(e => ({ data: null, error: e })); },
-    then(resolve) {
-      return q._execute().then(resolve);
+    then(resolve, reject) {
+      return q._execute().then(resolve, reject);
     },
     // @ts-ignore
     _execute() {
