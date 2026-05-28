@@ -29,6 +29,7 @@ interface DBArtist {
   open_to_bookings?: boolean;
   videos?: any[];
   gallery?: any[];
+  kind?: string;          // "musician" | "photographer" | etc.
 }
 
 function cityOf(a: DBArtist): string {
@@ -338,6 +339,12 @@ export default function ArtistsPage() {
                                 {g.toUpperCase()}
                               </button>
                             ))}
+                            {/* Kind badge for non-musicians */}
+                            {a.kind && a.kind !== "musician" && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-electric-blue text-cream font-display border border-ink">
+                                {a.kind === "photographer" ? "📸" : a.kind === "videographer" ? "🎥" : a.kind === "lighting" ? "💡" : a.kind === "mix_engineer" ? "🎚️" : a.kind === "production" ? "🏗️" : a.kind === "mc" ? "🎤" : a.kind}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
