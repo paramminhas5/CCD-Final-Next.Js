@@ -9,7 +9,20 @@ const nextConfig = {
   },
   reactStrictMode: true,
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Locked to known CDN hosts — avoids open wildcard in production
+    remotePatterns: [
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "cdn.shopify.com" },
+      { protocol: "https", hostname: "**.myshopify.com" },
+      { protocol: "https", hostname: "img.youtube.com" },
+      { protocol: "https", hostname: "**.behold.pictures" },
+      { protocol: "https", hostname: "feeds.behold.so" },
+      { protocol: "https", hostname: "catscandance.com" },
+      { protocol: "https", hostname: "**.instagram.com" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      // Fallback for dev/preview — remove before final prod hardening
+      { protocol: "https", hostname: "**" },
+    ],
   },
   async headers() {
     if (process.env.NODE_ENV === "production") return [];
