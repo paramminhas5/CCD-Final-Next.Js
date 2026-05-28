@@ -1585,6 +1585,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (!ok) return res.status(500).json({ error: "Failed to save booking request", detail: data });
+
+    // Fire new_inquiry email to artist (non-blocking)
+    try {
+      const artistBookingEmail = artistRows?.[0]?.booking_email ?? null;
+      if (artistBookingEmail && process.env.RESEND_API_KEY) {
+        const { sendBookingEmail } = await import("@/lib/booking-email");
+        void sendBookingEmail("new_inquiry", {
+          bookingId: Array.isArray(data) ? data[0]?.id : data?.id ?? "",
+          artistName: artist_name,
+          artistEmail: artistBookingEmail,
+          promoterName: requester_name,
+          promoterEmail: requester_email,
+          eventType: event_type ?? null,
+          eventDate: event_date ?? null,
+          eventDateEnd: event_date_end ?? null,
+          venueCity: venue_city ?? null,
+          venueName: venue_name ?? null,
+          budgetInr: budget_inr ? Number(budget_inr) : null,
+          notes: notes ?? null,
+        }).catch(console.error);
+      }
+    } catch { /* non-fatal */ }
+
     return res.json({ ok: true, message: "Booking request submitted. The artist will be in touch." });
   }
 
@@ -1627,6 +1650,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { ok, data } = await patch("booking_requests", pq(eqf("id", bookingId)), patchBody);
     if (!ok) return res.status(500).json({ error: "Status update failed", detail: data });
+
+    // ── Fire transactional email (non-blocking) ──────────────────────────────
+    // Resolve promoter email for notification. booking.requester_email is the
+    // promoter contact; booking.promoter_clerk_id links to promoter_profiles.
+    try {
+      const emailEventMap: Record<string, string> = {
+        quoted:    "quoted",
+        held:      "hold_placed",
+        confirmed: "confirmed",
+        declined:  "declined",
+        cancelled: "cancelled",
+      };
+      const emailEvent = emailEventMap[newStatus];
+      if (emailEvent && booking.requester_email) {
+        const emailData = {
+          bookingId,
+          artistName:   artist.name,
+          artistEmail:  artist.booking_email ?? null,
+          promoterName: booking.requester_name ?? booking.promoter_name ?? booking.requester_email,
+          promoterEmail: booking.requester_email,
+          eventType:    booking.event_type    ?? null,
+          eventDate:    booking.event_date    ?? null,
+          eventDateEnd: booking.event_date_end ?? null,
+          venueCity:    booking.venue_city    ?? null,
+          venueName:    booking.venue_name    ?? null,
+          budgetInr:    booking.budget_inr    ?? null,
+          quotedInr:    newStatus === "quoted" ? (Number(quoted_inr) || null) : (booking.quoted_inr ?? null),
+          holdExpiresAt: newStatus === "held" ? patchBody.hold_expires_at : null,
+          notes:        booking.notes         ?? null,
+        };
+        // Import dynamically to avoid SSR module issues in Next.js edge
+        const RESEND_KEY = process.env.RESEND_API_KEY;
+        if (RESEND_KEY) {
+          const { sendBookingEmail } = await import("@/lib/booking-email");
+          void sendBookingEmail(emailEvent as any, emailData).catch(console.error);
+        }
+      }
+    } catch (emailErr: any) {
+      console.error("[status] email fire failed:", emailErr.message);
+      // Non-fatal — booking state change already succeeded
+    }
+
     return res.json({ ok: true, status: newStatus });
   }
 
@@ -1722,6 +1787,439 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // END BOOKING PHASE 1
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ── BOOKING PHASE 2 ──────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── Helper: resolve promoter profile from Clerk header ──────────────────
+  async function resolvePromoter(): Promise<{ promoter: any; error?: string }> {
+    if (!clerkUserId) return { promoter: null, error: "Unauthorized" };
+    const rows = await get("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId))) as any[];
+    if (!rows?.length) return { promoter: null, error: "No promoter profile found. Register first." };
+    return { promoter: rows[0] };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PROMOTER PROFILES
+  // ══════════════════════════════════════════════════════════════════════
+
+  // POST /api/promoter/register  — create promoter account (Clerk-authed)
+  if (path === "promoter/register" && m === "POST") {
+    if (!clerkUserId) return res.status(401).json({ error: "Unauthorized" });
+    // Idempotent — return existing if already registered
+    const existing = await get("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId))) as any[];
+    if (existing?.length) return res.json(existing[0]);
+    const { company_name, contact_name, email, bio, primary_city, cities, genre_focus, website, instagram } = body;
+    if (!company_name || !email) return res.status(400).json({ error: "company_name and email required" });
+    const now = new Date().toISOString();
+    const { ok, data } = await ins("promoter_profiles", {
+      clerk_user_id: clerkUserId,
+      email: email.toLowerCase().trim(),
+      company_name: company_name.trim(),
+      contact_name: contact_name ?? null,
+      bio: bio ?? null,
+      primary_city: primary_city ?? null,
+      cities: Array.isArray(cities) ? cities : (cities ? [cities] : []),
+      genre_focus: Array.isArray(genre_focus) ? genre_focus : [],
+      website: website ?? null,
+      instagram: instagram ?? null,
+      is_verified: false,
+      bookings_count: 0,
+      total_spend_inr: 0,
+      created_at: now,
+      updated_at: now,
+    });
+    if (!ok) return res.status(500).json({ error: "Registration failed", detail: data });
+    return res.status(201).json(Array.isArray(data) ? data[0] : data);
+  }
+
+  // GET /api/promoter/me  — own promoter profile
+  if (path === "promoter/me" && m === "GET") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+    return res.json(promoter);
+  }
+
+  // PATCH /api/promoter/me  — update own profile
+  if (path === "promoter/me" && m === "PATCH") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+    const allowed = ["company_name","contact_name","bio","logo_url","website","instagram",
+                     "primary_city","cities","genre_focus"];
+    const patch: Record<string,any> = { updated_at: new Date().toISOString() };
+    for (const k of allowed) { if (body[k] !== undefined) patch[k] = body[k]; }
+    const { ok } = await patch("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId!)), patch);
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Update failed" });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SHORTLIST
+  // ══════════════════════════════════════════════════════════════════════
+
+  // GET /api/shortlist  — promoter's shortlist with artist details joined
+  if (path === "shortlist" && m === "GET") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+
+    // Fetch shortlist entries
+    const entries = await get("booking_shortlist",
+      pq({ ...eqf("promoter_clerk_id", clerkUserId!), ...ord("created_at", false) })
+    ) as any[];
+
+    if (!entries?.length) return res.json([]);
+
+    // Fetch artist details for each entry
+    const artistIds = [...new Set(entries.map((e: any) => e.artist_id))];
+    const artistRows = await get("artists",
+      `?id=in.(${artistIds.join(",")})&select=id,slug,name,photo_url,based_city,genres,fee_min_inr,open_to_bookings,available_cities,kind`
+    ) as any[];
+    const artistMap: Record<string, any> = {};
+    for (const a of artistRows ?? []) artistMap[a.id] = a;
+
+    const enriched = entries.map((e: any) => ({
+      ...e,
+      artist: artistMap[e.artist_id] ?? null,
+    }));
+    return res.json(enriched);
+  }
+
+  // POST /api/shortlist  — add artist to shortlist
+  if (path === "shortlist" && m === "POST") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+
+    const { artist_slug, brief_event_type, brief_date, brief_date_end,
+            brief_cities, brief_budget_inr, brief_notes } = body;
+    if (!artist_slug) return res.status(400).json({ error: "artist_slug required" });
+
+    // Resolve artist_id
+    const artistRows = await get("artists", pq(eqf("slug", artist_slug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Artist not found" });
+    const artistId = artistRows[0].id;
+
+    const now = new Date().toISOString();
+    // Upsert — idempotent, update brief if already on list
+    const { ok, data } = await upsert("booking_shortlist", {
+      promoter_clerk_id: clerkUserId,
+      artist_id: artistId,
+      brief_event_type: brief_event_type ?? null,
+      brief_date: brief_date ?? null,
+      brief_date_end: brief_date_end ?? null,
+      brief_cities: Array.isArray(brief_cities) ? brief_cities : (brief_cities ? [brief_cities] : []),
+      brief_budget_inr: brief_budget_inr ? Number(brief_budget_inr) : null,
+      brief_notes: brief_notes ?? null,
+      updated_at: now,
+      created_at: now,
+    });
+    if (!ok) return res.status(500).json({ error: "Failed to add to shortlist", detail: data });
+    return res.status(201).json({ ok: true, artist_id: artistId });
+  }
+
+  // DELETE /api/shortlist/:artist_slug
+  if (segs[0] === "shortlist" && segs.length === 2 && m === "DELETE") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+    const artistSlug = segs[1];
+    const artistRows = await get("artists", pq(eqf("slug", artistSlug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Artist not found" });
+    const { ok } = await del("booking_shortlist",
+      pq({ ...eqf("promoter_clerk_id", clerkUserId!), ...eqf("artist_id", artistRows[0].id) })
+    );
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Delete failed" });
+  }
+
+  // PATCH /api/shortlist/:artist_slug  — update brief on a single shortlist entry
+  if (segs[0] === "shortlist" && segs.length === 2 && m === "PATCH") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+    const artistSlug = segs[1];
+    const artistRows = await get("artists", pq(eqf("slug", artistSlug))) as any[];
+    if (!artistRows?.length) return res.status(404).json({ error: "Artist not found" });
+    const { ok } = await patch("booking_shortlist",
+      pq({ ...eqf("promoter_clerk_id", clerkUserId!), ...eqf("artist_id", artistRows[0].id) }),
+      { ...body, updated_at: new Date().toISOString() }
+    );
+    return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Update failed" });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SHORTLIST FAN-OUT
+  // POST /api/shortlist/fan-out
+  // Sends a booking inquiry to every un-contacted artist on the shortlist
+  // in a single request. Creates a booking_request per artist and marks
+  // each shortlist entry as contacted.
+  // ══════════════════════════════════════════════════════════════════════
+  if (path === "shortlist/fan-out" && m === "POST") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+
+    // Get un-contacted shortlist entries
+    const entries = await get("booking_shortlist",
+      pq({ ...eqf("promoter_clerk_id", clerkUserId!), ...eqf("contacted", "false") })
+    ) as any[];
+
+    if (!entries?.length) return res.json({ ok: true, sent: 0, message: "No un-contacted artists on shortlist" });
+
+    // Get brief from first entry (shared brief for all) or from body override
+    const firstEntry = entries[0];
+    const brief = {
+      event_type:   body.brief_event_type   ?? firstEntry.brief_event_type,
+      event_date:   body.brief_date          ?? firstEntry.brief_date,
+      event_date_end: body.brief_date_end    ?? firstEntry.brief_date_end,
+      cities:       body.brief_cities        ?? firstEntry.brief_cities ?? [],
+      budget_inr:   body.brief_budget_inr    ?? firstEntry.brief_budget_inr,
+      notes:        body.brief_notes         ?? firstEntry.brief_notes,
+      requester_name: body.requester_name    ?? promoter.contact_name ?? promoter.company_name,
+      requester_email: body.requester_email  ?? promoter.email,
+      requester_phone: body.requester_phone  ?? null,
+    };
+
+    // Fetch all artists for these shortlist entries
+    const artistIds = entries.map((e: any) => e.artist_id);
+    const artistRows = await get("artists",
+      `?id=in.(${artistIds.join(",")})&select=id,slug,name,booking_email`
+    ) as any[];
+    const artistMap: Record<string, any> = {};
+    for (const a of artistRows ?? []) artistMap[a.id] = a;
+
+    const now = new Date().toISOString();
+    const created: string[] = [];
+    const failed: string[] = [];
+
+    for (const entry of entries) {
+      const artist = artistMap[entry.artist_id];
+      if (!artist) { failed.push(entry.artist_id); continue; }
+
+      const purposeParts = [
+        brief.event_type,
+        brief.event_date ? `Date: ${brief.event_date}${brief.event_date_end ? ` – ${brief.event_date_end}` : ""}` : null,
+        brief.cities?.length ? `Cities: ${brief.cities.join(", ")}` : null,
+        brief.budget_inr ? `Budget: ₹${Number(brief.budget_inr).toLocaleString("en-IN")}` : null,
+        brief.notes,
+        `Sent via Promoter Shortlist fan-out by ${promoter.company_name}`,
+      ].filter(Boolean).join(" | ");
+
+      const { ok: insOk, data: insData } = await ins("booking_requests", {
+        artist_id: artist.id,
+        artist_id_resolved: artist.id,
+        artist_name: artist.name,
+        requester_email: brief.requester_email?.toLowerCase().trim(),
+        requester_phone: brief.requester_phone,
+        requester_name: brief.requester_name,
+        purpose: purposeParts,
+        event_type: brief.event_type ?? null,
+        event_date: brief.event_date ?? null,
+        event_date_end: brief.event_date_end ?? null,
+        venue_city: Array.isArray(brief.cities) ? brief.cities[0] : null,
+        budget_inr: brief.budget_inr ? Number(brief.budget_inr) : null,
+        notes: brief.notes ?? null,
+        status: "new",
+        source: "shortlist_fan_out",
+        promoter_clerk_id: clerkUserId,
+        promoter_name: promoter.company_name,
+        forward_requested: true,
+        ip_hash: null,
+        user_agent: req.headers["user-agent"] ?? null,
+        created_at: now,
+        updated_at: now,
+      });
+
+      if (!insOk) { failed.push(artist.slug); continue; }
+      const bookingId = Array.isArray(insData) ? insData[0]?.id : insData?.id;
+      created.push(artist.slug);
+
+      // Mark shortlist entry as contacted
+      await patch("booking_shortlist",
+        pq({ ...eqf("promoter_clerk_id", clerkUserId!), ...eqf("artist_id", artist.id) }),
+        { contacted: true, contacted_at: now, booking_request_id: bookingId ?? null, updated_at: now }
+      );
+
+      // Post a system message to the new booking thread
+      if (bookingId) {
+        await ins("booking_messages", {
+          booking_id: bookingId,
+          sender_role: "system",
+          sender_clerk_id: null,
+          sender_name: "CCD Booking",
+          body: `Booking request sent via promoter shortlist by **${promoter.company_name}**. Brief: ${purposeParts}`,
+          is_system: true,
+          read_by_artist: false,
+          read_by_promoter: true,
+          created_at: now,
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      sent: created.length,
+      failed: failed.length,
+      artists_contacted: created,
+      ...(failed.length ? { errors: failed } : {}),
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // BOOKING MESSAGES
+  // ══════════════════════════════════════════════════════════════════════
+
+  // GET /api/booking-messages/:booking_id  — full message thread
+  if (segs[0] === "booking-messages" && segs.length === 2 && m === "GET") {
+    const bookingId = segs[1];
+    if (!clerkUserId) return res.status(401).json({ error: "Unauthorized" });
+
+    // Verify caller owns this booking (artist or promoter)
+    const booking = await get("booking_requests", pq(eqf("id", bookingId))) as any[];
+    if (!booking?.length) return res.status(404).json({ error: "Booking not found" });
+    const b = booking[0];
+
+    const isArtist = b.artist_id_resolved && (
+      await get("artists", pq({ ...eqf("id", b.artist_id_resolved), ...eqf("claimed_by", clerkUserId) })) as any[]
+    ).length > 0;
+    const isPromoter = b.promoter_clerk_id === clerkUserId ||
+      b.requester_email === (
+        (await get("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId))) as any[])?.[0]?.email
+      );
+
+    if (!isArtist && !isPromoter) return res.status(403).json({ error: "Forbidden" });
+
+    const messages = await get("booking_messages",
+      pq({ ...eqf("booking_id", bookingId), ...ord("created_at") })
+    );
+
+    // Mark messages as read
+    const now = new Date().toISOString();
+    if (isArtist) {
+      await patch("booking_messages",
+        `?booking_id=eq.${bookingId}&sender_role=eq.promoter&read_by_artist=eq.false`,
+        { read_by_artist: true }
+      );
+    }
+    if (isPromoter) {
+      await patch("booking_messages",
+        `?booking_id=eq.${bookingId}&sender_role=eq.artist&read_by_promoter=eq.false`,
+        { read_by_promoter: true }
+      );
+    }
+
+    return res.json(messages ?? []);
+  }
+
+  // POST /api/booking-messages/:booking_id  — post a message
+  if (segs[0] === "booking-messages" && segs.length === 2 && m === "POST") {
+    const bookingId = segs[1];
+    if (!clerkUserId) return res.status(401).json({ error: "Unauthorized" });
+
+    const booking = await get("booking_requests", pq(eqf("id", bookingId))) as any[];
+    if (!booking?.length) return res.status(404).json({ error: "Booking not found" });
+    const b = booking[0];
+
+    // Determine sender role
+    let senderRole: "artist" | "promoter" | null = null;
+    let senderName = "";
+
+    const artistRows = await get("artists",
+      pq({ ...eqf("id", b.artist_id_resolved ?? ""), ...eqf("claimed_by", clerkUserId) })
+    ) as any[];
+    if (artistRows?.length) { senderRole = "artist"; senderName = artistRows[0].name; }
+
+    if (!senderRole) {
+      const promoRows = await get("promoter_profiles", pq(eqf("clerk_user_id", clerkUserId))) as any[];
+      if (promoRows?.length && (
+        b.promoter_clerk_id === clerkUserId ||
+        b.requester_email === promoRows[0].email
+      )) { senderRole = "promoter"; senderName = promoRows[0].company_name; }
+    }
+
+    if (!senderRole) return res.status(403).json({ error: "Forbidden — not party to this booking" });
+
+    const { body: msgBody, quote_inr, quote_valid_hours } = body;
+    if (!msgBody?.trim()) return res.status(400).json({ error: "body required" });
+
+    const now = new Date().toISOString();
+    const { ok, data } = await ins("booking_messages", {
+      booking_id: bookingId,
+      sender_role: senderRole,
+      sender_clerk_id: clerkUserId,
+      sender_name: senderName,
+      body: msgBody.trim(),
+      is_system: false,
+      quote_inr: quote_inr ? Number(quote_inr) : null,
+      quote_valid_until: quote_valid_hours
+        ? new Date(Date.now() + Number(quote_valid_hours) * 3600000).toISOString()
+        : null,
+      read_by_artist: senderRole === "artist",
+      read_by_promoter: senderRole === "promoter",
+      created_at: now,
+    });
+
+    if (!ok) return res.status(500).json({ error: "Failed to send message", detail: data });
+
+    // Fire message_received email to the other party (non-blocking)
+    try {
+      if (process.env.RESEND_API_KEY) {
+        const { sendBookingEmail } = await import("@/lib/booking-email");
+        const recipientEmail = senderRole === "artist"
+          ? b.requester_email          // notify promoter
+          : (await get("artists", `?id=eq.${b.artist_id_resolved}&select=booking_email`) as any[])?.[0]?.booking_email;
+        if (recipientEmail) {
+          void sendBookingEmail("message_received", {
+            bookingId,
+            artistName:    b.artist_name ?? "",
+            artistEmail:   senderRole === "promoter" ? recipientEmail : null,
+            promoterName:  b.requester_name ?? b.promoter_name ?? b.requester_email,
+            promoterEmail: senderRole === "artist" ? recipientEmail : b.requester_email,
+            senderName,
+            messageSnippet: (msgBody as string).slice(0, 200),
+          }, {
+            toArtist:   senderRole === "promoter",
+            toPromoter: senderRole === "artist",
+          }).catch(console.error);
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    return res.status(201).json(Array.isArray(data) ? data[0] : data);
+  }
+
+  // GET /api/promoter/bookings  — all booking requests made by this promoter
+  if (path === "promoter/bookings" && m === "GET") {
+    const { promoter, error } = await resolvePromoter();
+    if (!promoter) return res.status(error === "Unauthorized" ? 401 : 404).json({ error });
+    const { status: statusFilter } = rq;
+    const filters: Record<string, string> = {
+      ...eqf("promoter_clerk_id", clerkUserId!),
+      ...ord("created_at", false),
+    };
+    if (statusFilter) filters["status"] = `eq.${statusFilter}`;
+    const bookings = await get("booking_requests", pq(filters));
+    return res.json(bookings ?? []);
+  }
+
+  // GET /api/booking-requests/:id/thread  — get booking + messages + artist snippet
+  if (segs[0] === "booking-requests" && segs[2] === "thread" && m === "GET") {
+    const bookingId = segs[1];
+    if (!clerkUserId) return res.status(401).json({ error: "Unauthorized" });
+    const booking = await get("booking_requests", pq(eqf("id", bookingId))) as any[];
+    if (!booking?.length) return res.status(404).json({ error: "Not found" });
+    const b = booking[0];
+    const [messages, artistRows] = await Promise.all([
+      get("booking_messages", pq({ ...eqf("booking_id", bookingId), ...ord("created_at") })),
+      b.artist_id_resolved
+        ? get("artists", `?id=eq.${b.artist_id_resolved}&select=id,slug,name,photo_url,based_city,genres,kind`)
+        : Promise.resolve([]),
+    ]);
+    return res.json({
+      booking: b,
+      messages: messages ?? [],
+      artist: (artistRows as any[])?.[0] ?? null,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // END BOOKING PHASE 2
   // ═══════════════════════════════════════════════════════════════════════════
 
   return res.status(404).json({ error: `No handler for ${m} /${path}` });

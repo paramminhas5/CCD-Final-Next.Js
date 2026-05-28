@@ -191,7 +191,7 @@ YOUTUBE_API_KEY=AIza...
 FIRECRAWL_API_KEY=fc-...
 OPENAI_API_KEY=sk-...
 INSTAGRAM_ACCESS_TOKEN=...
-RESEND_API_KEY=re_...           # For email notifications
+RESEND_API_KEY=re_...           # Transactional emails — booking status, OTP, RSVP confirmations
 STRIPE_SECRET_KEY=sk_...        # For ticketing (coming soon)
 ```
 
@@ -296,8 +296,20 @@ STRIPE_SECRET_KEY=sk_...        # For ticketing (coming soon)
 ### 🎛️ Artist Portal (`/artist/dashboard`)
 - Self-service for claimed artists
 - Edit profile (bio, social links, booking preferences)
-- Manage tour dates
+- **📅 Calendar tab** — Airbnb-host-style month grid; drag to select date ranges → block sheet (Tour Leg / Unavailable / Open Slot); weekly recurrence, city arrays, fee override per leg
+- **💰 Packages tab** — Define bookable packages (name, price, set duration, tech rider, travel included, suitable-for tags); drag-to-reorder; active/pause toggle; live promoter-preview bar
+- **Booking Inbox** — Status filter tabs (new / quoted / held / confirmed / completed); quote-amount input; state-machine action buttons (Send Quote → Place Hold → Confirm); reply by email / WhatsApp
 - View booking requests inbox (OTP-verified)
+
+### 🎟️ Booking Marketplace (`/book`)
+- **Airbnb-style date + city search bar** in hero — activates `/api/marketplace/artists-v2`
+- Per-artist **availability signal** badges (✓ Open slot / ◎ Tour leg / ✗ Busy) sourced from live calendar data
+- Signal legend strip in sticky filter bar
+- Shared `BookingForm` component with package selector, 3-month availability mini-calendar, date-range picker, busy-day warning, numeric INR budget
+
+### 🧑‍🎤 Artist Profile BOOK tab (`/artists/:slug` → BOOK tab)
+- Shared `BookingForm` with live packages + merged calendar data
+- `AvailabilityStrip v2` — fetches `/api/artist-calendar` (blocks + individual gigs merged); shows tour-leg summaries; loading skeleton
 
 ### 📊 Other Pages
 - `/about` — Brand story
@@ -385,6 +397,20 @@ STRIPE_SECRET_KEY=sk_...        # For ticketing (coming soon)
 | `schema_user_event_interactions` | User save/dismiss/click tracking |
 | `schema_user_taste_profiles` | User music taste (genres, cities, liked artists) |
 
+### Booking Module Tables (Phase 1–2, `lib/db/migrations/`)
+| Table | Purpose |
+|---|---|
+| `artist_packages` | Pricing tiers per artist — name, price, set type, duration, tech rider, travel, suitable-for tags |
+| `artist_availability_blocks` | Host-side calendar — tour legs, unavailable blocks, open slots; date ranges + optional weekly recurrence; multi-city |
+| `promoter_profiles` | Promoter accounts (Clerk-linked) — company name, verified status, city, genres, booking history |
+| `booking_messages` | Threaded message log per booking request — sender role (promoter/artist), body, attachments |
+| `booking_shortlist` | Promoter shortlist — many-to-many (promoter × artist); stores brief text, target date, cities |
+
+> **Running migrations:** Open Supabase SQL Editor → paste each file in `lib/db/migrations/` in filename order → execute. All files are idempotent (`IF NOT EXISTS` guarded).
+
+### `artists.kind` column (Phase 1)
+All existing artist rows default to `kind = 'musician'`. Allowed values: `musician | photographer | lighting | mix_engineer | production | videographer | mc`. Seeds the Phase 3 Talent Platform.
+
 ---
 
 
@@ -424,6 +450,34 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 | DELETE | `/artist-dates/entry/:id` | Delete tour date |
 | GET | `/booking-requests/:artistId` | Booking requests for artist |
 
+### Booking Module (Phase 1–2)
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/artist-packages?artist_slug=` | Public | List active packages for artist |
+| POST | `/artist-packages` | Artist | Create package |
+| PATCH | `/artist-packages/:id` | Artist | Update package |
+| DELETE | `/artist-packages/:id` | Artist | Soft-delete package |
+| POST | `/artist-packages/reorder` | Artist | Reorder packages `{ order: [{id, sort_order}] }` |
+| GET | `/availability-blocks?artist_slug=&from=&to=` | Public | Public calendar blocks in range |
+| GET | `/availability-blocks/mine?from=&to=` | Artist | All own blocks (incl. private) |
+| POST | `/availability-blocks` | Artist | Create block (tour_leg / unavailable / available) |
+| PATCH | `/availability-blocks/:id` | Artist | Update block |
+| DELETE | `/availability-blocks/:id` | Artist | Delete block |
+| GET | `/artist-calendar?slug=&from=&to=` | Public | Merged day-map (blocks + gigs) → `{days, blocks, gigs}` |
+| POST | `/booking-inquiry-v2` | Public | Structured inquiry (v1 fallback built-in) |
+| PATCH | `/booking-requests/:id/status` | Artist | State machine: new→quoted→held→confirmed→completed |
+| GET | `/booking-requests/mine?status=` | Artist | Artist's inbox with optional status filter |
+| GET | `/marketplace/artists-v2?city=&date=&genre=&fee_max=` | Public | Date+city-aware artist search with `availability_signal` |
+| POST | `/promoter/register` | Promoter | Create promoter profile (Clerk-linked) |
+| GET | `/promoter/me` | Promoter | Get own promoter profile |
+| PATCH | `/promoter/me` | Promoter | Update promoter profile |
+| GET | `/shortlist` | Promoter | Get own shortlist with artist details |
+| POST | `/shortlist` | Promoter | Add artist to shortlist `{ artist_slug, brief?, target_date?, cities? }` |
+| DELETE | `/shortlist/:artist_slug` | Promoter | Remove artist from shortlist |
+| POST | `/shortlist/fan-out` | Promoter | Send brief to all shortlisted artists simultaneously |
+| GET | `/booking-messages/:booking_id` | Artist/Promoter | Message thread for a booking |
+| POST | `/booking-messages/:booking_id` | Artist/Promoter | Post message to thread |
+
 ### Forms
 | Method | Route | Description |
 |---|---|---|
@@ -453,14 +507,43 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 
 ## Roadmap
 
-### 🔥 Phase 6 — Fix What's Broken (Critical, do first)
+### ✅ Phase 1 — Artist Booking Module (COMPLETE — `feature/booking-phase1`)
+- [x] `artist_packages` table + full CRUD API + portal Packages tab
+- [x] `artist_availability_blocks` table + full CRUD API + Airbnb-host Calendar tab (drag-select, tour legs, weekly recurrence)
+- [x] `/api/artist-calendar` — merged day-map endpoint (blocks + gigs)
+- [x] `/api/booking-inquiry-v2` — structured inquiry with v1 fallback
+- [x] Booking state machine: new → quoted → held → confirmed → completed
+- [x] Upgraded Booking Inbox with status filter tabs + quote/hold/confirm actions
+- [x] Shared `BookingForm` component (packages + mini-calendar + date-range)
+- [x] `AvailabilityStrip v2` — reads merged calendar API, shows tour-leg block summaries
+- [x] `/book` marketplace — date+city Airbnb-style search hero + availability signal badges
+- [x] `artists.kind` column seeded for Phase 3 talent platform
+
+### ✅ Phase 2 — Promoter Accounts + Messaging (COMPLETE — `feature/booking-phase2`)
+- [x] `promoter_profiles` table — Clerk-linked, company name, verified status, city, genres
+- [x] `booking_messages` table — threaded message log per booking (sender_role: artist/promoter)
+- [x] `booking_shortlist` table — promoter shortlists with brief text + target dates
+- [x] Promoter registration + profile API
+- [x] Shortlist CRUD + **fan-out brief** (send to all shortlisted artists in one click)
+- [x] Booking message thread API (read + post)
+- [x] Transactional email triggers (Resend) on status changes: new inquiry, quoted, hold placed, confirmed, declined
+- [x] Promoter Dashboard (`/promoter/dashboard`) — shortlist manager, active bookings, message threads, brief fan-out
+
+### ✅ Phase 3 — Talent Platform (COMPLETE — `feature/booking-phase2`)
+- [x] Talent directory (`/talent`) — all `artists.kind` categories, kind-aware filtering
+- [x] Kind-aware onboarding — role-specific package templates auto-seeded on first portal load
+- [x] Role-specific fields: photographers (hourly rate, shoot types), mix engineers (rate/day, DAWs), lighting (rig type, day rate), production (crew size, specialisms), videographer (formats)
+- [x] `/talent/[slug]` — unified talent profile routing all kinds
+- [x] Kind badges on artist cards and directory
+
+### 🔥 Phase 4 — Fix What's Broken (Critical, do first)
 - [ ] Fix shop: verify Shopify token + confirm products published to Storefront channel
 - [ ] Fix admin: document all required env vars, add `.env.example`, verify Supabase service key setup
 - [ ] Wire YouTube API (`YOUTUBE_API_KEY`) → populate Videos page
 - [ ] Wire email delivery (`RESEND_API_KEY`) → booking OTP + RSVP confirmations + early access
 - [ ] Remove AdminPanel.tsx ghost routes or wire them properly
 
-### 🎯 Phase 7 — Artist Data Collection Engine
+### 🎯 Phase 5 — Artist Data Collection Engine
 - [ ] **Firecrawl enrichment pipeline** — crawl artist IG bios, SoundCloud profiles, Bandcamp pages
 - [ ] **Auto-populate gigography** — parse event listings from promoter websites
 - [ ] **Social stats snapshots** — weekly cron to capture IG followers, SC plays, Spotify monthly listeners
@@ -468,7 +551,7 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 - [ ] **Discography import** — Spotify API: pull releases for artists with spotify URL set
 - [ ] **Press mention scraper** — search Google News for artist name + music keywords
 
-### 🎪 Phase 8 — Live Events Infrastructure
+### 🎪 Phase 6 — Live Events Infrastructure
 - [ ] **Event crawler scheduler** — cron job running `curate-events` for all trusted promoter URLs
 - [ ] **Promoter crawl URLs** — promoters table already has `crawl_urls` field, just need the cron wired
 - [ ] **Event poster upload** — admin uploads poster → Supabase storage → poster_url
@@ -476,19 +559,7 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 - [ ] **Event reminder emails** — 24h before event for RSVPd users
 - [ ] **Embedded event widget** — `/embed/upcoming` already exists, needs styling polish
 
-### 🏠 Phase 9 — Artist Marketplace (Airbnb for Artists)
-> Venues and promoters browse artists, see availability, send direct booking inquiries
-
-- [ ] **Artist availability calendar** — artists mark available dates in portal
-- [ ] **Venue/Promoter browse** — filter artists by genre, city, fee range, availability date
-- [ ] **"Request a date" form** — venue submits booking request with event details + budget
-- [ ] **Artist response flow** — artist gets notified, can accept/decline/counter-propose
-- [ ] **Booking contract** — PDF download of agreed terms (date, fee, venue, performance duration)
-- [ ] **Promoter verified accounts** — promoters can claim a profile, get `✓ Verified Promoter` badge
-- [ ] **Public availability display** — artist profile shows "Available in [city] on [month]"
-- [ ] **Fee transparency** — artists set public fee range (already in DB, just not displayed by default)
-
-### 🎟️ Phase 10 — First-Party Ticketing
+### 🎟️ Phase 7 — First-Party Ticketing
 > Promoters sell tickets directly through CCD, CCD takes a small commission
 
 - [ ] **Stripe integration** — payment processing for ticket purchases
@@ -499,7 +570,7 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 - [ ] **Refund flow** — admin-triggered refund via Stripe API
 - [ ] **Sales dashboard** — promoter sees real-time ticket sales, revenue, capacity %
 
-### 👤 Phase 11 — Community & User Profiles
+### 👤 Phase 8 — Community & User Profiles
 - [ ] **User profile page** (`/profile`) — avatar, saved events, followed artists, cities
 - [ ] **Follow an artist** — heart button → persists to `user_taste_profiles.liked_artist_slugs`
 - [ ] **"Going" to events** — mark attendance, see who else is going
@@ -509,13 +580,13 @@ Base URL: `/api` (proxied through Next.js → Express 5 server)
 - [ ] **"Heard at [event]"** — crowd-sourced track ID submissions
 - [ ] **Event memories** — post-event photo gallery (moderated)
 
-### 📱 Phase 12 — PWA + Mobile
+### 📱 Phase 9 — PWA + Mobile
 - [ ] **Service worker** — offline cache for artists page + events
 - [ ] **Push notifications** — opt-in for followed artists' upcoming events
 - [ ] **Add to Home Screen** — install prompt on mobile
 - [ ] **Splash screen** + native-feel transitions
 
-### 💰 Phase 13 — Monetisation
+### 💰 Phase 10 — Monetisation
 - [ ] **Artist verified badge** — paid annual subscription for verified status + analytics
 - [ ] **Featured listings** — promoters pay to feature events in "Editor's Picks" tab
 - [ ] **Shop v2** — complete Shopify integration, "Reserve My Drop" pre-registration

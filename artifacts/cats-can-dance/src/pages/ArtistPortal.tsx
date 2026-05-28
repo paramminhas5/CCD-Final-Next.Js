@@ -10,6 +10,7 @@ import { api } from "@/lib/api-client";
 import { toast } from "sonner";
 import PackagesManager from "@/components/portal/PackagesManager";
 import CalendarManager from "@/components/portal/CalendarManager";
+import { DEFAULT_PACKAGES, type TalentKind } from "@/lib/talent-config";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 type Artist = {
@@ -578,6 +579,41 @@ function MarketplaceInbox({ artistSlug, artistName }: { artistSlug: string; arti
 }
 
 /* ─── Main Dashboard ─────────────────────────────────────────────────────── */
+// ── Packages tab with role-specific auto-seeding ──────────────────────────────
+// On first visit (0 packages), seeds the artist's role-specific default packages.
+function PackagesManagerWithSeeding({
+  artistId, artistKind, getToken,
+}: { artistId: string; artistKind: string; getToken: () => Promise<string | null> }) {
+  const [seeded, setSeeded] = useState(false);
+
+  useEffect(() => {
+    if (seeded) return;
+    (async () => {
+      try {
+        const r = await fetch(`/api/artist-packages?artist_id=${artistId}`);
+        const existing = await r.json();
+        if (Array.isArray(existing) && existing.length === 0) {
+          const kind = artistKind as TalentKind;
+          const templates = DEFAULT_PACKAGES[kind] ?? DEFAULT_PACKAGES.musician;
+          if (templates.length === 0) return;
+          const token = await getToken();
+          const hdrs = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+          for (const tpl of templates) {
+            await fetch("/api/artist-packages", {
+              method: "POST", headers: hdrs,
+              body: JSON.stringify(tpl),
+            });
+          }
+          toast.success(`${templates.length} starter packages added for your role — edit them to match your pricing`);
+        }
+      } catch { /* non-fatal */ }
+      finally { setSeeded(true); }
+    })();
+  }, [artistId, artistKind]);
+
+  return <PackagesManager artistId={artistId} />;
+}
+
 type Tab = "profile" | "calendar" | "packages" | "bookings" | "inquiries";
 
 const ArtistPortal = () => {
@@ -587,6 +623,7 @@ const ArtistPortal = () => {
 
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { getToken } = useAuth();
 
   const [artist, setArtist] = useState<Artist | null>(null);
   const [tab, setTab] = useState<Tab>("profile");
@@ -760,9 +797,9 @@ const ArtistPortal = () => {
         </div>
 
         {tab === "profile" && <ProfileEditor artist={artist} onSaved={setArtist} />}
-        {tab === "calendar" && <CalendarManager artistId={artist.id} />}
-        {tab === "packages" && <PackagesManager artistId={artist.id} />}
-        {tab === "bookings" && <BookingInbox artistId={artist.id} />}
+        {tab === "calendar"  && <CalendarManager artistId={artist.id} />}
+        {tab === "packages"  && <PackagesManagerWithSeeding artistId={artist.id} artistKind={(artist as any).kind ?? "musician"} getToken={getToken} />}
+        {tab === "bookings"  && <BookingInbox artistId={artist.id} />}
         {tab === "inquiries" && <MarketplaceInbox artistSlug={artist.slug} artistName={artist.name} />}
       </div>
       <Footer />

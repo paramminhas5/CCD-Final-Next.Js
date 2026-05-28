@@ -6,11 +6,12 @@
  */
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Search, MapPin, Music, X, ChevronDown, CalendarDays, Zap, Clock } from "lucide-react";
+import { Search, MapPin, Music, X, ChevronDown, CalendarDays, Zap, Clock, Bookmark, BookmarkCheck } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import BookingForm from "@/components/booking/BookingForm";
+import { useAuth } from "@clerk/react";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -50,6 +51,52 @@ function BookingDialog({ artist, onClose }: { artist: Artist; onClose: () => voi
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Shortlist Button ─────────────────────────────────────────────────────────
+function ShortlistButton({ artistSlug, artistName }: { artistSlug: string; artistName: string }) {
+  const { getToken, isSignedIn } = useAuth();
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function toggle() {
+    if (!isSignedIn) {
+      window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`;
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = await getToken();
+      const hdrs = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      if (saved) {
+        await fetch(`/api/shortlist/${artistSlug}`, { method: "DELETE", headers: hdrs });
+        setSaved(false);
+      } else {
+        const r = await fetch("/api/shortlist", {
+          method: "POST", headers: hdrs,
+          body: JSON.stringify({ artist_slug: artistSlug }),
+        });
+        if (r.status === 404) {
+          // Promoter profile not registered yet
+          window.location.href = "/promoter/dashboard";
+          return;
+        }
+        setSaved(true);
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <button onClick={toggle} disabled={loading}
+      title={saved ? "Remove from shortlist" : "Add to shortlist"}
+      className={`w-10 shrink-0 border-4 border-ink flex items-center justify-center transition-colors disabled:opacity-50 ${
+        saved ? "bg-acid-yellow text-ink hover:bg-magenta hover:text-cream" : "bg-cream text-ink hover:bg-acid-yellow"
+      }`}>
+      {loading ? <Zap className="w-3.5 h-3.5 animate-pulse" /> :
+        saved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+    </button>
   );
 }
 
@@ -134,12 +181,15 @@ function ArtistBookCard({ artist, onBook }: { artist: Artist; onBook: (a: Artist
           <p className="text-xs text-ink/60 line-clamp-2 mb-4">{artist.bio}</p>
         )}
 
-        <button
-          onClick={() => onBook(artist)}
-          className="w-full py-2.5 border-4 border-ink bg-ink text-cream font-display text-xs uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
-        >
-          Request Booking →
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onBook(artist)}
+            className="flex-1 py-2.5 border-4 border-ink bg-ink text-cream font-display text-xs uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+          >
+            Request Booking →
+          </button>
+          <ShortlistButton artistSlug={artist.slug} artistName={artist.name} />
+        </div>
       </div>
     </article>
   );
