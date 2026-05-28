@@ -6,7 +6,7 @@ import {
   userTasteProfilesTable,
   eventArtistLineupsTable,
 } from "@workspace/db/schema";
-import { eq, and, sql, desc, asc, gte, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, asc, gte, lte, inArray } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 
 const router = Router();
@@ -38,8 +38,8 @@ router.get("/recommended", async (req, res) => {
     const allEvents = await eventQuery;
 
     // Get user taste profile if authenticated
-    let tasteProfile = null;
-    let userInteractions = [];
+    let tasteProfile: any = null;
+    let userInteractions: any[] = [];
 
     if (userId) {
       const profileRows = await db
@@ -75,7 +75,7 @@ router.get("/recommended", async (req, res) => {
       let score = 0;
       const reasons = [];
       const eventLineups = lineupsByEvent[event.id] || [];
-      const eventGenres = event.genre || [];
+      const eventGenres = (event.genre || []) as string[];
 
       // ─── Tab-specific scoring ─────────────────────────────────────────────
 
