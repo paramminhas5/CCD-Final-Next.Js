@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import PageHero from "@/components/PageHero";
@@ -51,17 +52,25 @@ const ForArtists = () => (
           <p className="text-ink/80 text-lg md:text-xl font-medium mb-6">
             Most gigs are transactional. CCD turns each set into a content drop, a community moment and people want to experience again.
           </p>
-          <PartnerContactDialog
-            kind="artists"
-            trigger={
-              <button
-                type="button"
-                className="inline-block bg-magenta text-cream font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
-              >
-                PLAY WITH US →
-              </button>
-            }
-          />
+          <div className="flex flex-wrap gap-3">
+            <PartnerContactDialog
+              kind="artists"
+              trigger={
+                <button
+                  type="button"
+                  className="inline-block bg-magenta text-cream font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                >
+                  PLAY WITH US →
+                </button>
+              }
+            />
+            <Link
+              href="/artist/dashboard"
+              className="inline-block bg-acid-yellow text-ink font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+            >
+              ARTIST PORTAL →
+            </Link>
+          </div>
         </div>
         <ul className="space-y-3">
           {bullets.map((b, i) => (
@@ -71,6 +80,33 @@ const ForArtists = () => (
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+    <section className="bg-ink border-b-4 border-ink py-16 md:py-20">
+      <div className="container flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+        <div>
+          <p className="font-display text-acid-yellow text-xs uppercase tracking-[0.3em] mb-2">/ ALREADY AN ARTIST?</p>
+          <h2 className="font-display text-3xl md:text-4xl text-cream uppercase leading-tight">
+            CLAIM YOUR PROFILE.<br/>MANAGE YOUR BOOKINGS.
+          </h2>
+          <p className="text-cream/60 mt-3 max-w-md">
+            Log in to the Artist Portal to edit your bio, manage tour dates, add releases, upload press clippings, and respond to booking inquiries — all in one place.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 shrink-0">
+          <Link
+            href="/artist/dashboard"
+            className="inline-block bg-magenta text-cream font-display text-lg px-8 py-4 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform whitespace-nowrap"
+          >
+            GO TO ARTIST PORTAL →
+          </Link>
+          <Link
+            href="/artists"
+            className="inline-block bg-transparent text-cream font-display text-sm px-8 py-3 border-4 border-cream/40 hover:border-cream hover:bg-cream/10 transition-colors text-center"
+          >
+            BROWSE THE ROSTER
+          </Link>
+        </div>
       </div>
     </section>
     <Footer />

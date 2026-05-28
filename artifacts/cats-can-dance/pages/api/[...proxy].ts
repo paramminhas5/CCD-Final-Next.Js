@@ -311,7 +311,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Artists: list ───────────────────────────────────────────────────────────
   if (path === "artists" && m === "GET") {
-    const rows = await get("artists", pq({ ...eqf("status","approved"), ...ord("name") }));
+    const f: Record<string,string> = { ...eqf("status","approved"), ...ord("name") };
+    if (rq.featured === "true") f["featured"] = "eq.true";
+    const limitVal = rq.limit ? parseInt(rq.limit) : null;
+    let rows = (await get("artists", pq(f))) as any[];
+    if (limitVal && limitVal > 0) rows = rows.slice(0, limitVal);
     return res.json(rows ?? []);
   }
 
@@ -421,6 +425,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       socialStats = ss?.[0] ?? null;
     } catch { /* table may not exist */ }
 
+    let socialHistory: any[] = [];
+    try {
+      socialHistory = await get("artist_social_stats", `?artist_slug=eq.${slug}&order=captured_at.asc&limit=30`) as any[];
+    } catch { /* resilient */ }
+
     let discography: any[] = [];
     try { discography = await get("artist_discography", `?artist_slug=eq.${slug}&order=release_date.desc&limit=20`) as any[]; } catch { /* table may not exist */ }
 
@@ -451,7 +460,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const topCity = Object.entries(cityCounts).sort((x: any, y: any) => y[1] - x[1])[0] as [string, number] | undefined;
     if (topCity) facts.push({ icon: "📍", label: "Home turf", value: topCity[0], detail: `${topCity[1]} gigs` });
 
-    return res.json({ artist, connections, appearances, upcomingDates, milestones, socialStats, discography, press, stats, facts });
+    return res.json({ artist, connections, appearances, upcomingDates, milestones, socialStats, socialHistory, discography, press, stats, facts });
   }
 
   // ── Artists: by logged-in user (claimed_by) ────────────────────────────────
