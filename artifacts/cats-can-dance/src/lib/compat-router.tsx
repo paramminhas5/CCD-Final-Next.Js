@@ -63,11 +63,25 @@ export function useParams<T extends Record<string, string> = Record<string, stri
 }
 
 export function useSearchParams(): [URLSearchParams, (params: URLSearchParams) => void] {
-  if (typeof window === "undefined") {
-    return [new URLSearchParams(), () => {}];
-  }
-  const params = new URLSearchParams(window.location.search);
-  return [params, () => {}];
+  const router = useRouter();
+  // Build URLSearchParams from router.query so the value is reactive across
+  // navigation (unlike reading window.location.search directly which only
+  // captures the value at mount time).
+  const params = new URLSearchParams(
+    Object.entries(router.query)
+      .filter(([k]) => k !== "proxy") // strip Next.js catch-all param
+      .flatMap(([k, v]) =>
+        Array.isArray(v) ? v.map((val) => [k, val]) : [[k, v as string]]
+      )
+  );
+
+  const setParams = (next: URLSearchParams) => {
+    const query: Record<string, string> = {};
+    next.forEach((v, k) => { query[k] = v; });
+    router.push({ pathname: router.pathname, query }, undefined, { shallow: true });
+  };
+
+  return [params, setParams];
 }
 
 export function useLocation() {
@@ -113,6 +127,9 @@ export type NavLinkProps = {
 /**
  * NavLink — supports react-router-dom's function-as-className API:
  * `className={({ isActive }) => isActive ? "active" : ""}`
+ *
+ * Uses router.pathname consistently (no window.location) to avoid SSR/client
+ * hydration mismatches.
  */
 export function NavLink({
   to,
@@ -127,10 +144,10 @@ export function NavLink({
 }: NavLinkProps) {
   const router = useRouter();
   const dest = toHref(to ?? href);
+  // Use router.pathname for both SSR and client — no window.location which
+  // causes a hydration mismatch because the server never has window access.
   const isActive =
-    typeof window !== "undefined"
-      ? window.location.pathname === dest || window.location.pathname.startsWith(dest + "/")
-      : router.pathname === dest || router.pathname.startsWith(dest + "/");
+    router.pathname === dest || router.pathname.startsWith(dest + "/");
 
   const resolvedClass =
     typeof className === "function" ? className({ isActive }) : className;

@@ -555,6 +555,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return ok ? res.json({ ok: true }) : res.status(400).json({ error: "Failed" });
   }
 
+  // ── Artists: self-update (claimed artist edits own profile) ─────────────────
+  // Ownership verified: the artist's claimed_by must match the posted user_id.
+  // No admin password required — the check IS the authentication.
+  if (segs[0] === "artists" && segs[2] === "self-update" && m === "PATCH") {
+    const artistId = segs[1];
+    const { user_id, ...fields } = body as any;
+    if (!user_id) return res.status(401).json({ error: "user_id required" });
+    // Verify ownership
+    const rows = await get("artists", pq(eqf("id", artistId))) as any[];
+    if (!rows?.length) return res.status(404).json({ error: "Artist not found" });
+    if (rows[0].claimed_by !== user_id) return res.status(403).json({ error: "You don't own this profile" });
+    // Only allow safe editable fields — never let self-update change status/claimed_by/slug
+    const ALLOWED = ["bio","why","instagram","soundcloud","spotify","bandcamp","website","booking_email","manager_email","labels","photo_url"];
+    const safe: Record<string, unknown> = {};
+    for (const k of ALLOWED) { if (k in fields) safe[k] = (fields as any)[k]; }
+    if (!Object.keys(safe).length) return res.status(400).json({ error: "No editable fields provided" });
+    const { ok, data } = await patch("artists", pq(eqf("id", artistId)), { ...safe, updated_at: new Date().toISOString() });
+    return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed" });
+  }
+
   // ── Artists: patch (admin only) ─────────────────────────────────────────────
   if (segs[0] === "artists" && segs[1] && m === "PATCH") {
     if (!isAdmin(req)) return res.status(401).json({ error: "Admin only" });
@@ -628,6 +648,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── Videos (public) ─────────────────────────────────────────────────────────
   if (path === "videos" && m === "GET") {
     return res.json(await get("site_videos", pq(ord("sort_order"))));
+  }
+
+  // ── Catbot chat ─────────────────────────────────────────────────────────────
+  // Proxies the chat request to the Supabase edge function.
+  // The SUPABASE_ANON_KEY is safe to use server-side as a Bearer token.
+  if (path === "catbot-chat" && m === "POST") {
+    const CATBOT_URL = process.env.CATBOT_EDGE_URL ?? `${SB}/functions/v1/catbot-chat`;
+    const ANON_KEY = process.env.SUPABASE_ANON_KEY ?? "";
+    if (!ANON_KEY) {
+      return res.status(503).json({ error: "Catbot not configured — SUPABASE_ANON_KEY missing" });
+    }
+    try {
+      const upstream = await fetch(CATBOT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${ANON_KEY}`,
+        },
+        body: JSON.stringify(req.body),
+      });
+      if (!upstream.ok || !upstream.body) {
+        const txt = await upstream.text().catch(() => "stream error");
+        return res.status(upstream.status).send(txt);
+      }
+      // Stream the SSE response back to the client
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      const reader = upstream.body.getReader();
+      const pump = async () => {
+        const { done, value } = await reader.read();
+        if (done) { res.end(); return; }
+        res.write(value);
+        await pump();
+      };
+      await pump();
+    } catch (err: any) {
+      return res.status(502).json({ error: `Catbot unreachable: ${err.message}` });
+    }
+    return;
   }
 
   // ── Site settings ───────────────────────────────────────────────────────────

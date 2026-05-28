@@ -152,7 +152,7 @@ const Index = () => {
         </Suspense>
         <MarqueeBySlot id="above-drops" />
         <Suspense fallback={<SectionFallback bg="bg-cream" />}>
-          <SectionReveal><Drops /></SectionReveal>
+          <SectionReveal id="drops"><Drops /></SectionReveal>
         </Suspense>
         <MarqueeBySlot id="above-instagram" />
         <Suspense fallback={<SectionFallback bg="bg-magenta" />}>

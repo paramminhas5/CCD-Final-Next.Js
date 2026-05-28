@@ -12,7 +12,7 @@ const SUGGESTIONS = [
   "Where's the playlist?",
 ];
 
-const CHAT_URL = `${"/api"}/functions/v1/catbot-chat`;
+const CHAT_URL = `/api/catbot-chat`;
 
 const Catbot = () => {
   const [open, setOpen] = useState(false);
@@ -61,7 +61,6 @@ const Catbot = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${""}`,
         },
         body: JSON.stringify({ messages: next }),
       });

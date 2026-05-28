@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -186,7 +184,13 @@ function WhatsOnStrip() {
           {!loading && cityCounts.length > 0 && (
             <>
               <div className="w-px h-4 bg-ink/30 shrink-0" />
-              <button className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap">
+              <button
+                className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap"
+                onClick={() => {
+                  const el = document.getElementById("events");
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
                 See all below ↓
               </button>
             </>
