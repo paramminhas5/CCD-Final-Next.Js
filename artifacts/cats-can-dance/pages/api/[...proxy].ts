@@ -3,6 +3,8 @@
  * Routes all /api/* calls to Supabase REST with service-role key.
  * Admin routes require x-admin-password header matching ADMIN_PASSWORD env var.
  * NO hardcoded password fallback — set ADMIN_PASSWORD in Vercel env vars.
+ *
+ * /api/ticketing/* routes are forwarded to the Express API server.
  */
 import type { NextApiRequest, NextApiResponse } from "next";
 
@@ -12,6 +14,8 @@ const SK = process.env.SUPABASE_SERVICE_KEY ??
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yemd5aXBwenR6ZW5veXJ0c3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTExNjAzOCwiZXhwIjoyMDk0NjkyMDM4fQ.79dS5Y1Ov1P51veAR62fKEX4m-okHqSAg6huzTTL2C4";
 // ADMIN_PW: must be set in Vercel env vars — no hardcoded fallback for security
 const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "84838281";
+// Express API server URL — for ticketing routes
+const API_SERVER = process.env.API_SERVER_URL ?? process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") ?? "http://localhost:3001";
 
 const H = () => ({
   Authorization: `Bearer ${SK}`,
@@ -74,6 +78,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? req.query.proxy
     : [req.query.proxy as string];
   const path = segs.join("/");
+
+  // ── Ticketing: forward to Express API server ──────────────────────────────
+  if (segs[0] === "ticketing") {
+    const subPath = segs.join("/");
+    const qs = new URLSearchParams(req.query as Record<string, string>);
+    qs.delete("proxy");
+    const qsStr = qs.toString() ? `?${qs.toString()}` : "";
+    const targetUrl = `${API_SERVER}/api/${subPath}${qsStr}`;
+    const forwardHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    // Forward auth and admin headers verbatim
+    if (req.headers["authorization"]) forwardHeaders["authorization"] = req.headers["authorization"] as string;
+    if (req.headers["x-admin-password"]) forwardHeaders["x-admin-password"] = req.headers["x-admin-password"] as string;
+    if (req.headers["cookie"]) forwardHeaders["cookie"] = req.headers["cookie"] as string;
+    try {
+      const upstream = await fetch(targetUrl, {
+        method: req.method ?? "GET",
+        headers: forwardHeaders,
+        ...(req.method !== "GET" && req.method !== "HEAD" && req.body ? { body: JSON.stringify(req.body) } : {}),
+      });
+      const contentType = upstream.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const data = await upstream.json();
+        return res.status(upstream.status).json(data);
+      }
+      const text = await upstream.text();
+      return res.status(upstream.status).send(text);
+    } catch (proxyErr: any) {
+      return res.status(502).json({ error: `Ticketing API unreachable: ${proxyErr.message}` });
+    }
+  }
+
   const { proxy: _p, ...rq } = req.query as Record<string, string>;
   const body: any = req.body ?? {};
   const m = req.method ?? "GET";

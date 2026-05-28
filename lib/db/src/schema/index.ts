@@ -17,3 +17,4 @@ export * from "./site_videos";
 export * from "./schema_user_event_interactions";
 export * from "./schema_user_taste_profiles";
 export * from "./venue_profiles";
+export * from "./ticketing";
