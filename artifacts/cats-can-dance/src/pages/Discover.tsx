@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import CuratedEvents from "@/components/CuratedEvents";
 import { CITY_SCENES, GLOBAL_SCENES, GENRE_PAGES } from "@/content/scenes";
 import {
   MapPin, Globe, Music2, Compass, ArrowRight, Play,
@@ -111,40 +112,31 @@ function WhatsOnStrip() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get upcoming events, group by city, count per city
     fetch("/api/curated-events?limit=50")
       .then(r => r.json())
       .then((events: any[]) => {
         if (!Array.isArray(events)) return;
         const now = new Date();
         const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-        // Filter to events happening within the next 7 days
         const upcoming = events.filter(e => {
           if (!e.event_date) return false;
           const d = new Date(e.event_date);
           return d >= now && d <= weekFromNow;
         });
-
-        // Count by city
         const counts: Record<string, number> = {};
         for (const e of upcoming) {
           if (e.city) counts[e.city] = (counts[e.city] || 0) + 1;
         }
-
-        // Sort by count desc, take top 6
         const sorted = Object.entries(counts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6)
           .map(([city, count]) => ({ city, count }));
-
         setCityCounts(sorted);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  // Don't render if no upcoming events found
   if (!loading && cityCounts.length === 0) return null;
 
   return (
@@ -158,9 +150,7 @@ function WhatsOnStrip() {
             </span>
           </div>
           <div className="w-px h-4 bg-ink/30 shrink-0" />
-
           {loading ? (
-            // Skeleton
             Array(4).fill(null).map((_, i) => (
               <div key={i} className="h-7 w-28 bg-ink/10 animate-pulse shrink-0" />
             ))
@@ -177,7 +167,6 @@ function WhatsOnStrip() {
                   </span>
                 </span>
               );
-
               return citySlug ? (
                 <Link
                   key={city}
@@ -194,16 +183,12 @@ function WhatsOnStrip() {
               );
             })
           )}
-
           {!loading && cityCounts.length > 0 && (
             <>
               <div className="w-px h-4 bg-ink/30 shrink-0" />
-              <Link
-                href="/events"
-                className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap"
-              >
-                All events →
-              </Link>
+              <button className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap">
+                See all below ↓
+              </button>
             </>
           )}
         </div>
@@ -231,7 +216,6 @@ function UniversalSearch() {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Build static results from scenes data
   const staticResults: SearchResult[] = [
     ...CITY_SCENES.map(c => ({
       type: "city" as const,
@@ -261,7 +245,6 @@ function UniversalSearch() {
 
   const q = query.trim().toLowerCase();
 
-  // Filter static results
   const filteredStatic = q.length >= 2
     ? staticResults.filter(r =>
         r.label.toLowerCase().includes(q) ||
@@ -269,7 +252,6 @@ function UniversalSearch() {
       ).slice(0, 6)
     : [];
 
-  // Fetch artist results when query changes
   useEffect(() => {
     if (q.length < 2) { setArtistResults([]); return; }
     setLoadingArtists(true);
@@ -298,12 +280,8 @@ function UniversalSearch() {
     return () => clearTimeout(timer);
   }, [q]);
 
-  const allResults: SearchResult[] = [
-    ...artistResults,
-    ...filteredStatic,
-  ];
+  const allResults: SearchResult[] = [...artistResults, ...filteredStatic];
 
-  // Group results by type
   const grouped = allResults.reduce<Record<string, SearchResult[]>>((acc, r) => {
     if (!acc[r.type]) acc[r.type] = [];
     acc[r.type].push(r);
@@ -311,10 +289,7 @@ function UniversalSearch() {
   }, {});
 
   const typeLabels: Record<string, string> = {
-    artist: "Artists",
-    city: "Cities",
-    genre: "Genres",
-    scene: "Global Scenes",
+    artist: "Artists", city: "Cities", genre: "Genres", scene: "Global Scenes",
   };
   const typeIcons: Record<string, React.ReactNode> = {
     artist: <Music className="w-3 h-3" />,
@@ -323,7 +298,6 @@ function UniversalSearch() {
     scene: <Globe className="w-3 h-3" />,
   };
 
-  // Close on outside click
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -334,7 +308,6 @@ function UniversalSearch() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  // Keyboard: Escape to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); }
@@ -353,7 +326,6 @@ function UniversalSearch() {
 
   return (
     <div ref={containerRef} className="relative max-w-2xl mx-auto">
-      {/* Input */}
       <div className={`flex items-center border-4 border-ink bg-cream transition-colors ${open ? "border-magenta" : ""}`}>
         <Search className="w-5 h-5 text-ink/40 ml-4 shrink-0" />
         <input
@@ -377,30 +349,22 @@ function UniversalSearch() {
           </button>
         )}
       </div>
-
-      {/* Dropdown */}
       {showDropdown && (
         <div className="absolute top-full left-0 right-0 z-50 border-4 border-ink border-t-0 bg-cream shadow-[8px_8px_0_#1a1a1a] max-h-[70vh] overflow-y-auto">
-          {/* Loading */}
           {loadingArtists && allResults.length === 0 && (
             <div className="p-4">
               <div className="h-5 bg-ink/10 animate-pulse w-32 mb-2" />
               <div className="h-5 bg-ink/10 animate-pulse w-48" />
             </div>
           )}
-
-          {/* No results */}
           {!loadingArtists && allResults.length === 0 && (
             <div className="p-6 text-center">
               <p className="font-display text-sm text-ink/50 uppercase">Nothing found for "{query}"</p>
               <p className="text-xs text-ink/40 mt-1">Try "house", "bengaluru", or an artist name</p>
             </div>
           )}
-
-          {/* Results grouped by type */}
           {Object.entries(grouped).map(([type, results]) => (
             <div key={type}>
-              {/* Group header */}
               <div className="px-4 pt-3 pb-1 flex items-center gap-2 border-b border-ink/10">
                 <span className="text-ink/40">{typeIcons[type]}</span>
                 <span className="font-display text-[10px] uppercase tracking-widest text-ink/50">
@@ -413,7 +377,6 @@ function UniversalSearch() {
                   onClick={() => handleSelect(r.href)}
                   className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-acid-yellow transition-colors border-b border-ink/10 last:border-b-0 group"
                 >
-                  {/* Colour swatch for non-artist results */}
                   {r.accent && r.type !== "artist" && (
                     <span className={`shrink-0 w-3 h-3 border border-ink ${r.accent}`} />
                   )}
@@ -430,8 +393,6 @@ function UniversalSearch() {
               ))}
             </div>
           ))}
-
-          {/* Footer hint */}
           {allResults.length > 0 && (
             <div className="px-4 py-2 border-t-4 border-ink bg-ink/5">
               <p className="font-display text-[10px] uppercase text-ink/30 tracking-widest">
@@ -451,8 +412,8 @@ export default function DiscoverPage() {
     {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
-      name: "Discover — Indian & Global Electronic Music Scenes",
-      description: "Explore India's underground electronic music cities, global scene origins, and every genre you need to know.",
+      name: "Discover — Indian Electronic Music Events & Scenes",
+      description: "Find the best electronic music events across India, curated by Cats Can Dance. Explore city scenes, genres, and the underground.",
       url: "https://catscandance.com/discover",
       about: CITY_SCENES.map(c => ({
         "@type": "Place",
@@ -474,10 +435,10 @@ export default function DiscoverPage() {
   return (
     <main className="bg-cream text-ink">
       <SEO
-        title="Discover — Cats Can Dance | Indian & Global Electronic Music Scenes"
-        description="Explore India's underground electronic music cities, global scene origins — Detroit Techno, Chicago House, London Jungle — and every genre you need to know."
+        title="Discover Events — Cats Can Dance | Best Electronic Music Events in India"
+        description="Find curated electronic music events across India — Bengaluru, Mumbai, Delhi, Goa and beyond. House, Techno, Jungle, Garage. Updated daily from Skillbox, District, Insider and more."
         path="/discover"
-        keywords="india electronic music scenes, discover underground music, techno house jungle drum and bass india, bengaluru mumbai delhi goa music"
+        keywords="india electronic music events, best techno house events India, discover underground events bangalore mumbai delhi goa, cats can dance curated events"
         jsonLd={jsonLd}
       />
       <Nav />
@@ -487,9 +448,8 @@ export default function DiscoverPage() {
         <WhatsOnStrip />
       </div>
 
-      {/* ── Hero ── */}
-      <section className="bg-ink pt-16 pb-20 md:pt-20 md:pb-28 border-b-4 border-ink relative overflow-hidden">
-        {/* Background grid decoration */}
+      {/* ── Discover Hero ── */}
+      <section className="bg-ink border-b-4 border-ink pt-14 pb-16 md:pt-16 md:pb-20 relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-5 pointer-events-none"
           style={{
@@ -498,24 +458,44 @@ export default function DiscoverPage() {
           }}
         />
         <div className="container relative z-10">
-          <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">
-            <Compass className="inline w-4 h-4 mr-2" />
-            Scene Discovery
-          </p>
-          <h1 className="font-display text-cream text-[14vw] md:text-[8vw] leading-[0.85] uppercase mb-8">
-            WHERE<br />
-            <span className="text-acid-yellow">DOES THE</span><br />
-            MUSIC<br />
-            COME FROM?
-          </h1>
-          <p className="text-cream/70 max-w-xl text-lg leading-relaxed mb-10">
-            Every sound has an origin. Every city has a scene. Every genre has a story.
-            This is your map — from Detroit Techno to Bengaluru Jungle, from Chicago House to Goa Trance.
-          </p>
-
-          {/* ── Search bar inside hero ── */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-3">
+                <Compass className="inline w-4 h-4 mr-2" />
+                Curated Events · India
+              </p>
+              <h1 className="font-display text-cream text-5xl md:text-7xl leading-[0.88] uppercase">
+                WHAT'S<br />
+                <span className="text-acid-yellow">ON</span><br />
+                TONIGHT.
+              </h1>
+              <p className="text-cream/60 mt-4 max-w-md text-base">
+                The best electronic music events across India, pulled daily from Skillbox, District, Insider, HighApe — and hand-picked by us.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 shrink-0">
+              <Link
+                href="/submit-event"
+                className="font-display text-xs uppercase bg-cream text-ink px-5 py-2.5 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+              >
+                + Submit Your Night
+              </Link>
+              <Link
+                href="/promoters"
+                className="font-display text-xs uppercase bg-transparent text-cream px-5 py-2.5 border-4 border-cream/30 hover:border-cream transition-colors"
+              >
+                Trusted Promoters
+              </Link>
+            </div>
+          </div>
+          {/* Search bar */}
           <UniversalSearch />
         </div>
+      </section>
+
+      {/* ── Curated Events Grid (main content) ── */}
+      <section id="events">
+        <CuratedEvents />
       </section>
 
       {/* ── Indian Cities ── */}
@@ -570,25 +550,25 @@ export default function DiscoverPage() {
         </div>
       </section>
 
-      {/* ── CTA strip ── */}
+      {/* ── Promoter CTA ── */}
       <section className="bg-magenta border-y-4 border-ink py-12">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <h3 className="font-display text-3xl text-cream uppercase">Ready to dance?</h3>
-            <p className="text-cream/80 mt-1">Find events near you across India.</p>
+            <h3 className="font-display text-3xl text-cream uppercase">Run a credible night?</h3>
+            <p className="text-cream/80 mt-1">Get on the discover feed. Apply to become a verified promoter.</p>
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link
-              href="/events"
+              href="/submit-event"
               className="bg-acid-yellow text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
             >
-              See All Events →
+              Submit Your Night →
             </Link>
             <Link
-              href="/artists"
+              href="/promoters"
               className="bg-cream text-ink font-display px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
             >
-              Browse Artists
+              Browse Promoters
             </Link>
           </div>
         </div>

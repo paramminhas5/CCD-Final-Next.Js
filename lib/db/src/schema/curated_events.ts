@@ -15,6 +15,12 @@ export const curatedEventsTable = pgTable("curated_events", {
   genre: jsonb("genre").notNull().default([]),
   image_url: text("image_url"),
   is_featured: boolean("is_featured").notNull().default(false),
+  /** Moderation: 'published' (live) | 'pending' (awaiting admin review) */
+  submission_status: text("submission_status").notNull().default("published"),
+  /** Clerk user ID of the promoter who submitted this event */
+  submitted_by: text("submitted_by"),
+  /** Slug of the promoter who owns this event */
+  promoter_slug: text("promoter_slug"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
