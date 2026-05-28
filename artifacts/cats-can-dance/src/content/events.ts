@@ -39,6 +39,27 @@ const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
 // for a slug isn't available yet (env var missing, seed not run, etc.).
 
 export const EVENT_ROWS: Record<string, EventRow> = {
+  // ─── Past episodes ───────────────────────────────────────────────────────
+  "episode-1": {
+    slug: "episode-1",
+    title: "CCD AT BAR WILD",
+    date: "Wed, Apr 2, 2025",
+    city: "Bangalore",
+    venue: "Bar Wild",
+    blurb:
+      "The first Cats Can Dance episode. Bar Wild, Indiranagar. The room that started it — house, disco, garage, and the kind of floor that makes you forget what time it is. Startdawg and Merman held it down from open to close.",
+    lineup: ["Startdawg", "Merman"],
+    status: "past",
+    poster_url: null,
+    sort_order: 0,
+    series: null,
+    series_label: null,
+    event_type: "standard",
+    pet_friendly: false,
+    series_tagline: null,
+    is_finale: false,
+  },
+
   "ccdxsocial-01": {
     slug: "ccdxsocial-01",
     title: "CCDXSOCIAL 01",
