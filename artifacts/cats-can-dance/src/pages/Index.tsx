@@ -126,9 +126,19 @@ const Index = () => {
         <Catbot />
         <MoonwalkCat />
         <Hero />
+        {/* ── Identity strip — one sentence for first-time visitors ── */}
+        <div className="bg-ink border-b-4 border-ink py-3 px-4">
+          <p className="container font-display text-cream text-xs md:text-sm uppercase tracking-[0.18em] text-center">
+            Bengaluru underground crew · Dance music episodes · Limited streetwear drops
+          </p>
+        </div>
         <CityMarquee />
         <MarqueeBySlot id="above-about" />
         <SectionReveal><About /></SectionReveal>
+        {/* ── EarlyAccess moved up — email capture is the #1 conversion action ── */}
+        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
+          <SectionReveal><EarlyAccess /></SectionReveal>
+        </Suspense>
         <MarqueeBySlot id="above-events" />
         <SectionReveal><Events /></SectionReveal>
         <SectionReveal><CcdxSocialHomeStrip /></SectionReveal>
@@ -157,10 +167,6 @@ const Index = () => {
         <MarqueeBySlot id="above-instagram" />
         <Suspense fallback={<SectionFallback bg="bg-magenta" />}>
           <SectionReveal><Instagram /></SectionReveal>
-        </Suspense>
-        <MarqueeBySlot id="above-early-access" />
-        <Suspense fallback={<SectionFallback bg="bg-electric-blue" />}>
-          <SectionReveal><EarlyAccess /></SectionReveal>
         </Suspense>
         <Contact />
         <Footer />

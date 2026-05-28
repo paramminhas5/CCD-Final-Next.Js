@@ -650,7 +650,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.json(await get("site_videos", pq(ord("sort_order"))));
   }
 
-  // ── Catbot chat ─────────────────────────────────────────────────────────────
+  // ── Instagram feed (Behold.so proxy) ────────────────────────────────────────
+  // Proxies the Behold feed to avoid CORS/ad-blocker issues on client.
+  if (path === "instagram-feed" && m === "GET") {
+    const BEHOLD_URL = process.env.BEHOLD_FEED_URL ?? "https://feeds.behold.so/6bt7nDISwk0mUzAQMd9s";
+    try {
+      const r = await fetch(BEHOLD_URL, { headers: { Accept: "application/json" } });
+      if (!r.ok) return res.status(r.status).json({ error: "feed unavailable" });
+      const data = await r.json();
+      const posts = (data?.posts ?? []).slice(0, 9).map((p: any) => ({
+        id: String(p.id),
+        mediaUrl: p.sizes?.medium?.mediaUrl ?? p.sizes?.large?.mediaUrl ?? p.mediaUrl,
+        permalink: p.permalink,
+        caption: p.prunedCaption ?? p.caption,
+        mediaType: p.mediaType ?? "IMAGE",
+      }));
+      return res.json({ posts });
+    } catch (err: any) {
+      return res.status(502).json({ error: `Feed unreachable: ${err.message}` });
+    }
+  }
   // Proxies the chat request to the Supabase edge function.
   // The SUPABASE_ANON_KEY is safe to use server-side as a Bearer token.
   if (path === "catbot-chat" && m === "POST") {

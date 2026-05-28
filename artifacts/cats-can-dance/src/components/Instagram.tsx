@@ -84,9 +84,18 @@ const Instagram = () => {
                 href={`https://instagram.com/${HANDLE}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="aspect-square bg-cream border-4 border-ink chunk-shadow grid place-items-center font-display text-2xl md:text-4xl text-magenta hover:bg-acid-yellow transition-colors"
+                className="aspect-square bg-cream border-4 border-ink chunk-shadow grid place-items-center hover:bg-acid-yellow transition-colors"
               >
-                🐾
+                <div className="text-center p-3">
+                  {i === 4 ? (
+                    <>
+                      <p className="font-display text-magenta text-2xl mb-1">🐾</p>
+                      <p className="font-display text-ink text-xs uppercase tracking-widest">Follow Us</p>
+                    </>
+                  ) : (
+                    <p className="font-display text-magenta text-3xl">🐾</p>
+                  )}
+                </div>
               </a>
             ))}
 

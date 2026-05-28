@@ -328,6 +328,27 @@ const Events = () => {
 
         <CuratedEventsTeaser />
 
+        {/* ── Cross-link: Events ↔ Discover ── */}
+        <section className="bg-acid-yellow border-y-4 border-ink py-8">
+          <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ LOOKING FOR MORE?</p>
+              <p className="font-display text-ink text-xl md:text-2xl leading-tight">
+                Find events from across India — not just ours.
+              </p>
+              <p className="text-ink/60 text-sm font-medium mt-0.5">
+                Skillbox, District, Insider, HighApe — updated daily.
+              </p>
+            </div>
+            <Link
+              to="/discover"
+              className="shrink-0 bg-ink text-cream font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform whitespace-nowrap"
+            >
+              What's On This Weekend →
+            </Link>
+          </div>
+        </section>
+
         <section className="bg-ink border-y-4 border-ink py-10 md:py-14">
           <div className="container flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>

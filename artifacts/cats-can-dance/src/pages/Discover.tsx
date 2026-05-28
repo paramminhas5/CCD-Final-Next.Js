@@ -578,6 +578,27 @@ export default function DiscoverPage() {
         </div>
       </section>
 
+      {/* ── Cross-link: Discover ↔ CCD Events ── */}
+      <section className="bg-acid-yellow border-b-4 border-ink py-8">
+        <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ CCD ORIGINALS</p>
+            <p className="font-display text-ink text-xl md:text-2xl leading-tight">
+              Want CCD's own underground episodes?
+            </p>
+            <p className="text-ink/60 text-sm font-medium mt-0.5">
+              RSVP-only nights — House, Disco, Jungle, Garage, D&B.
+            </p>
+          </div>
+          <Link
+            href="/events"
+            className="shrink-0 bg-ink text-cream font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform whitespace-nowrap"
+          >
+            See CCD Events →
+          </Link>
+        </div>
+      </section>
+
       <Footer />
     </main>
   );

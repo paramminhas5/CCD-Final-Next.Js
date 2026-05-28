@@ -66,6 +66,8 @@ const About = () => {
             src={imgUrl(catDancer)}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             style={{ x: xMobile, y: bob, rotate: rot }}
             className="md:hidden absolute top-0 mt-2 left-0 w-3/4 max-w-[220px] pointer-events-none drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           />
@@ -74,6 +76,8 @@ const About = () => {
             src={imgUrl(catDancer)}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             style={{ x: xDesktop, y: bob, rotate: rot }}
             className="hidden md:block absolute top-0 mt-2 left-0 w-2/3 max-w-sm pointer-events-none drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           />

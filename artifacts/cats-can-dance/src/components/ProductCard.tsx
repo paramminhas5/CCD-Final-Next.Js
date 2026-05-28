@@ -36,10 +36,12 @@ const ProductCard = ({ product, altSuffix = "Cats Can Dance limited drop" }: Pro
             {product.node.title}
           </h3>
         </Link>
-        <p className="font-display text-xl mb-4">
-          {product.node.priceRange.minVariantPrice.currencyCode}{" "}
-          {parseFloat(product.node.priceRange.minVariantPrice.amount).toFixed(2)}
+        {/* Price — always visible in grid */}
+        <p className="font-display text-xl text-ink mb-1">
+          {product.node.priceRange.minVariantPrice.currencyCode === "INR" ? "₹" : product.node.priceRange.minVariantPrice.currencyCode}{" "}
+          {parseFloat(product.node.priceRange.minVariantPrice.amount).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </p>
+        <p className="text-ink/50 text-xs font-medium mb-4 uppercase tracking-widest">Limited drop · No restocks</p>
         <Button
           onClick={() =>
             variant &&
