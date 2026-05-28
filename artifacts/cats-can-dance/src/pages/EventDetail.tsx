@@ -16,9 +16,8 @@
  *  11. Journal       — curated long-form posts
  *  12. Sticky CTA    — mobile-only RSVP bar
  *
- * SSR: not enabled at this page level (the wrapper at pages/events/[slug].tsx
- * uses dynamic({ ssr: false })). Rich JSON-LD is still emitted client-side via
- * the SEO component so crawlers that execute JS see it. SSG is a follow-up.
+ * SSR: pages/events/[slug].tsx provides `initialEvent` via getStaticProps + ISR.
+ * The component hydrates immediately with that data, then enriches from the DB.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -52,6 +51,7 @@ import {
   getStaticEventsBySeries,
 } from "@/content/events";
 import episode1Poster from "@/assets/episode-1-poster.png";
+import { useEventRsvpCount } from "@/hooks/useSocialProof";
 
 import type { EventRow, MediaItem } from "@/types/events";
 
@@ -88,12 +88,22 @@ const Field = ({
 
 // ──────────────────── component ────────────────────
 
-const EventDetail = () => {
-  const { slug = "" } = useParams();
+interface EventDetailProps {
+  /** Pre-fetched event row from getStaticProps (SSR/ISR). Falls back to null → client-side fetch. */
+  initialEvent?: EventRow | null;
+  /** Slug from getStaticProps (avoids reading router.query on first render). */
+  slug?: string;
+}
+
+const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) => {
+  const params = useParams();
+  const slug = slugProp || params.slug || "";
   const [open, setOpen] = useState(false);
-  const [event, setEvent] = useState<EventRow | null>(null);
+  // Seed state with SSR data so content is visible on first paint
+  const [event, setEvent] = useState<EventRow | null>(initialEvent ?? null);
   const [series, setSeries] = useState<EventRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  // If we already have initialEvent, consider the initial load done
+  const [loaded, setLoaded] = useState(!!initialEvent);
   const [lightbox, setLightbox] = useState<MediaItem | null>(null);
 
   // Ticketing
@@ -214,6 +224,10 @@ const EventDetail = () => {
   })();
   const ctaLabel = content.cta_label ?? "RSVP NOW →";
   const stickyMeta = `${event.date} · ${content.price_text ?? "Free RSVP"}`;
+
+  // Social proof — RSVP count for this event (fetched client-side, best-effort)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const rsvpCount = useEventRsvpCount(slug);
 
   // ─── JSON-LD ───
   const eventLd = {
@@ -396,6 +410,12 @@ const EventDetail = () => {
                     >
                       {ctaLabel}
                     </button>
+                  )}
+                  {/* Social proof — RSVP count shown when ≥5 people have signed up */}
+                  {isUpcoming && rsvpCount !== null && rsvpCount >= 5 && (
+                    <span className={`font-display text-sm uppercase tracking-widest ${isUpcoming ? "text-acid-yellow" : "text-magenta"}`}>
+                      ✦ {rsvpCount.toLocaleString("en-IN")} going
+                    </span>
                   )}
                   <button
                     type="button"
@@ -835,6 +855,8 @@ const EventDetail = () => {
         onOpenChange={setOpen}
         eventSlug={slug}
         eventTitle={`Cats Can Dance ${event.title}`}
+        eventDate={event.date}
+        eventVenue={event.venue}
       />
 
       {/* Ticketing checkout — only when ticketing config is active */}

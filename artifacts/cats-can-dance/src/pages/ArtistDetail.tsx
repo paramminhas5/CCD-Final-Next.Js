@@ -38,6 +38,7 @@ import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
 import SimilarArtists from "@/components/SimilarArtists";
 import FollowButton from "@/components/FollowButton";
 import BookingForm from "@/components/booking/BookingForm";
+import { useArtistFollowerCount } from "@/hooks/useSocialProof";
 
 // ───────────────────────── Types ─────────────────────────
 interface Artist {
@@ -455,10 +456,26 @@ function AvailabilityStrip({
 
 // ───────────────────────── Main page ─────────────────────────
 
-export default function ArtistDetailPage() {
+interface ArtistDetailProps {
+  /** Minimal artist shape pre-fetched by getStaticProps (SSR/ISR). */
+  initialArtist?: {
+    id: string; slug: string; name: string;
+    bio?: string; based_city?: string; genres: string[];
+    photo_url?: string; instagram?: string; soundcloud?: string;
+    spotify?: string; open_to_bookings?: boolean; claimed_by?: string; featured?: boolean;
+  } | null;
+  /** Slug from getStaticProps — available before router.query hydrates. */
+  slug?: string;
+}
+
+export default function ArtistDetailPage({ initialArtist, slug: slugProp }: ArtistDetailProps = {}) {
   const router = useRouter();
-  const slug = (router.query?.slug as string) || "";
+  const slug = slugProp || (router.query?.slug as string) || "";
   const { toast } = useToast();
+
+  // Seed the data state from SSR props so content renders on first paint.
+  // The full enriched profile is fetched client-side below.
+  const emptyStats: ArtistStats = { total_gigs: 0, total_cities: 0, total_venues: 0, total_connections: 0, years_active: 0, b2b_count: 0, festival_count: 0 };
 
   const [data, setData] = useState<{
     artist: Artist | null; connections: Connection[]; appearances: Appearance[];
@@ -466,19 +483,28 @@ export default function ArtistDetailPage() {
     stats: ArtistStats; facts: CoolFact[]; upcomingDates: ArtistDate[];
     discography: Discography[]; press: PressItem[];
     socialHistory: any[];
-  } | null>(null);
+  } | null>(
+    // If SSR provided a minimal artist, seed data with it so the hero renders immediately
+    initialArtist
+      ? {
+          artist: initialArtist as unknown as Artist,
+          connections: [], appearances: [], milestones: [],
+          socialStats: null, stats: emptyStats, facts: [],
+          upcomingDates: [], discography: [], press: [], socialHistory: [],
+        }
+      : null
+  );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  const [isLoading, setIsLoading] = useState(true);
+  // If SSR provided data we can skip showing the loading spinner immediately
+  const [isLoading, setIsLoading] = useState(!initialArtist);
   const [expandedBio, setExpandedBio] = useState(false);
   const [selectedYear, setSelectedYear] = useState("all");
   const [copied, setCopied] = useState(false);
 
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const bookSectionRef = useRef<HTMLDivElement | null>(null);
-
-  const emptyStats: ArtistStats = { total_gigs: 0, total_cities: 0, total_venues: 0, total_connections: 0, years_active: 0, b2b_count: 0, festival_count: 0 };
 
   useEffect(() => {
     if (!slug) return;
@@ -569,6 +595,10 @@ export default function ArtistDetailPage() {
   const isBookable = artist.open_to_bookings !== false;
   const hasOpenSlot = upcomingDates.some(d => d.status === "available");
 
+  // Social proof — CCD follower count (best-effort, shown when ≥1)
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const followerCount = useArtistFollowerCount(artist.slug);
+
   return (
     <main className="bg-background text-foreground">
       <SEO
@@ -645,6 +675,12 @@ export default function ArtistDetailPage() {
                   <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{stats.years_active} yrs active</span>
                 )}
                 {stats.total_gigs > 0 && <span>{stats.total_gigs} gigs</span>}
+                {followerCount !== null && followerCount > 0 && (
+                  <span className="flex items-center gap-1 text-acid-yellow">
+                    <Users className="w-3.5 h-3.5" />
+                    {followerCount.toLocaleString("en-IN")} {followerCount === 1 ? "follower" : "followers"} on CCD
+                  </span>
+                )}
               </div>
 
               {artist.genres.length > 0 && (

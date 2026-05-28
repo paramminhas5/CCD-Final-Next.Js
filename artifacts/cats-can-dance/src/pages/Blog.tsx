@@ -84,6 +84,11 @@ const Blog = () => {
                   <p className="text-ink/70 font-medium mb-3 text-sm sm:text-base">{p.excerpt}</p>
                   <p className="font-display text-ink/60 text-xs sm:text-sm">
                     {p.date} · {p.author}
+                    {p.body && p.body.length > 0 && (
+                      <span className="ml-2 text-ink/40">
+                        · {Math.max(1, Math.ceil(p.body.join(" ").split(/\s+/).filter(Boolean).length / 200))} min read
+                      </span>
+                    )}
                   </p>
                 </div>
               </Link>

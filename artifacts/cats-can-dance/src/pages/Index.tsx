@@ -18,6 +18,7 @@ import SceneSnapshot from "@/components/SceneSnapshot";
 import GenreWheel from "@/components/GenreWheel";
 import ArtistSpotlight from "@/components/ArtistSpotlight";
 import CityMarquee from "@/components/CityMarquee";
+import { usePlatformStats } from "@/hooks/useSocialProof";
 
 const Playlist = lazy(() => import("@/components/Playlist"));
 const Drops = lazy(() => import("@/components/Drops"));
@@ -32,6 +33,7 @@ const SectionFallback = ({ bg = "bg-cream" }: { bg?: string }) => (
 const Index = () => {
   useSmoothScroll();
   const location = useLocation();
+  const platformStats = usePlatformStats();
 
   // ── Section visibility (loaded from site_settings) ──
   const [sectionVis, setSectionVis] = useState({
@@ -132,6 +134,31 @@ const Index = () => {
             Bengaluru underground crew · Dance music episodes · Limited streetwear drops
           </p>
         </div>
+        {/* ── Platform social proof strip — shown when data is available ── */}
+        {platformStats && (platformStats.total_signups > 0 || platformStats.total_artists > 0) && (
+          <div className="bg-acid-yellow border-b-4 border-ink py-3 px-4">
+            <div className="container flex flex-wrap justify-center gap-x-8 gap-y-1">
+              {platformStats.total_signups > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_signups.toLocaleString("en-IN")} on the list
+                </span>
+              )}
+              {platformStats.total_artists > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_artists.toLocaleString("en-IN")} artists
+                </span>
+              )}
+              {platformStats.total_rsvps > 0 && (
+                <span className="font-display text-ink text-xs uppercase tracking-widest">
+                  ✦ {platformStats.total_rsvps.toLocaleString("en-IN")} RSVPs this season
+                </span>
+              )}
+              <span className="font-display text-ink text-xs uppercase tracking-widest">
+                ✦ {platformStats.cities} cities
+              </span>
+            </div>
+          </div>
+        )}
         <CityMarquee />
         <MarqueeBySlot id="above-about" />
         <SectionReveal><About /></SectionReveal>

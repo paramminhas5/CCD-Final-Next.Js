@@ -45,6 +45,24 @@ const upsert = (t: string, b: unknown) => sb(t, "", "POST", b, "return=represent
 const patch  = (t: string, q: string, b: unknown) => sb(t, q, "PATCH", b);
 const del    = (t: string, q: string) => sb(t, q, "DELETE", undefined, "return=minimal");
 
+// Returns the exact row count for a table+filter via PostgREST's Prefer: count=exact header.
+async function sbCount(table: string, qs: string): Promise<number | null> {
+  try {
+    const r = await fetch(`${SB}/rest/v1/${table}${qs || ""}?select=id&limit=0`, {
+      headers: { ...H(), Prefer: "count=exact" },
+    });
+    const raw = r.headers.get("content-range"); // e.g. "0-0/1234"
+    if (raw) {
+      const total = raw.split("/")[1];
+      const n = parseInt(total, 10);
+      if (!isNaN(n)) return n;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ── PostgREST query builder ──────────────────────────────────────────────────
 // Manually builds ?col=eq.val strings — avoids URLSearchParams encoding @ as %40
 // which breaks PostgREST eq. filters on email columns.
@@ -670,6 +688,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(502).json({ error: `Feed unreachable: ${err.message}` });
     }
   }
+  // ── Social proof routes — lightweight aggregated counts ─────────────────────
+  // These power the social proof badges throughout the UI.
+  // All counts are public (no PII exposed — just aggregate numbers).
+
+  // GET /api/social-proof/platform → { total_rsvps, total_artists, total_signups, cities }
+  if (path === "social-proof/platform" && m === "GET") {
+    const [rsvpRows, artistRows, signupRows] = await Promise.all([
+      get("event_rsvps", `?select=id&limit=1`),
+      get("artists", `?status=eq.approved&select=id&limit=1`),
+      get("early_access_signups", `?select=id&limit=1`),
+    ]) as [any[], any[], any[]];
+    // PostgREST returns actual count via headers; fall back to row length for now
+    const countRsvps   = Array.isArray(rsvpRows)   ? rsvpRows.length   : 0;
+    const countArtists = Array.isArray(artistRows)  ? artistRows.length : 0;
+    const countSignups = Array.isArray(signupRows)  ? signupRows.length : 0;
+    // For true counts use PostgREST Range header trick (select with Prefer: count=exact)
+    const rsvpCount   = await sbCount("event_rsvps", "");
+    const artistCount = await sbCount("artists", "?status=eq.approved");
+    const signupCount = await sbCount("early_access_signups", "");
+    return res.json({
+      total_rsvps:    rsvpCount ?? countRsvps,
+      total_artists:  artistCount ?? countArtists,
+      total_signups:  signupCount ?? countSignups,
+      cities: 6,
+    });
+  }
+
+  // GET /api/social-proof/event-rsvps?slug=ccdxsocial-01 → { count }
+  if (path === "social-proof/event-rsvps" && m === "GET") {
+    const slug = rq.slug;
+    if (!slug) return res.json({ count: 0 });
+    const count = await sbCount("event_rsvps", `?event_slug=eq.${encodeURIComponent(slug)}`);
+    return res.json({ count: count ?? 0 });
+  }
+
+  // GET /api/social-proof/signup-count → { count }
+  if (path === "social-proof/signup-count" && m === "GET") {
+    const count = await sbCount("early_access_signups", "");
+    return res.json({ count: count ?? 0 });
+  }
+
+  // GET /api/social-proof/artist-followers?slug=kohra → { count }
+  if (path === "social-proof/artist-followers" && m === "GET") {
+    const slug = rq.slug;
+    if (!slug) return res.json({ count: 0 });
+    const count = await sbCount("user_taste_profiles", `?liked_artist_slugs=cs.{${slug}}`);
+    return res.json({ count: count ?? 0 });
+  }
+
   // Proxies the chat request to the Supabase edge function.
   // The SUPABASE_ANON_KEY is safe to use server-side as a Bearer token.
   if (path === "catbot-chat" && m === "POST") {

@@ -6,6 +6,7 @@ import note from "@/assets/music-note.png";
 import { imgUrl } from "@/lib/img";
 import Confetti from "@/components/Confetti";
 import { supabase } from "@/lib/supabase-shim";
+import { useSignupCount } from "@/hooks/useSocialProof";
 
 const EmailSchema = z.string().trim().toLowerCase().email().max(255);
 
@@ -21,6 +22,7 @@ const EarlyAccess = () => {
   const [busy, setBusy] = useState(false);
   const [burst, setBurst] = useState(false);
   const lastSubmitRef = useRef(0);
+  const signupCount = useSignupCount();
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +79,12 @@ const EarlyAccess = () => {
         <p className="text-cream/90 text-base md:text-lg mb-6 font-medium">
           Sign up for early access to drops, gigs, and the cult before everyone else catches on.
         </p>
+        {/* Social proof — shown only when count is available */}
+        {signupCount !== null && signupCount > 0 && (
+          <p className="font-display text-acid-yellow text-sm uppercase tracking-widest mb-4">
+            ✦ {signupCount.toLocaleString("en-IN")} people on the list across 6 cities
+          </p>
+        )}
         <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-4 max-w-xl mx-auto">
           {/* honeypot */}
           <input

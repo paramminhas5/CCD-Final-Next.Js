@@ -169,6 +169,12 @@ const BlogPost = () => {
               );
             })()}
             <p className="font-display text-ink/50 text-xs mb-8 italic">Honest, by humans, from Bangalore.</p>
+            {/* Reading time — 200 wpm average */}
+            {wordCount > 0 && (
+              <p className="font-display text-ink/40 text-xs uppercase tracking-widest mb-4">
+                {Math.max(1, Math.ceil(wordCount / 200))} min read · {wordCount.toLocaleString()} words
+              </p>
+            )}
             <div className="aspect-video w-full border-4 border-ink chunk-shadow-lg mb-10 overflow-hidden">
               <BlogCover title={post.title} coverTitle={post.coverTitle} category={post.category} tag={post.tag} issue={post.issue} color={post.coverColor} size="lg" className="border-0" />
             </div>
