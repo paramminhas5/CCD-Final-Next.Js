@@ -23,7 +23,10 @@ export const CITY_SCENES: CityScene[] = [
     textColor: "text-cream",
     activeGenres: ["House", "Disco", "Jungle", "Drum & Bass", "Garage", "Techno"],
     keyVenues: ["Bar Wild", "Skyye", "The Humming Tree", "Plan B"],
-    starterPlaylistEmbed: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSK", // Bengaluru House/Electronic Mix playlist
+    starterPlaylistEmbed: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSK",
+  },
+  {
+    slug: "mumbai",
     name: "Mumbai",
     tagline: "South Bombay selectors and Bandra rooftops.",
     description:

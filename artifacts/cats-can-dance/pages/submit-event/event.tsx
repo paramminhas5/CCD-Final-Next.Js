@@ -1,10 +1,6 @@
 /**
  * /submit-event/event — authenticated promoter event submission form
- *
- * Only accessible to users with a verified promoter profile (claimed_by set).
- * Unauthenticated users are redirected to /sign-in.
- * Non-promoters are redirected to /submit-event (promoter application).
+ * ssr: false — uses Clerk hooks, must be client-only.
  */
-
-import PromoterEventSubmit from "@/pages/PromoterEventSubmit";
-export default PromoterEventSubmit;
+import dynamic from "next/dynamic";
+export default dynamic(() => import("@/pages/PromoterEventSubmit"), { ssr: false });

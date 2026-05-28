@@ -689,7 +689,12 @@ function ProfileTab({
       });
       if (!r.ok) throw new Error((await r.json()).error);
       toast.success("Profile saved");
-      onSaved({ ...profile, ...form });
+      onSaved({
+        ...profile,
+        ...form,
+        cities: form.cities.split(",").map(s => s.trim()).filter(Boolean),
+        genre_focus: form.genre_focus.split(",").map(s => s.trim()).filter(Boolean),
+      });
     } catch (e: any) { toast.error(e.message ?? "Save failed"); }
     finally { setSaving(false); }
   }

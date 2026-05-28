@@ -25,12 +25,12 @@ import Marquee from "@/components/Marquee";
 import CuratedEventsTeaser from "@/components/CuratedEventsTeaser";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
 import SeriesStrip from "@/components/SeriesStrip";
+import { parseEventDate } from "@/lib/parse-date";
 
-// ── Countdown hook ──────────────────────────────────────────────────────────
-const NEXT_SHOW_DATE = new Date("2026-06-29T14:30:00Z"); // 8 PM IST
-
-function useCountdown(target: Date) {
+// ── Countdown hook — driven by actual next-event date, not hardcoded ────────
+function useCountdown(target: Date | null) {
   const calc = () => {
+    if (!target) return { days: 0, hours: 0, mins: 0, over: true };
     const diff = target.getTime() - Date.now();
     if (diff <= 0) return { days: 0, hours: 0, mins: 0, over: true };
     const secs = Math.floor(diff / 1000);
@@ -43,9 +43,11 @@ function useCountdown(target: Date) {
   };
   const [t, setT] = useState(calc);
   useEffect(() => {
+    setT(calc());
     const id = setInterval(() => setT(calc()), 60000);
     return () => clearInterval(id);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.getTime()]);
   return t;
 }
 
@@ -75,7 +77,6 @@ const resolvePosterUrl = (raw: string | null | undefined): string | null => {
 
 const Events = () => {
   const [all, setAll] = useState<EventRow[]>([]);
-  const cd = useCountdown(NEXT_SHOW_DATE);
 
   useEffect(() => {
     (async () => {
@@ -92,7 +93,14 @@ const Events = () => {
   const featured = upcoming[0] ?? all[0];
   const restUpcoming = upcoming.slice(1);
 
-  // Group upcoming events by series (if any).
+  // Dynamic next-show date — derived from the first upcoming event, never hardcoded
+  const nextShowDate = useMemo(() => {
+    const first = upcoming[0];
+    if (!first) return null;
+    return parseEventDate(first.date);
+  }, [upcoming]);
+
+  const cd = useCountdown(nextShowDate);
   const seriesGroup = useMemo(() => {
     const upcomingSeries = upcoming.find((e) => !!e.series);
     if (!upcomingSeries?.series) return null;
@@ -224,7 +232,7 @@ const Events = () => {
         />
 
         {/* ── Jun 29 urgency banner ── */}
-        {!cd.over && (
+        {!cd.over && featured && (
           <div className="bg-ink border-b-4 border-ink">
             <div className="container py-5 flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-4">
@@ -233,10 +241,10 @@ const Events = () => {
                 </span>
                 <div>
                   <p className="font-display text-cream text-lg md:text-2xl leading-none">
-                    CCDXSOCIAL 01 — SUN 29 JUN
+                    {featured.series_label ? `${featured.series_label} — ` : ""}{featured.title} · {featured.date}
                   </p>
                   <p className="font-display text-cream/50 text-xs uppercase tracking-widest mt-0.5">
-                    Indiranagar Social, Bengaluru · 🐾 Pets Welcome · Free RSVP
+                    {featured.venue}, {featured.city}{featured.pet_friendly ? " · 🐾 Pets Welcome" : ""} · Free RSVP
                   </p>
                 </div>
               </div>
@@ -257,7 +265,7 @@ const Events = () => {
                   <span className="text-cream/40">M</span>
                 </div>
                 <Link
-                  to="/events/ccdxsocial-01"
+                  to={featured ? `/events/${featured.slug}` : "/events"}
                   className="bg-acid-yellow text-ink font-display text-sm px-5 py-2.5 border-4 border-acid-yellow chunk-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-transform whitespace-nowrap"
                 >
                   RSVP NOW →
