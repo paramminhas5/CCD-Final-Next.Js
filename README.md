@@ -20,15 +20,9 @@
 7. [Curated Events Module](#curated-events-module)
 8. [Database Schema](#database-schema)
 9. [API Reference](#api-reference)
-10. [Next Steps](#next-steps)
+10. [Next Steps & Roadmap](#next-steps--roadmap)
 11. [Design System](#design-system)
 12. [Known Issues Log](#known-issues-log)
-8. [Features In Progress / Broken](#features-in-progress--broken)
-9. [Database Schema](#database-schema)
-10. [API Reference](#api-reference)
-11. [Roadmap & Next Steps](#roadmap--next-steps)
-12. [Design System](#design-system)
-13. [Contributing](#contributing)
 
 ---
 
@@ -71,7 +65,7 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 | Layer | Tech |
 |---|---|
 | Framework | Next.js 14 (Pages Router) |
-| Language | TypeScript 5.x strict |
+| Language | TypeScript 5.x |
 | Auth | Clerk |
 | UI | shadcn/ui + Tailwind CSS v3 |
 | Animation | Framer Motion v12 |
@@ -86,7 +80,7 @@ Cats Can Dance (CCD) is a Bengaluru-based underground dance music brand — even
 | Database | Supabase (Postgres + storage) |
 | Auth | Clerk |
 | Deployment | Vercel |
-| Cron | Vercel cron (nightly scraper + weekly digest) |
+| Cron | Vercel cron (nightly scraper + weekly digest + hold expiry) |
 | Email | Resend |
 | Packages | pnpm workspaces |
 
@@ -114,43 +108,40 @@ Copy `.env.example` to `.env.local`. Required vars marked ★.
 
 ```bash
 # ── Clerk ─────────────────────────────────────────────────────────────────────
-# ★ Both required — without them Sign-In is disabled
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-CLERK_SECRET_KEY=sk_live_...
-CLERK_PROXY_URL=                    # Optional — only for proxied custom domains
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...   # ★
+CLERK_SECRET_KEY=sk_live_...                    # ★
+CLERK_PROXY_URL=                                # Optional
 
 # ── Supabase ──────────────────────────────────────────────────────────────────
-# ★ SUPABASE_SERVICE_KEY required — admin panel, scraper, and all proxy routes fail without it
 NEXT_PUBLIC_SUPABASE_URL=https://nrzgyippztzenoyrtszr.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_KEY=eyJ...         # ★ Server-only. Never expose in client code.
+SUPABASE_ANON_KEY=eyJ...                        # Used by catbot proxy
+SUPABASE_SERVICE_KEY=eyJ...                     # ★ Server-only
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
-# ★ Required — gates /admin-cms and /admin-panel. No default, returns 401 if unset.
-ADMIN_PASSWORD=choose_a_strong_password
+ADMIN_PASSWORD=choose_a_strong_password         # ★
 
-# ── Event scraper ─────────────────────────────────────────────────────────────
-# ★ CRON_SECRET — Vercel passes this to cron routes. Without it the scraper is publicly triggerable.
-CRON_SECRET=generate_with_openssl_rand_base64_32
-# Recommended — Claude Haiku scoring. Without it, all scraped events get score=7 (no filtering).
-ANTHROPIC_API_KEY=sk-ant-...
+# ── Cron / Scraper ────────────────────────────────────────────────────────────
+CRON_SECRET=...                                 # ★ openssl rand -base64 32
+ANTHROPIC_API_KEY=sk-ant-...                    # Recommended (Haiku scoring)
 
-# ── Email (Resend) ────────────────────────────────────────────────────────────
-# ★ Recommended — RSVP confirmations + weekly digest go silent without this.
-RESEND_API_KEY=re_...
+# ── Email ─────────────────────────────────────────────────────────────────────
+RESEND_API_KEY=re_...                           # ★ Recommended
 EMAIL_FROM=hello@catscandance.com
 NEXT_PUBLIC_SITE_URL=https://catscandance.com
 
 # ── Shopify ───────────────────────────────────────────────────────────────────
 NEXT_PUBLIC_SHOPIFY_API_VERSION=2025-10
 NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN=ccd-final-bv8ld.myshopify.com
-NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN=...
+NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN=...        # ★ (no hardcoded fallback)
+
+# ── AI features ───────────────────────────────────────────────────────────────
+CATBOT_EDGE_URL=                                # Optional: custom edge function URL
+FAL_KEY=                                        # Optional: AI poster generation
 
 # ── Optional integrations ─────────────────────────────────────────────────────
-INSTAGRAM_ACCESS_TOKEN=             # Homepage Instagram feed
-YOUTUBE_API_KEY=AIza...             # Videos page
-FIRECRAWL_API_KEY=fc-...            # Artist enrichment (Express server only)
-OPENAI_API_KEY=sk-...               # Artist enrichment (Express server only)
+BEHOLD_FEED_URL=https://feeds.behold.so/...    # Instagram feed (Behold.so)
+YOUTUBE_API_KEY=AIza...
 ```
 
 > Set all vars in **Vercel → Project → Settings → Environment Variables**. Never commit `.env.local`.
@@ -159,90 +150,125 @@ OPENAI_API_KEY=sk-...               # Artist enrichment (Express server only)
 
 ## Features Built
 
+### ✅ Audit Phases Completed (May 2026)
+
+All items below were implemented and verified building clean (`pnpm run build` → 78 pages, 0 TypeScript errors).
+
+**Phase 1 — Security & Critical Fixes**
+- Removed hardcoded admin password from frontend code; replaced with ownership-verified `/api/artists/:id/self-update`
+- Fixed Catbot: empty Bearer token removed, server-side proxy via `SUPABASE_ANON_KEY`
+- Hero CTAs now scroll to correct targets (`#early-access`, `#drops`)
+- `useSearchParams` shim is reactive via `router.query`
+- `About` component has fallback copy when CMS is down
+- Duplicate font `@import` removed (was loading twice)
+
+**Phase 2 — UX & Navigation**
+- `EarlyAccess` email capture moved to position 3 on homepage
+- Identity strip added below hero
+- Nav reduced to 6 primary items; Talent/partners → "Work With Us" dropdown
+- Events ↔ Discover cross-links
+- DiscoButton in mobile hamburger
+- Shop `ProductCard` shows ₹ price prominently in grid
+
+**Phase 3 — Performance**
+- Hero images → `next/image priority` (LCP improvement)
+- NavLink hydration mismatch fixed
+- Duplicate Tailwind glob removed; `vite-env.d.ts` deleted
+- `next.config.mjs` image domains locked to known CDN hosts
+
+**Phase 4 — Features**
+- `/ccdxsocial` → public series landing page; internal proposal at `/ccdxsocial/proposal`
+- Instagram feed proxied server-side (avoids CORS/ad-blockers)
+- RSVP toasts say "Check your inbox for confirmation"
+- Scene city pages render YouTube playlists when set
+
+**Batch A — Data & Route Fixes**
+- `/api/user-role` added to proxy (role-based portals now work)
+- `/api/booking-inquiry` added (artist BOOK tab saves requests)
+- `expire-holds` cron registered in `vercel.json` (hourly)
+- Cross-browser safe date parser (`src/lib/parse-date.ts`)
+- Events page countdown is dynamic from DB, not hardcoded
+- Homepage Events shows static fallback when Supabase is empty
+- Admin UI password hint removed
+- Shopify hardcoded token removed
+- Artist search in Discover: 5 → 100 results
+- `.next/` added to `.gitignore`
+
+**AAA Improvements (June 2026)**
+- **SSR/Static generation** for `/events/[slug]` and `/artists/[slug]` — full `getStaticProps` + `getStaticPaths` + ISR (60s revalidation). Artist and event pages are now crawlable by Google, generate correct OG/Twitter preview cards, and load with content on first paint.
+- **Social proof counters** — RSVP count on event detail ("X people RSVP'd"), follower count on artist profile, list size on EarlyAccess form, platform stats on homepage.
+- **Hero urgency strip** — live countdown to next event visible above the fold on homepage inside the hero section.
+- **RSVP dialog enhancements** — WhatsApp opt-in field, "Add to Google Calendar" one-click link after successful RSVP.
+- **Mobile nav overhaul** — compressed to 5+1 items, grouped sections, account as avatar dropdown.
+- **Artist inline audio** — SoundCloud iframe renders directly in the HOME tab, no external redirect needed.
+- **Product page: size guide** — modal with S/M/L/XL measurements; inventory urgency ("Only X left") from Shopify `availableForSale`.
+- **Blog reading time** — estimated reading time displayed on posts and blog index cards.
+- **Footer newsletter** — email capture in footer; same early-access endpoint.
+- **Global search in nav** — search icon in desktop nav opens UniversalSearch overlay.
+- **Accessibility** — `aria-expanded` on all nav dropdowns, `aria-label` improvements, focus management in modals.
+
+---
+
 ### 🏠 Homepage
 - Full-viewport hero with parallax DJ cat + animated flanking cats
+- Live urgency strip: countdown to next event with RSVP CTA
 - CityMarquee rolling ticker, SceneSnapshot city tiles with live event counts
 - ArtistSpotlight carousel, GenreWheel, Videos, Playlist, Shop drops
-- Instagram feed, Early Access signup, Disco Mode easter egg 🪩
+- Instagram feed (Behold.so, server-proxied), Early Access signup with social proof
+- Disco Mode easter egg 🪩
 
-### 🗺️ Discover (`/discover`) — *Curated events home*
+### 🗺️ Discover (`/discover`)
 - **Hero** ("WHAT'S ON TONIGHT") + full `<CuratedEvents>` grid
-- Tabs: For You · Trending · Editor's Picks · This Weekend
-- Filters: city + genre pills, infinite scroll, save/share
-- Universal search (artists + cities + genres + scenes)
-- "What's On This Weekend" city strip
-- Cities, Genres, Global Scenes explorer below
+- Universal search (artists + cities + genres + scenes), 100-result live lookup
+- "What's On This Weekend" live city strip with working scroll button
+- Cities, Genres, Global Scenes explorer; cross-link to CCD Events
 
-### 🎟️ Events (`/events`)
-- CCD own events: featured card, series strip, upcoming list, past episodes
-- Countdown to next show
-- 4-card curated teaser → "See all on Discover →" CTA
+### 🎟️ Events (`/events`, `/events/[slug]`)
+- Own events: featured card, series strip, upcoming list, past episodes
+- Dynamic countdown to next show from DB
+- Event detail: fully SSR'd via `getStaticProps` + ISR — crawlable, preview-card ready
+- Static fallback for all CcdxSocial events when DB empty
 
-### 🏙️ City + Genre + Scene Pages
-- `/scene/:city` — artists, events, promoters, venues per city
-- `/genres/:genre` — BPM, origin story, Indian scene, starter tracks
-- `/scenes/:scene` — Detroit Techno, Chicago House, London Jungle, Berlin Techno, UK Garage, NYC House, Goa Trance
-
-### 🎤 Artists (`/artists`, `/artists/:slug`)
+### 🎤 Artists (`/artists`, `/artists/[slug]`)
 - Directory: search, city/genre filters, mosaic grid
-- Detail: 6-tab layout (Overview · Gigs · Connections · Journey · Stats · EPK)
-- SoundCloud oEmbed, Spotify embed, connection graph, gig stats chart
-- Follow button → persists to `user_taste_profiles`
-
-### 🎪 Promoters (`/promoters`, `/promoters/:slug`)
-- Directory with trusted-only filter
-- Detail page with **claim button** — signed-in users can claim unclaimed profiles to unlock event submission
+- Detail: fully SSR'd via `getStaticProps` + ISR
+- 7-tab layout: Home · Gigs · Connections · Journey · Stats · EPK · Book
+- Inline SoundCloud audio player in Home tab
+- 6-month availability calendar, direct booking form
+- Social proof: follower count displayed when available
 
 ### 🛍️ Shop (`/shop`, `/product/:handle`)
-- Shopify Storefront API, cart via Zustand
+- Shopify Storefront API headless; full cart via Zustand
+- Product page: size guide modal, inventory urgency badge ("Only X left")
+- WhatsApp/X/copy share links
 
 ### ✍️ Blog (`/blog`, `/blog/:slug`)
-- 11 SEO-optimised articles, author profiles
+- 14 SEO-optimised articles; reading time on all cards and post headers
+- Author profiles, related posts, category-specific FAQ schema
+- Footer newsletter capture
 
 ### 🎓 Admin Panel (`/admin-cms`)
-- 14-tab password-gated CMS
-- **Curated Events tab:**
-  - Add/edit/delete events manually
-  - `🎛 LINEUP` button per event → modal to add/remove/toggle artists (populates `event_artist_lineups`)
-  - Run Nightly Scraper → triggers actual Vercel cron handler (Skillbox/District/Insider/HighApe + Haiku scoring)
-  - District JSON Import → paste/upload array, bulk-upsert with dedup
-  - Pending Submissions queue → approve/reject promoter-submitted events
-- All other tabs: signups, playlists, videos, events, blog, promoters, artists, RSVPs, marquees, theme
+- 14-tab password-gated CMS covering all site content
 
 ### 👤 User Dashboard (`/dashboard`)
-- **Fan:** XP/tier progress, **Your Events** panel (For You / Artist Gigs / Saved strips), XP history, role application
-- **Artist:** Edit profile, manage tour dates, EPK download
-- **Promoter:** Full event list with status badges (✓ Live / ⏳ Pending), submit form, delete own events
-- **Profile (`/profile`):** Followed artists grid, city + genre preferences → powers personalised recommendations
+- Fan: XP/tier, "Your Events" panel, XP history, role application
+- Artist: profile editing (ownership-verified), EPK, booking inbox
+- Promoter: event management, submit form
 
 ### 🤖 Personalised Recommendations (`/api/events/recommended`)
-- Reads Clerk userId → loads `user_taste_profiles` + `user_event_interactions` + `event_artist_lineups`
-- Scoring: genre affinity (+15/match), liked artist in lineup (+20), city (+10), venue (+8), featured (+25), recency
-- Sections: **Artists You Love / Your Vibe / Worth the Trip** + fallback strips
-- Tabs: for_you · trending · editors_picks · this_weekend
-- Filters: city, genre, date range, limit, offset
+- Genre/artist/city affinity scoring
+- Four tabs: For You · Trending · Editor's Picks · This Weekend
 
-### 📧 RSVP Confirmation Email
-- On RSVP: branded Resend HTML email with event name, date, venue, "name on door" confirmation
-- Fire-and-forget — RSVP saves to DB regardless; email is silent no-op without `RESEND_API_KEY`
-
-### 🔄 Nightly Scraper (`/api/cron/scrape-events`)
-- Sources: **Skillbox** (`skillbox.in/events`), **District** (`district.in/sitemap.xml`), **Insider.in**, **HighApe**
-- JSON-LD extraction, genre/city pre-filter, dedup by URL
-- Claude Haiku scoring (relevance 1–10, blurb generation) — publishes events scoring ≥ 6
-- Vercel cron: 2am IST daily, maxDuration 300s. Falls back to score=7 if no `ANTHROPIC_API_KEY`.
-
-### 📧 Weekly Digest (`/api/cron/weekly-digest`)
-- Reads `user_taste_profiles` → personalised upcoming-events email per user
-- Vercel cron: Monday 6:30am IST. Dormant until `RESEND_API_KEY` set.
+### 🔄 Cron Jobs (Vercel)
+| Cron | Schedule | Purpose |
+|---|---|---|
+| `/api/cron/scrape-events` | Nightly 2am IST | Scrape Skillbox/District/Insider/HighApe + Haiku scoring |
+| `/api/cron/weekly-digest` | Monday 6:30am IST | Personalised event email to users |
+| `/api/cron/expire-holds` | Hourly | Expire 48h artist booking holds |
 
 ---
 
 ## Curated Events Module
-
-> Complete flow: scrape → score → store → recommend → display → submit → moderate
-
-### Architecture
 
 ```
   ┌─────────────────────────────────────────────────────────┐
@@ -253,269 +279,216 @@ OPENAI_API_KEY=sk-...               # Artist enrichment (Express server only)
   Vercel cron    Admin CRUD      Promoter submit  JSON import
   Skillbox       /admin-cms      /submit-event/   Admin panel
   District       add/edit/del    event (Clerk)    District paste
-  Insider        🎛 LINEUP       trusted→publish  up to 500 rows
+  Insider        🎛 LINEUP       trusted→publish
   HighApe        modal           untrusted→queue
   + Haiku ≥6
 
-                          │
-                          ▼
-        /api/events/recommended (smart scoring)
-        reads: user_taste_profiles
-               user_event_interactions
-               event_artist_lineups ← populated via 🎛 LINEUP in admin
+              ▼
+  /api/events/recommended
+  reads: user_taste_profiles + user_event_interactions + event_artist_lineups
 
-       ┌──────────────┬──────────────┬──────────────┬──────────────┐
-       ▼              ▼              ▼              ▼              ▼
-  /discover       /events        /dashboard    /promoters     weekly email
-  Full grid       4-card         Fan: For You  :slug claim    Resend digest
-  tabs/filters    teaser         Artist Gigs   button
-                                 Saved events
-                                 Promoter: list
+  Surfaces: /discover  /events  /dashboard  weekly email
 ```
 
-### Source keys + badge colours
+### Source badges
 | Key | Origin | Badge |
 |---|---|---|
-| `skillboxes` | Skillbox.in (nightly cron) | Lime |
-| `district` | District.in sitemap (nightly cron) | Magenta |
-| `insider` | Insider.in per city (nightly cron) | Electric blue |
-| `highape` | HighApe (nightly cron) | Orange |
-| `editorial` | Admin manual pick | Acid yellow |
-| `manual` | Admin manual entry | Ink/cream |
-| `promoter:<slug>` | Verified promoter submit form | Hot pink |
-| `import:district` | Admin District JSON import | Magenta |
-
-### Promoter event submission flow
-1. Promoter applies at `/submit-event`
-2. Admin approves → go to Supabase and set `promoters.claimed_by = '<clerk_user_id>'` (or user self-claims via the button on their promoter page)
-3. Promoter logs in → Dashboard → Promoter Portal → Submit New Event
-4. `/submit-event/event` submits to `POST /api/promoters/submit-event`
-5. `trusted = true` → auto-published. `trusted = false` → `submission_status = pending`
-6. Admin approves/rejects from `/admin-cms` Curated Events → Pending Submissions
-
-### One-time Supabase migration
-Run `scripts/sql/20260528_promoter_claimed_by_and_event_status.sql` in Supabase SQL Editor. Safe to re-run (uses `IF NOT EXISTS`).
+| `skillboxes` | Skillbox.in | Lime |
+| `district` | District.in | Magenta |
+| `insider` | Insider.in | Electric blue |
+| `highape` | HighApe | Orange |
+| `editorial` | Admin pick | Acid yellow |
+| `manual` | Admin entry | Ink/cream |
+| `promoter:<slug>` | Verified promoter | Hot pink |
 
 ---
 
 ## Database Schema
 
-24 tables in PostgreSQL (Supabase), managed via Drizzle ORM (`lib/db/src/schema/`).
+24 tables in PostgreSQL (Supabase).
 
-### Core Tables
 | Table | Purpose |
 |---|---|
-| `events` | CCD own events — title, date, venue, lineup, poster, series |
-| `curated_events` | Scraped/submitted/imported events — source, genre, `submission_status`, `promoter_slug`, `submitted_by` |
-| `promoters` | Promoter profiles — trusted flag, `claimed_by` (Clerk user ID), crawl_urls |
-| `artists` | Artist profiles — bio, genres, city, social links, `claimed_by` |
-| `venue_profiles` | Venue data — capacity, genre focus, tier |
-| `event_artist_lineups` | Artist↔curated_event join — powers "artist you follow is playing" recommendations |
-| `user_event_interactions` | view / save / rsvp / share / attended / dismissed — powers scoring + Saved strip |
-| `user_taste_profiles` | liked_genres[], liked_artist_slugs[], liked_cities[], travel_willingness |
-| `user_roles` | Fan / artist / promoter / venue / admin role assignments |
-| `role_applications` | Artist + promoter applications pending admin review |
-| `fan_profiles` | XP, tier, CCD points per user |
-| `xp_events` | XP event log (earn history) |
-| `bookings` | OTP-verified artist booking requests |
-| `booking_otp_codes` | One-time codes for booking anti-spam |
-| `artist_submissions` | New artist submissions awaiting admin approval |
-| `site_settings` | CMS data — playlists, marquees, theme, blog posts |
-| `site_videos` | YouTube video IDs + metadata |
-| `forms` | Contact messages + early access signups + RSVPs |
-
-### Rich Artist Data
-| Table | Purpose |
-|---|---|
-| `artist_connections` | B2B/collab connections (strength 0–10) |
+| `events` | CCD own events |
+| `curated_events` | Scraped/submitted events |
+| `promoters` | Promoter profiles |
+| `artists` | Artist profiles |
+| `artist_connections` | B2B/collab connections |
 | `artist_dates` | Self-managed tour dates |
 | `event_appearances` | Full gigography |
 | `artist_milestones` | Career milestones |
-| `artist_social_stats` | Follower snapshots (IG, SC, Spotify) |
-| `artist_discography` | Releases/EPs/tracks |
+| `artist_social_stats` | Follower snapshots |
+| `artist_discography` | Releases |
 | `artist_press` | Press mentions |
+| `artist_packages` | Bookable packages |
+| `artist_availability_blocks` | Availability calendar blocks |
+| `user_event_interactions` | view/save/rsvp/share per user |
+| `user_taste_profiles` | liked genres/artists/cities |
+| `user_roles` | Fan/artist/promoter/venue/admin |
+| `role_applications` | Applications pending review |
+| `fan_profiles` | XP, tier, CCD points |
+| `xp_events` | XP earn history |
+| `booking_requests` | Artist booking requests |
+| `booking_messages` | Booking thread messages |
+| `booking_shortlist` | Promoter artist shortlist |
+| `site_settings` | CMS data (playlists, theme, etc.) |
+| `site_videos` | YouTube video IDs |
 
-### New columns (migration: `20260528_promoter_claimed_by_and_event_status.sql`)
-- `promoters.claimed_by` — Clerk user ID of the promoter who owns the profile
-- `curated_events.submission_status` — `published` (default/live) | `pending` (awaiting review)
-- `curated_events.submitted_by` — Clerk user ID of submitter
-- `curated_events.promoter_slug` — slug of the submitting promoter
+---
 
 ## API Reference
 
-All routes proxied through `pages/api/[...proxy].ts` → Supabase REST.
+All routes via `pages/api/[...proxy].ts` → Supabase REST.
 
 ### Public
 | Method | Route | Notes |
 |---|---|---|
-| GET | `/curated-events` | Published events only (filter: city, featured, limit) |
-| GET | `/curated-events/by-promoter?promoter_slug=` | All events for a promoter (any status) |
-| GET | `/events/recommended` | Personalised recs (tab, city, genre, date range, limit, offset) |
-| GET | `/artists` | List (filter: genre, city, featured, limit, offset) |
-| GET | `/artists/:slug` | Artist profile |
-| GET | `/promoters` | Directory |
-| GET | `/promoters/by-user?user_id=` | Promoter linked to a Clerk user |
-| GET | `/event-artist-lineups?curated_event_id=` | Lineup for an event |
-| GET | `/user/profile?userId=` | Taste profile |
-| GET | `/user/saved-events?user_id=` | User's saved events |
-| GET | `/user/artist-gigs?user_id=` | Upcoming gigs for followed artists |
+| GET | `/artists` | List (filter: genre, city, featured, limit) |
+| GET | `/artists/:slug` | Profile |
+| GET | `/artists/:slug/full` | Enriched profile (gigs, connections, stats) |
+| GET | `/artists/:slug/basic` | Basic fallback |
+| GET | `/artist-calendar?slug=` | Merged availability calendar |
+| GET | `/events` | CCD events list |
+| GET | `/events/:slug` | Single event |
+| GET | `/curated-events` | Published curated events |
+| GET | `/events/recommended` | Personalised recs (tab, city, genre, limit) |
+| GET | `/instagram-feed` | Behold.so feed proxy |
+| GET | `/user-role?user_id=` | User role info |
 
 ### Authenticated
 | Method | Route | Notes |
 |---|---|---|
-| POST | `/event-rsvp` | RSVP + sends Resend confirmation email |
-| POST | `/artist-submissions` | Submit new artist |
+| POST | `/event-rsvp` | RSVP + Resend confirmation email |
+| POST | `/early-access` | Email list signup |
 | POST | `/contact` | Contact form |
-| POST | `/early-access` | Early access signup |
-| POST | `/user/profile` | Save taste profile (cities, genres, followed artists) |
 | POST | `/user/follow` | Follow/unfollow artist |
-| POST | `/promoters/:slug/claim` | Claim promoter profile (one per user, 409 if taken) |
-| POST | `/promoters/submit-event` | Submit event as verified promoter |
-| DELETE | `/curated-events/:id` | Delete own event (promoter) or any (admin) |
+| POST | `/artists/:id/self-update` | Artist edits own profile (ownership-verified) |
+| POST | `/booking-inquiry` | Artist booking request |
+| POST | `/booking-inquiry-v2` | Structured booking request |
 
-### Admin (x-admin-password header)
+### Admin (`x-admin-password` header)
 | Method | Route | Notes |
 |---|---|---|
 | GET/POST | `/functions/v1/admin-curated-events` | Full CRUD |
-| GET/POST/PATCH/DELETE | `/event-artist-lineups` | Lineup CRUD |
-| GET/POST | `/admin/pending-events` | List + approve/reject promoter submissions |
-| POST | `/admin/import-district-json` | Bulk import up to 500 events |
-| POST | `/cron/scrape-events` | Trigger nightly scraper manually |
-| POST | `/functions/v1/admin-promoters` | Promoter CRUD |
-| GET/POST | `/user-role` | Read/assign user roles |
-| GET | `/admin-roles` | List all role assignments |
-| GET/PATCH | `/role-applications/:id` | Review + approve role applications |
+| GET/POST | `/functions/v1/admin-artists` | Artist CRUD |
+| GET/POST | `/functions/v1/admin-videos` | Video CRUD |
+| GET/POST | `/functions/v1/admin-content` | Settings CRUD |
+| GET | `/functions/v1/admin-signups` | Signups export |
+| GET/POST | `/user-role` | Role management |
 
-### 🔥 Immediate (before next event)
+---
 
-## Next Steps
+## Next Steps & Roadmap
 
-### 🔴 Do immediately (nothing works in production without these)
+### 🔴 Required in Vercel before first event
 
 ```
-1. Vercel → Project → Settings → Environment Variables:
-   SUPABASE_SERVICE_KEY = <service role JWT from Supabase Settings → API>
-   ADMIN_PASSWORD       = <strong password, at least 20 chars>
-   CRON_SECRET          = <run: openssl rand -base64 32>
-   ANTHROPIC_API_KEY    = <Claude API key>
-   RESEND_API_KEY       = <Resend API key>
-
-2. Supabase SQL Editor → run:
-   scripts/sql/20260528_promoter_claimed_by_and_event_status.sql
-
-3. Redeploy in Vercel after setting env vars (they don't hot-reload).
+SUPABASE_SERVICE_KEY  = <service role JWT>
+ADMIN_PASSWORD        = <strong password, 20+ chars>
+CRON_SECRET           = <openssl rand -base64 32>
+ANTHROPIC_API_KEY     = <Claude API key — enables smart event scoring>
+RESEND_API_KEY        = <Resend — enables RSVP emails + weekly digest>
+NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN = <Shopify token>
 ```
 
-### 🟡 This week (makes the platform feel real)
+### 🟡 This week — high leverage, low effort
 
-**A — Seed lineups for upcoming events** *(highest leverage, ~1 hour)*
-- Go to `/admin-cms` → Curated Events tab
-- Find each upcoming curated event → click `🎛 LINEUP`
-- Add the artists playing (use their slug from `/artists/` if they're in the directory)
-- This single action activates:
-  - "Artists You Love" section in Discover For You tab
-  - "Artists You Follow" strip in user dashboard
-  - Artist-based recommendations for every user who follows those artists
+**A — Seed event lineups (~1 hour)**
+Go to `/admin-cms` → Curated Events → click `🎛 LINEUP` per event → add artists by slug.
+This activates "Artists You Love" in Discover + dashboard recommendations.
 
-**B — Link first trusted promoter to a Clerk user** *(5 min)*
+**B — Link first trusted promoter to Clerk user (~5 min)**
 ```sql
 UPDATE promoters
-SET claimed_by = 'user_<clerk_id_here>', trusted = true
+SET claimed_by = 'user_<clerk_id>', trusted = true
 WHERE slug = 'your-promoter-slug';
 ```
-Then that user can go to `/dashboard` → Promoter Portal → submit events directly.
 
-**C — Set YouTube + Instagram env vars**
-```
-YOUTUBE_API_KEY=AIza...
-INSTAGRAM_ACCESS_TOKEN=...
-```
-Videos page and homepage Instagram feed go live immediately.
+**C — Behold.so Instagram feed**
+Sign up at behold.so, connect Instagram, copy the feed URL.
+Set `BEHOLD_FEED_URL=https://feeds.behold.so/<your-key>` in Vercel.
 
-**D — Fix the Shopify token**
-- Shopify Admin → Apps → Storefront API → create or verify the token
-- Set `NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN` in Vercel
-- Confirm products are published to the Storefront channel
+**D — Verify Shopify storefront channel**
+Shopify Admin → Apps → Storefront API → confirm token + products published to Storefront channel.
 
 ### 🟢 Next sprint — new features
 
-**E — Promoter self-service analytics** *(~1 day)*
-- Add a "Stats" panel to PromoterPortal showing per-event: views, saves, RSVPs
-- Source: `user_event_interactions` grouped by `event_id`
-- No new DB table needed
+**E — CCD Points Redemption** *(highest business impact, ~2 days)*
+Close the loyalty loop: users accumulate points with every RSVP/share/follow, but have no way to spend them.
+- Shopify Discount Codes API: generate a `CCD10` (10% off) code when user reaches 100 points
+- Surface in `/dashboard` → "Redeem your X CCD Points"
+- Track redemptions in a new `point_redemptions` table
+- Users with points currently see "redemption launching soon" — this is a broken promise
 
-**F — RSVP reminder email** *(~2 hours)*
-- 24h before event: query upcoming RSVPs, send reminder via Resend
-- Add a Vercel cron at `0 12 * * *` (6pm IST) to check for events tomorrow
-- Template already built (RSVP confirmation template is in proxy, just adapt it)
+**F — Promoter Analytics Panel** *(~1 day)*
+Add a Stats panel to PromoterPortal showing per-event: views, saves, RSVPs.
+Source: `user_event_interactions` grouped by `event_id`.
+No new DB table needed.
 
-**G — Artist availability calendar** *(~1 day)*
-- Artists set available/tentative/confirmed dates in `/artist/dashboard`
-- `artist_dates` table already exists and has a portal tab
-- Surface on artist detail page → enables venue browse-and-book flow
+**G — 24h Pre-Event WhatsApp Reminder**
+Users who opt-in at RSVP get a WhatsApp message the day before.
+RSVP dialog already has the phone number field — wire it to a 24h cron.
 
-**H — Per-event SEO pages for curated events** *(~half day)*
-- `/events/curated/:id` — shareable URL with JSON-LD `MusicEvent` instead of always linking offsite
-- Increases organic search surface area significantly for electronic music queries
+**H — Attended / Check-In Flow**
+Post-event pages are currently dead. Add:
+- "Were you there?" CTA on past event pages
+- One-click attendance mark → +25 XP + social proof counter increment
+- Source: `user_event_interactions` action = `attended`
 
-**I — "Going" attendance count** *(~1 hour)*
-- Show RSVP count on curated event cards using `user_event_interactions` where `action = rsvp`
-- No schema change needed — just aggregate query in the recommended API
+**I — Per-Event SEO Pages for Curated Events** *(~half day)*
+Currently curated events always link offsite. Add `/events/curated/:id` — shareable page with JSON-LD `MusicEvent`.
+Massive SEO surface area for electronic music queries.
 
 ### 🔵 Medium-term roadmap
 
-**Phase: Artist Marketplace**
-- Artist availability calendar (artist sets open dates)
-- Venue/promoter browse: filter by genre, city, fee range, availability
-- Booking inquiry form → artist inbox in portal
-- Booking PDF (date, fee, venue, duration)
-
-**Phase: First-Party Ticketing**
-- Stripe: `STRIPE_SECRET_KEY` env var + Stripe Elements checkout
-- Promoter sets ticket tiers (Early Bird / General / VIP with quantities)
+**First-Party Ticketing v2**
+- Stripe payment intent integration (replace Razorpay placeholder)
 - QR code PDF tickets via Resend + `qrcode` library
 - `/checkin/:eventSlug` door-staff scanner page
 - Promoter real-time sales dashboard
 
-**Phase: Community Layer**
-- Activity feed in dashboard: "3 artists you follow have upcoming events"
-- Push notifications (PWA) for followed artist events
-- "Heard at [event]" crowd-sourced track IDs
-- Post-event photo gallery (moderated)
+**Blog CMS Migration**
+- Current posts live in `src/content/posts.ts` (TypeScript file = code deploy per post)
+- Migrate to Supabase `blog_posts` table with rich JSON body
+- Admin `/admin-cms` Blog tab already has publish/generate endpoints ready
+- Unblocks editorial velocity without architecture changes
 
-**Phase: Content + SEO**
+**Community Layer**
+- Activity feed: "3 artists you follow have upcoming events"
+- PWA push notifications for followed artist events
+- Post-event crowd-sourced track IDs ("heard at [event]")
+- Photo gallery (moderated upload)
+
+**SEO Expansion**
 - More city pages: Kolkata, Ahmedabad, Jaipur, Kochi
 - More genre pages: Afrobeats, Baile Funk, Footwork
-- Blog editorial calendar (admin generate+publish is already built)
-- Programmatic SEO: one page per artist × city combination
+- Programmatic pages: one page per artist × city combination
 
 ---
 
 ## Design System
 
-CCD brutalist design — all utilities in Tailwind.
-
 ### Palette
-| Token | Hex | Usage |
+| Token | Value | Usage |
 |---|---|---|
 | `cream` | `#F5F0E8` | Primary background |
 | `ink` | `#1A1A1A` | Text, borders |
-| `magenta` | `#E040FB` | Primary accent, CTAs, District badge |
-| `acid-yellow` | `#F5E642` | Secondary accent, featured badges |
-| `electric-blue` | `#00BFFF` | Bengaluru, Insider badge |
-| `orange` | `#FF6600` | Hyderabad, HighApe badge |
-| `lime` | `#AAFF00` | Goa, Skillbox badge |
-| `hot-pink` | `#FF69B4` | Promoter badge |
+| `magenta` | `hsl(0 72% 51%)` | Primary CTAs |
+| `acid-yellow` | `hsl(84 81% 56%)` | Secondary accent |
+| `electric-blue` | `hsl(221 83% 53%)` | Bengaluru |
+| `orange` | `hsl(21 90% 53%)` | Hyderabad |
+| `lime` | `hsl(142 76% 73%)` | Goa |
 
 ### Typography
-- **Display:** `font-display` — Bowlby One SC (all-caps, chunky)
-- **Body:** system sans-serif
+- **Display:** `font-display` → Bowlby One (all-caps, chunky)
+- **Body:** Space Grotesk
 
 ### Signature utilities
 ```css
-.chunk-shadow { box-shadow: 4px 4px 0 #1a1a1a; }
-/* Hover: translate-x-[2px] translate-y-[2px] shadow-none */
-/* All interactive: border-4 border-ink */
+.chunk-shadow     { box-shadow: 8px 8px 0 hsl(var(--ink)); }
+.chunk-shadow-lg  { box-shadow: 14px 14px 0 hsl(var(--ink)); }
+/* Hover pattern: hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none */
+/* All interactive elements: border-4 border-ink */
 ```
 
 ---
@@ -524,28 +497,29 @@ CCD brutalist design — all utilities in Tailwind.
 
 | Date | Issue | Status |
 |---|---|---|
-| 2026-05 | Shop products not visible — Shopify token needs verification | 🔴 Open |
-| 2026-05 | Admin panel empty — `SUPABASE_SERVICE_KEY` not set in Vercel | 🔴 Open |
-| 2026-05 | Instagram feed empty — no `INSTAGRAM_ACCESS_TOKEN` | 🟡 Needs env var |
-| 2026-05 | YouTube videos empty — no `YOUTUBE_API_KEY` | 🟡 Needs env var |
-| 2026-05 | Artist enrichment no-op — Firecrawl not wired | 🟡 Needs API keys |
-| 2026-05 | RSVP emails not sent — no `RESEND_API_KEY` | 🟡 Needs env var |
-| 2026-05 | Recommendations heuristic only — no lineups seeded yet | 🟡 Needs lineup data |
-| 2026-05 | `ArtistGigChart` duplicate `</div>` | ✅ Fixed |
-| 2026-05 | `public/sitemap.xml` conflicted with dynamic sitemap | ✅ Fixed |
-| 2026-05 | "Run Nightly Now" button was a no-op stub | ✅ Fixed |
-| 2026-05 | `/discover` had no curated events grid | ✅ Fixed |
-| 2026-05 | Recommendations didn't read taste profiles | ✅ Fixed |
-| 2026-05 | No promoter event submission path | ✅ Fixed |
-| 2026-05 | Dashboard had no events panel | ✅ Fixed |
-| 2026-05 | Hardcoded service-role JWT in proxy | ✅ Fixed |
-| 2026-05 | Hardcoded admin password `84838281` in proxy + AdminPanel | ✅ Fixed |
-| 2026-05 | AdminPanel fetches all 401'd after entering password | ✅ Fixed |
-| 2026-05 | No lineup tool → recommendations fell back to heuristics | ✅ Fixed (🎛 LINEUP in admin) |
-| 2026-05 | Promoters couldn't claim their profile without SQL access | ✅ Fixed (claim button on profile page) |
-| 2026-05 | PromoterPortal showed no event list | ✅ Fixed |
+| 2026-06 | CCD Points redemption not yet live | 🟡 Planned (next sprint) |
+| 2026-06 | Blog posts in TypeScript file — deploy required per post | 🟡 Planned (CMS migration) |
+| 2026-06 | Ticketing Express server not in repo | 🟡 Planned (Ticketing v2) |
+| 2026-05 | Shop offline — Shopify token needs Vercel env var | 🟡 Needs env var |
+| 2026-05 | Admin panel empty — `SUPABASE_SERVICE_KEY` needed | 🟡 Needs env var |
+| 2026-05 | Instagram feed — needs `BEHOLD_FEED_URL` | 🟡 Needs env var |
+| 2026-05 | RSVP emails — needs `RESEND_API_KEY` | 🟡 Needs env var |
+| 2026-05 | Hardcoded admin password in proxy + AdminPanel | ✅ Fixed |
+| 2026-05 | Hardcoded Shopify storefront token in source | ✅ Fixed |
+| 2026-05 | Artist BOOK tab — `/api/booking-inquiry` 404 | ✅ Fixed |
+| 2026-05 | Role portals broken — `/api/user-role` missing | ✅ Fixed |
+| 2026-05 | `expire-holds` cron not in `vercel.json` | ✅ Fixed |
+| 2026-05 | Bengaluru scene page showed "Mumbai" | ✅ Fixed |
+| 2026-05 | Build error: `patch` variable shadowed outer function | ✅ Fixed |
+| 2026-05 | `@types/react` 18.3.28 broke `NextComponentType` JSX | ✅ Fixed |
+| 2026-05 | Hero CTAs scrolled to wrong targets | ✅ Fixed |
+| 2026-05 | `useSearchParams` shim not reactive | ✅ Fixed |
+| 2026-05 | Double font loading (CSS @import + `_document`) | ✅ Fixed |
+| 2026-05 | `SectionReveal` wrapped every section — SEO opacity-0 | ✅ Fixed |
+| 2026-05 | Artist search fetched only 5 results | ✅ Fixed |
+| 2026-05 | `submit-event/event.tsx` SSR'd Clerk hooks — build crash | ✅ Fixed |
 
 ---
 
 *Built with ❤️ by Cats Can Dance — Bengaluru's underground crew.*
-*Platform built by Kiro AI in collaboration with the CCD team.*
+*Platform engineered by Kiro AI in collaboration with the CCD team.*

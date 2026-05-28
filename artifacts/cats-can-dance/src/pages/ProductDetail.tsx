@@ -4,11 +4,68 @@ import { useRouter } from "next/router";
 import { PRODUCT_BY_HANDLE_QUERY, storefrontApiRequest } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, X } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { CartDrawer } from "@/components/CartDrawer";
+
+// ── Size guide data ────────────────────────────────────────────────────────────
+const SIZE_GUIDE = [
+  { size: "S",   chest: "36–38\"",  length: "27\"",  waist: "28–30\"" },
+  { size: "M",   chest: "38–40\"",  length: "28\"",  waist: "30–32\"" },
+  { size: "L",   chest: "40–42\"",  length: "29\"",  waist: "32–34\"" },
+  { size: "XL",  chest: "42–44\"",  length: "30\"",  waist: "34–36\"" },
+  { size: "XXL", chest: "44–46\"",  length: "31\"",  waist: "36–38\"" },
+];
+
+function SizeGuideModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/70"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Size guide"
+    >
+      <div
+        className="bg-cream border-4 border-ink chunk-shadow max-w-md w-full p-6 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close size guide"
+          className="absolute top-3 right-3 w-8 h-8 border-2 border-ink grid place-items-center hover:bg-acid-yellow transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <h2 className="font-display text-2xl text-ink mb-1">SIZE GUIDE</h2>
+        <p className="text-xs text-ink/50 mb-4 font-medium">All measurements are in inches. Screen-printed on heavyweight 240gsm cotton — fits true to size.</p>
+        <table className="w-full border-4 border-ink text-sm">
+          <thead className="bg-ink text-cream font-display">
+            <tr>
+              <th className="px-3 py-2 text-left">SIZE</th>
+              <th className="px-3 py-2 text-left">CHEST</th>
+              <th className="px-3 py-2 text-left">LENGTH</th>
+              <th className="px-3 py-2 text-left">WAIST</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SIZE_GUIDE.map((row, i) => (
+              <tr key={row.size} className={`border-t-2 border-ink/20 ${i % 2 === 0 ? "bg-cream" : "bg-acid-yellow/20"}`}>
+                <td className="px-3 py-2 font-display text-ink">{row.size}</td>
+                <td className="px-3 py-2 text-ink/80">{row.chest}</td>
+                <td className="px-3 py-2 text-ink/80">{row.length}</td>
+                <td className="px-3 py-2 text-ink/80">{row.waist}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-xs text-ink/40 mt-3">Size exchanges within 7 days of delivery on unworn pieces.</p>
+      </div>
+    </div>
+  );
+}
 
 const ProductDetail = () => {
   const router = useRouter();
@@ -18,6 +75,7 @@ const ProductDetail = () => {
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
   const addItem = useCartStore((s) => s.addItem);
   const isLoading = useCartStore((s) => s.isLoading);
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -112,6 +170,7 @@ const ProductDetail = () => {
       />
       <main className="bg-cream text-ink min-h-screen">
         <Nav />
+        {showSizeGuide && <SizeGuideModal onClose={() => setShowSizeGuide(false)} />}
         <section className="container py-16 md:py-24 relative">
           <div className="absolute top-8 right-4 md:right-8 z-10">
             <CartDrawer />
@@ -150,23 +209,53 @@ const ProductDetail = () => {
                 <p className="text-lg mb-8 leading-relaxed">{product.description}</p>
 
                 {product.options?.[0] && (
-                  <div className="mb-8">
-                    <p className="font-bold mb-3">{product.options[0].name.toUpperCase()}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {product.variants.edges.map((e: any) => (
-                        <button
-                          key={e.node.id}
-                          onClick={() => setSelectedVariantId(e.node.id)}
-                          className={`px-4 py-2 border-4 border-ink font-bold transition-all ${
-                            selectedVariantId === e.node.id
-                              ? "bg-magenta text-cream"
-                              : "bg-cream hover:bg-acid-yellow"
-                          }`}
-                        >
-                          {e.node.selectedOptions[0]?.value || e.node.title}
-                        </button>
-                      ))}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-bold">{product.options[0].name.toUpperCase()}</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowSizeGuide(true)}
+                        className="font-display text-xs uppercase text-magenta underline decoration-2 underline-offset-2 hover:text-ink transition-colors"
+                      >
+                        Size Guide
+                      </button>
                     </div>
+                    <div className="flex flex-wrap gap-2">
+                      {product.variants.edges.map((e: any) => {
+                        const outOfStock = e.node.availableForSale === false;
+                        return (
+                          <button
+                            key={e.node.id}
+                            onClick={() => !outOfStock && setSelectedVariantId(e.node.id)}
+                            disabled={outOfStock}
+                            className={`px-4 py-2 border-4 border-ink font-bold transition-all relative ${
+                              selectedVariantId === e.node.id
+                                ? "bg-magenta text-cream"
+                                : outOfStock
+                                  ? "bg-ink/10 text-ink/40 cursor-not-allowed line-through"
+                                  : "bg-cream hover:bg-acid-yellow"
+                            }`}
+                          >
+                            {e.node.selectedOptions[0]?.value || e.node.title}
+                            {outOfStock && (
+                              <span className="sr-only"> — sold out</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Inventory urgency — show when selected variant has limited stock */}
+                    {variant && variant.availableForSale && (() => {
+                      const qty = variant.quantityAvailable;
+                      if (qty != null && qty > 0 && qty <= 5) {
+                        return (
+                          <p className="font-display text-magenta text-xs uppercase tracking-widest mt-3 animate-pulse">
+                            ⚡ Only {qty} left in this size
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 )}
 
@@ -182,11 +271,11 @@ const ProductDetail = () => {
                       selectedOptions: variant.selectedOptions || [],
                     })
                   }
-                  disabled={!variant || isLoading}
+                  disabled={!variant || !variant.availableForSale || isLoading}
                   size="lg"
-                  className="w-full md:w-auto bg-ink text-cream border-4 border-ink hover:bg-magenta px-12"
+                  className="w-full md:w-auto bg-ink text-cream border-4 border-ink hover:bg-magenta px-12 mb-8"
                 >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "ADD TO CART"}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : !variant?.availableForSale ? "SOLD OUT" : "ADD TO CART"}
                 </Button>
 
                 <div className="flex flex-wrap items-center gap-3 mt-8">

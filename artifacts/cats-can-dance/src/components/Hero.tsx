@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import heroCenter from "@/assets/hero-center.svg";
 import catLeft from "@/assets/cat-left.svg";
 import catRight from "@/assets/cat-right.svg";
@@ -11,15 +12,41 @@ import catHpDance from "@/assets/cat-headphones-dance.png";
 import { useDisco } from "@/contexts/DiscoContext";
 import DiscoBall from "@/components/DiscoBall";
 import Lasers from "@/components/Lasers";
+import { parseEventDate } from "@/lib/parse-date";
 
 // next/image with priority handles critical image preloading automatically.
 // No manual preload needed.
+
+/** Fetches the next upcoming event and returns a countdown + slug for the urgency strip. */
+function useNextEvent() {
+  const [next, setNext] = useState<{ title: string; date: string; venue: string; slug: string } | null>(null);
+  const [daysAway, setDaysAway] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/events?status=upcoming&limit=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: any) => {
+        const event = Array.isArray(data) ? data[0] : data?.events?.[0] ?? null;
+        if (!event?.slug) return;
+        setNext({ title: event.title, date: event.date, venue: event.venue, slug: event.slug });
+        const d = parseEventDate(event.date);
+        if (d) {
+          const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
+          if (diff > 0 && diff <= 60) setDaysAway(diff);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  return { next, daysAway };
+}
 
 const Hero = () => {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const { disco } = useDisco();
   const reduce = useReducedMotion();
+  const { next, daysAway } = useNextEvent();
 
   // Big bottom side cats (existing)
   const leftX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-180%"]);
@@ -136,6 +163,23 @@ const Hero = () => {
             <Image src={catRight} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
         </div>
+
+        {/* Urgency strip — shows when an event is ≤60 days away */}
+        {next && daysAway !== null && (
+          <div className="absolute top-[72px] md:top-[80px] inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+            <Link
+              href={`/events/${next.slug}`}
+              className="pointer-events-auto inline-flex items-center gap-3 bg-acid-yellow text-ink border-4 border-ink px-4 py-2 font-display text-xs md:text-sm uppercase tracking-widest chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+            >
+              <span className="inline-block w-2 h-2 bg-magenta rounded-full animate-pulse shrink-0" aria-hidden />
+              <span>
+                ▶ {next.title} — {daysAway === 1 ? "TOMORROW" : `${daysAway} DAYS`}
+              </span>
+              <span className="hidden sm:inline text-ink/60">· {next.venue}</span>
+              <span className="bg-ink text-acid-yellow px-2 py-0.5 text-[10px] font-display uppercase">RSVP →</span>
+            </Link>
+          </div>
+        )}
 
         {/* Desktop buttons */}
         <div className="hidden md:flex absolute inset-x-0 bottom-16 z-50 flex-row gap-3 justify-center px-4">

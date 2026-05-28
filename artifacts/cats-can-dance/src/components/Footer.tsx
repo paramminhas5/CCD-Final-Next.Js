@@ -2,6 +2,7 @@ import { Link } from "@/lib/compat-router";
 import ccdLogo from "@/assets/ccd-logo.png";
 import { imgUrl } from "@/lib/img";
 import { getAllPosts } from "@/content/posts";
+import { useState } from "react";
 
 const groups = [
   {
@@ -104,6 +105,25 @@ const buildDiscover = () => {
 
 
 const Footer = () => {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || state === "busy" || state === "done") return;
+    setState("busy");
+    try {
+      const res = await fetch("/api/early-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), source: "footer" }),
+      });
+      setState(res.ok || res.status === 409 ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  };
+
   return (
     <section className="relative bg-ink text-cream py-24 md:py-32 overflow-hidden">
       <div
@@ -133,6 +153,34 @@ const Footer = () => {
         >
           GET IN TOUCH →
         </a>
+
+        {/* ── Newsletter capture ── */}
+        <div className="mt-12 max-w-md mx-auto text-center">
+          <p className="font-display text-cream/70 text-sm uppercase tracking-widest mb-3">Stay in the loop</p>
+          {state === "done" ? (
+            <p className="font-display text-acid-yellow text-sm uppercase tracking-widest">✓ You're on the list</p>
+          ) : (
+            <form onSubmit={onSubmit} className="flex gap-2">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                maxLength={255}
+                className="flex-1 bg-cream/10 text-cream border-4 border-cream/30 px-4 py-2 font-medium text-sm focus:outline-none focus:border-acid-yellow placeholder:text-cream/30"
+              />
+              <button
+                type="submit"
+                disabled={state === "busy"}
+                className="bg-acid-yellow text-ink font-display text-xs uppercase px-4 py-2 border-4 border-acid-yellow hover:bg-cream transition-colors disabled:opacity-60"
+              >
+                {state === "busy" ? "…" : "JOIN"}
+              </button>
+            </form>
+          )}
+          {state === "error" && <p className="text-magenta text-xs mt-1 font-display">Something went wrong — try again</p>}
+        </div>
 
         <div className="mt-20 grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-10 max-w-6xl mx-auto">
           {groups.map((g) => (

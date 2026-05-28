@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink as RouterNavLink, useLocation, useNavigate } from "@/lib/compat-router";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search, User, LogOut, LayoutDashboard } from "lucide-react";
 import DiscoButton from "@/components/DiscoButton";
 import DiscoMute from "@/components/DiscoMute";
 import DiscoHint from "@/components/DiscoHint";
@@ -77,6 +77,8 @@ const Dropdown = ({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="true"
         className={`font-display text-base hover:${activeColor} transition-colors inline-flex items-baseline gap-1 ${
           isActive ? activeColor : baseColor
         }`}
@@ -137,6 +139,61 @@ const Dropdown = ({
         </div>
       )}
     </li>
+  );
+};
+
+// ── Account dropdown — compact avatar/initials button with menu ──────────────
+const AccountDropdown = ({ user, signOut, scrolled }: { user: any; signOut: () => void; scrolled: boolean }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const initials = (user?.firstName?.[0] ?? user?.username?.[0] ?? "U").toUpperCase();
+  const baseColor = scrolled ? "bg-cream text-ink" : "bg-cream/20 text-cream";
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label="Account menu"
+        className={`w-9 h-9 border-4 border-ink font-display text-sm grid place-items-center transition-colors ${baseColor} hover:bg-acid-yellow hover:text-ink`}
+      >
+        {initials}
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 pt-2 min-w-[160px] z-50">
+          <ul className="py-1 bg-cream border-4 border-ink chunk-shadow">
+            <li>
+              <a href="/dashboard" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 font-display text-sm text-ink hover:bg-acid-yellow">
+                <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+              </a>
+            </li>
+            <li>
+              <a href="/profile" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-4 py-2 font-display text-sm text-ink hover:bg-acid-yellow">
+                <User className="w-3.5 h-3.5" /> Profile
+              </a>
+            </li>
+            <li className="border-t-2 border-ink/10">
+              <button onClick={() => { signOut(); setOpen(false); }}
+                className="flex items-center gap-2 w-full text-left px-4 py-2 font-display text-sm text-ink/60 hover:bg-acid-yellow hover:text-ink">
+                <LogOut className="w-3.5 h-3.5" /> Sign Out
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -214,24 +271,20 @@ const Nav = () => {
           <Dropdown label="More" links={moreLinks} scrolled={effectiveScrolled} />
         </ul>
         <div className="hidden lg:flex items-center gap-3">
+          {/* Global search trigger */}
+          <RouterNavLink
+            to="/discover"
+            aria-label="Search"
+            className={`hover:${activeColor} transition-colors`}
+          >
+            <Search className={`w-4 h-4 ${baseColor}`} />
+          </RouterNavLink>
           <span className="hidden xl:block"><DiscoMute /></span>
           <DiscoButton compact />
           {hasCart && <CartDrawer />}
           {user ? (
-            <div className="flex items-center gap-2">
-              <a href="/profile"
-                className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-cream text-ink hover:bg-acid-yellow transition-colors">
-                Profile
-              </a>
-              <a href="/dashboard"
-                className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-acid-yellow text-ink hover:bg-magenta hover:text-cream transition-colors">
-                Dashboard
-              </a>
-              <button onClick={() => signOut()}
-                className="font-display text-xs uppercase px-3 py-2 border-4 border-ink bg-cream text-ink hover:bg-ink hover:text-cream transition-colors">
-                Sign Out
-              </button>
-            </div>
+            /* ── Compact avatar dropdown for signed-in users ── */
+            <AccountDropdown user={user} signOut={signOut} scrolled={effectiveScrolled} />
           ) : (
             // Always render the Sign In CTA — unconditional, so it shows even
             // before Clerk loads (or when Clerk is disabled / mis-configured).
@@ -256,6 +309,7 @@ const Nav = () => {
           {hasCart && <CartDrawer />}
           <button
             aria-label="Toggle menu"
+            aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className="w-10 h-10 sm:w-11 sm:h-11 grid place-items-center border-4 border-ink bg-cream chunk-shadow"
           >
@@ -265,46 +319,77 @@ const Nav = () => {
       </nav>
 
       {open && (
-        <div className="lg:hidden bg-cream border-t-4 border-ink">
-          <ul className="container py-4 flex flex-col gap-1">
-            {mobileLinks.map((l) => (
-              <li key={l.to}>
-                {l.external ? (
-                  <a
-                    href={l.to}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block font-display text-2xl text-ink py-2"
-                  >
+        <div className="lg:hidden bg-cream border-t-4 border-ink max-h-[85vh] overflow-y-auto">
+          <div className="container py-4 space-y-1">
+            {/* ── Primary navigation ── */}
+            {primaryLinks.map((l) => (
+              <RouterNavLink
+                key={l.to}
+                to={l.to}
+                className={({ isActive }) =>
+                  `block font-display text-xl text-ink py-2 border-b border-ink/10 ${isActive ? "text-magenta" : ""}`
+                }
+              >
+                {l.label}
+              </RouterNavLink>
+            ))}
+
+            {/* ── Work With Us group ── */}
+            <div className="pt-2">
+              <p className="font-display text-[10px] uppercase tracking-[0.25em] text-ink/40 mb-1">Work With Us</p>
+              {partnersLinks.map((l) => (
+                <RouterNavLink key={l.to} to={l.to} className="block font-display text-lg text-ink py-1.5 border-b border-ink/5">
+                  {l.label}
+                </RouterNavLink>
+              ))}
+            </div>
+
+            {/* ── More group ── */}
+            <div className="pt-2">
+              <p className="font-display text-[10px] uppercase tracking-[0.25em] text-ink/40 mb-1">More</p>
+              {moreLinks.map((l) =>
+                l.external ? (
+                  <a key={l.to} href={l.to} target="_blank" rel="noreferrer"
+                    className="block font-display text-lg text-ink py-1.5 border-b border-ink/5">
                     {l.label} ↗
                   </a>
                 ) : (
-                  <RouterNavLink to={l.to} className="block font-display text-2xl text-ink py-2">
+                  <RouterNavLink key={l.to} to={l.to} className="block font-display text-lg text-ink py-1.5 border-b border-ink/5">
                     {l.label}
                   </RouterNavLink>
-                )}
-              </li>
-            ))}
-            {user ? (
-              <>
-                <li><a href="/profile" className="block font-display text-2xl text-ink py-2">Profile</a></li>
-                <li><a href="/dashboard" className="block font-display text-2xl text-ink py-2">Dashboard</a></li>
-                <li><button onClick={() => signOut()} className="block font-display text-2xl text-ink/50 py-2 w-full text-left">Sign Out</button></li>
-              </>
-            ) : (
-              <li><button onClick={() => openSignIn()} className="block font-display text-2xl text-magenta py-2 w-full text-left">Sign In →</button></li>
-            )}
-            <li>
-              <a href="/#early-access" onClick={goToEarlyAccess} className="block font-display text-2xl text-magenta py-2">
+                )
+              )}
+            </div>
+
+            {/* ── Account + utilities ── */}
+            <div className="pt-3 border-t-2 border-ink/20 space-y-1">
+              {user ? (
+                <>
+                  <a href="/dashboard" className="flex items-center gap-2 font-display text-lg text-ink py-2">
+                    <LayoutDashboard className="w-4 h-4" /> Dashboard
+                  </a>
+                  <a href="/profile" className="flex items-center gap-2 font-display text-lg text-ink py-2">
+                    <User className="w-4 h-4" /> Profile
+                  </a>
+                  <button onClick={() => signOut()} className="flex items-center gap-2 font-display text-lg text-ink/50 py-2 w-full text-left">
+                    <LogOut className="w-4 h-4" /> Sign Out
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => openSignIn()} className="block font-display text-xl text-magenta py-2 w-full text-left">
+                  Sign In →
+                </button>
+              )}
+              <a href="/#early-access" onClick={goToEarlyAccess} className="block font-display text-xl text-magenta py-2">
                 Early Access →
               </a>
-            </li>
-            {/* Disco mode toggle in mobile menu */}
-            <li className="pt-3 border-t-2 border-ink/10 flex items-center gap-3">
-              <span className="font-display text-sm uppercase text-ink/40 tracking-widest">Disco Mode</span>
-              <DiscoButton compact />
-            </li>
-          </ul>
+              {/* Disco mode toggle */}
+              <div className="flex items-center gap-3 pt-2 border-t border-ink/10">
+                <span className="font-display text-sm uppercase text-ink/40 tracking-widest">Disco Mode</span>
+                <DiscoButton compact />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </header>
