@@ -422,9 +422,9 @@ function EventCard({
         </div>
 
         {/* Genres */}
-        {event.genre.length > 0 && (
+        {(event.genre ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {event.genre.slice(0, 3).map(g => (
+            {(event.genre ?? []).slice(0, 3).map(g => (
               <span key={g} className="px-1.5 py-0.5 text-[10px] font-display uppercase bg-acid-yellow text-ink border border-ink">
                 {g}
               </span>
