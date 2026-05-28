@@ -5,7 +5,7 @@
  * Falls back to localStorage when user not signed in (with upgrade prompt).
  */
 import { useState, useEffect } from "react";
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import { Heart } from "lucide-react";
 
 interface Props {
@@ -27,7 +27,7 @@ function setLocalFollowed(slugs: string[]) {
 }
 
 export default function FollowButton({ artistSlug, artistName, compact = false, onToggle }: Props) {
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { user, isLoaded, isSignedIn } = useSafeUser();
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
 

@@ -1,10 +1,7 @@
 /**
- * Per-event editorial content.
+ * Per-event editorial content + static fallback rows.
  *
- * The Supabase `events` row gives us the dynamic stuff (title, date,
- * lineup, status). Rich copy — vibe pillars, schedule, venue address,
- * partners — lives here so it can be reviewed in PRs and stays in sync
- * with the brand voice.
+ * Two halves:
  *
  * CCD × SOCIAL — Season 1 show structure:
  *   Show 01 · 29 Jun 2026 → THE DEBUT         (broad, welcoming, first impression)
@@ -37,7 +34,105 @@ const DEFAULT_VIBE_PILLARS_CCDXSOCIAL: VibePillar[] = [
   { icon: "🛍️", label: "MARKET", desc: "Curated vendor market: pet-first brands, streetwear, food, and CCD drops." },
 ];
 
-// ──────────────────── Per-slug content ────────────────────
+// ──────────────────── Static fallback rows ────────────────────
+// Mirrors public/ccdxsocial-seed.sql — used by EventDetail when the DB row
+// for a slug isn't available yet (env var missing, seed not run, etc.).
+
+export const EVENT_ROWS: Record<string, EventRow> = {
+  "ccdxsocial-debut": {
+    slug: "ccdxsocial-debut",
+    title: "THE DEBUT",
+    date: "Sat, Jun 21, 2026",
+    city: "Bangalore",
+    venue: "Social, Indiranagar",
+    blurb:
+      "India's first curated pet lifestyle festival meets underground dance music. The Debut is the first chapter — outdoor pet zone from 4PM with activities, vendor market, agility tasters and portrait booth. Then Startdawg and Merman take over for the night.",
+    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 1,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "BROAD · WELCOMING · FIRST IMPRESSION",
+    is_finale: false,
+  },
+
+  "ccdxsocial-groom-room": {
+    slug: "ccdxsocial-groom-room",
+    title: "THE GROOM ROOM",
+    date: "Sat, Jun 28, 2026",
+    city: "Bangalore",
+    venue: "Social, Church Street",
+    blurb:
+      "All about looking good — pets and parents alike. Fashion, grooming, accessories. Live grooming demo on stage, best dressed contest, dedicated style photography corner. Plus Startdawg and Merman keeping the floor moving.",
+    lineup: ["Startdawg", "Merman", "TBA", "TBA", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 2,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "FASHION · GROOMING · STYLE",
+    is_finale: false,
+  },
+
+  "ccdxsocial-zoomies": {
+    slug: "ccdxsocial-zoomies",
+    title: "ZOOMIES",
+    date: "Sun, Jun 29, 2026",
+    city: "Bangalore",
+    venue: "Indiranagar Social",
+    blurb:
+      "The most physical chapter of the series. Outdoor pet zone all afternoon — two agility courses, a timed speed run, performance contest. Any breed, any age, any skill level. Then 8 PM doors flip and Startdawg b2b Merman take the floor through the night.",
+    lineup: ["Startdawg", "Merman", "TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 3,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "AGILITY · PERFORMANCE · SPEED",
+    is_finale: false,
+  },
+
+  "ccdxsocial-grand-finale": {
+    slug: "ccdxsocial-grand-finale",
+    title: "GRAND FORMAT SHOW",
+    date: "Date TBA · 2026",
+    city: "Bangalore",
+    venue: "Venue TBA",
+    blurb:
+      "The season finale. Everything the series has been building to. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA. The biggest thing we've ever done. Sponsorship enquiries open now.",
+    lineup: ["Startdawg", "Merman", "Full lineup TBA"],
+    status: "upcoming",
+    poster_url: null,
+    sort_order: 4,
+    series: "ccdxsocial",
+    series_label: "CCD × SOCIAL",
+    event_type: "ccdxsocial",
+    pet_friendly: true,
+    series_tagline: "SEASON FINALE · GRAND FORMAT",
+    is_finale: true,
+  },
+};
+
+/** Static fallback lookup — used by EventDetail when Supabase is empty. */
+export function getStaticEventRow(slug: string): EventRow | null {
+  return EVENT_ROWS[slug] ?? null;
+}
+
+/** All static rows that share a series — for the SeriesStrip fallback. */
+export function getStaticEventsBySeries(series: string): EventRow[] {
+  return Object.values(EVENT_ROWS)
+    .filter((e) => e.series === series)
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+// ──────────────────── Per-slug rich content ────────────────────
 
 export const EVENT_CONTENT: Record<string, EventContent> = {
 

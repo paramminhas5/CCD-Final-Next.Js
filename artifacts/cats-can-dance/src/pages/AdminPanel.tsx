@@ -8,23 +8,34 @@
  * - XP Leaderboard: top fans by XP/tier
  * - System: trigger scraper, view recent event_signals
  *
- * Gated to admin role only.
+ * Access: Clerk admin role OR admin password fallback (sessionStorage).
+ * The password fallback unblocks operators when Clerk env vars aren't set
+ * up yet on Vercel — same password as /admin-cms.
  */
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import Nav from "@/components/Nav";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 
-const ADMIN_PW = "84838281";
+const ADMIN_PW_DEFAULT = "84838281";
+const PASS_KEY = "ccd_admin_pass";
+
+function getStoredPw(): string {
+  if (typeof window === "undefined") return "";
+  return sessionStorage.getItem(PASS_KEY) ?? "";
+}
 
 async function adminFetch(path: string, method = "GET", body?: object) {
+  const pw = getStoredPw() || ADMIN_PW_DEFAULT;
   return fetch(path, {
     method,
-    headers: { "Content-Type": "application/json", "x-admin-password": ADMIN_PW },
+    headers: { "Content-Type": "application/json", "x-admin-password": pw },
     body: body ? JSON.stringify(body) : undefined,
   }).then(r => r.ok ? r.json() : null);
 }
+
+const ADMIN_PW = ADMIN_PW_DEFAULT; // legacy ref used by existing tabs below
 
 /* ── Types ── */
 type Application = {
@@ -441,19 +452,47 @@ function SystemTab() {
 
 /* ── Main AdminPanel ─────────────────────────────────────────────────────── */
 const AdminPanel = () => {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded } = useSafeUser();
   const roleInfo = useUserRole();
   const [activeTab, setActiveTab] = useState<"applications" | "roles" | "artists" | "xp" | "system">("applications");
   const [pendingCount, setPendingCount] = useState(0);
 
+  // Password-fallback state: lets admins in even when Clerk isn't configured
+  // OR when the user_roles table doesn't grant them the admin role yet.
+  const [pwInput, setPwInput] = useState("");
+  const [pwAuthed, setPwAuthed] = useState<boolean>(() =>
+    typeof window !== "undefined" && !!sessionStorage.getItem(PASS_KEY),
+  );
+
+  const isAuthed = roleInfo.isAdmin || pwAuthed;
+
   useEffect(() => {
-    if (!roleInfo.isAdmin) return;
-    fetch("/api/role-applications?status=eq.pending", { headers: { "x-admin-password": ADMIN_PW } })
+    if (!isAuthed) return;
+    fetch("/api/role-applications?status=eq.pending", {
+      headers: { "x-admin-password": getStoredPw() || ADMIN_PW_DEFAULT },
+    })
       .then(r => r.ok ? r.json() : [])
       .then(d => setPendingCount(Array.isArray(d) ? d.length : 0))
       .catch(() => {});
-  }, [roleInfo.isAdmin]);
+  }, [isAuthed]);
 
+  const tryPasswordLogin = async (pw: string) => {
+    if (!pw) return;
+    // Verify against /api/health using the password (any admin route works
+    // — we hit role-applications which is admin-gated)
+    const r = await fetch("/api/role-applications?status=eq.pending", {
+      headers: { "x-admin-password": pw },
+    });
+    if (r.ok) {
+      sessionStorage.setItem(PASS_KEY, pw);
+      setPwAuthed(true);
+      toast.success("Unlocked");
+    } else {
+      toast.error("Wrong password");
+    }
+  };
+
+  // Still loading Clerk state — show splash
   if (!isLoaded || roleInfo.loading) return (
     <div className="min-h-screen bg-cream"><Nav/>
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -462,11 +501,57 @@ const AdminPanel = () => {
     </div>
   );
 
-  if (!user || !roleInfo.isAdmin) return (
+  // Not authenticated via Clerk admin role AND not via password — show
+  // dual-path login: prompt sign-in OR enter password.
+  if (!isAuthed) return (
     <div className="min-h-screen bg-cream"><Nav/>
-      <div className="container py-32 text-center">
-        <p className="font-display text-4xl text-ink uppercase mb-4">Access Denied</p>
-        <p className="text-ink/50">Admin access only.</p>
+      <div className="container py-24 max-w-lg">
+        <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-2">/ ADMIN</p>
+        <h1 className="font-display text-4xl uppercase text-ink mb-3">CCD Backend</h1>
+        <p className="text-ink/70 mb-8">
+          Two ways in. {user ? "Your account doesn't have the admin role yet." : "Sign in with an admin account, or use the admin password."}
+        </p>
+
+        {!user && (
+          <div className="border-4 border-ink bg-cream chunk-shadow p-6 mb-5">
+            <p className="font-display text-sm uppercase text-ink mb-3">Option 1 — Sign in</p>
+            <a href="/sign-in?redirect_url=/admin"
+              className="inline-block bg-magenta text-cream font-display px-5 py-3 border-4 border-ink chunk-shadow uppercase hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
+              Sign in →
+            </a>
+          </div>
+        )}
+
+        <div className="border-4 border-ink bg-cream chunk-shadow p-6">
+          <p className="font-display text-sm uppercase text-ink mb-3">
+            {user ? "Use admin password" : "Option 2 — Admin password"}
+          </p>
+          <form onSubmit={(e) => { e.preventDefault(); tryPasswordLogin(pwInput); }} className="space-y-3">
+            <input
+              type="password"
+              value={pwInput}
+              onChange={(e) => setPwInput(e.target.value)}
+              placeholder="Password"
+              className="w-full bg-cream text-ink border-4 border-ink px-4 py-3 font-display text-lg focus:outline-none focus:bg-acid-yellow"
+              autoFocus
+            />
+            <button type="submit"
+              className="w-full bg-ink text-cream font-display text-base py-3 hover:bg-magenta transition-colors uppercase">
+              Unlock
+            </button>
+          </form>
+          <p className="text-xs text-ink/50 mt-3">
+            Set <code className="font-mono bg-acid-yellow/30 px-1">ADMIN_PASSWORD</code> in Vercel env vars.
+            Falls back to <code className="font-mono bg-acid-yellow/30 px-1">{ADMIN_PW_DEFAULT}</code>.
+          </p>
+        </div>
+
+        <div className="mt-6 text-sm">
+          <p className="text-ink/60">
+            Looking for the content management panel (signups, events, playlists, RSVPs)?
+            That's at <a href="/admin-cms" className="text-magenta underline">/admin-cms</a>.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -486,7 +571,12 @@ const AdminPanel = () => {
         <div className="container py-6">
           <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-1">/ ADMIN</p>
           <h1 className="font-display text-5xl text-cream uppercase">CCD Backend</h1>
-          <p className="text-cream/40 text-sm mt-1">{user.primaryEmailAddress?.emailAddress}</p>
+          <p className="text-cream/40 text-sm mt-1">
+            {user?.primaryEmailAddress?.emailAddress ?? (pwAuthed ? "Password-authenticated session" : "")}
+          </p>
+          <div className="mt-2 text-xs">
+            <a href="/admin-cms" className="text-acid-yellow underline">→ Content management (signups, events, RSVPs, blog…)</a>
+          </div>
         </div>
         <div className="container">
           <div className="flex overflow-x-auto">
@@ -503,8 +593,8 @@ const AdminPanel = () => {
       </div>
 
       <div className="container py-10 max-w-5xl">
-        {activeTab === "applications" && <ApplicationsTab userId={user.id}/>}
-        {activeTab === "roles"        && <RolesTab userId={user.id}/>}
+        {activeTab === "applications" && <ApplicationsTab userId={user?.id ?? "admin-pw"}/>}
+        {activeTab === "roles"        && <RolesTab userId={user?.id ?? "admin-pw"}/>}
         {activeTab === "artists"      && <ArtistsTab/>}
         {activeTab === "xp"           && <XPTab/>}
         {activeTab === "system"       && <SystemTab/>}

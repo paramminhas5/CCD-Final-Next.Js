@@ -26,18 +26,40 @@ function CartSyncProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Resolves the Clerk publishable key. Returns "" if missing — callers must
+ * handle the empty-key case so the rest of the app still renders.
+ */
+function resolveClerkKey(): string {
+  if (typeof window !== "undefined") {
+    const fromHost = publishableKeyFromHost(
+      window.location.hostname,
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
+    );
+    if (fromHost) return fromHost;
+  }
+  return process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+}
+
 function ClerkWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-
-  const clerkPubKey =
-    (typeof window !== "undefined"
-      ? publishableKeyFromHost(
-          window.location.hostname,
-          process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
-        )
-      : undefined) ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
-
+  const clerkPubKey = resolveClerkKey();
   const clerkProxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL || undefined;
+
+  // No Clerk key → render the app without ClerkProvider so the rest still
+  // works (Sign-In button gracefully links to /sign-in instead of opening a
+  // modal). This unblocks dev / preview deploys without env vars.
+  if (!clerkPubKey) {
+    if (typeof window !== "undefined" && !(window as any).__ccdClerkWarned) {
+      (window as any).__ccdClerkWarned = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[CCD] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — auth features disabled. " +
+          "Set it in Vercel → Project Settings → Environment Variables.",
+      );
+    }
+    return <>{children}</>;
+  }
 
   return (
     <ClerkProvider

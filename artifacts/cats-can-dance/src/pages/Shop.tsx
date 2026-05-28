@@ -133,7 +133,11 @@ const Shop = () => {
           ) : shopError ? (
             <div className="text-center py-32 border-4 border-ink bg-magenta">
               <p className="font-display text-3xl text-cream mb-2">SHOP OFFLINE</p>
-              <p className="text-cream/80 text-sm mb-4">Could not connect to the CCD store. Try refreshing in a moment.</p>
+              <p className="text-cream/80 text-sm mb-4 max-w-lg mx-auto">{shopError}</p>
+              <p className="text-cream/60 text-xs mb-4 max-w-md mx-auto">
+                Most common fix: bump <code className="bg-ink/40 px-1 py-0.5">NEXT_PUBLIC_SHOPIFY_API_VERSION</code> to the
+                current stable in Vercel. Tokens / domains are also configurable via env vars.
+              </p>
               <button
                 onClick={() => window.location.reload()}
                 className="font-display text-sm uppercase px-5 py-2 border-4 border-cream bg-cream text-ink chunk-shadow hover:bg-acid-yellow transition-colors"

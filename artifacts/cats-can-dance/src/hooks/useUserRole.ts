@@ -9,7 +9,7 @@
  *   venue → can manage their venue profile
  *   admin → all access
  */
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import { useEffect, useState } from "react";
 
 export type UserRole = "user" | "artist" | "promoter" | "venue" | "admin";
@@ -30,7 +30,7 @@ const CACHE: Record<string, { data: RoleInfo; ts: number }> = {};
 const TTL = 5 * 60 * 1000; // 5 min
 
 export function useUserRole(): RoleInfo {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded } = useSafeUser();
   const [info, setInfo] = useState<RoleInfo>({
     role: "user", entityId: null, entitySlug: null, entityName: null,
     loading: true, isArtist: false, isPromoter: false, isVenue: false, isAdmin: false,
