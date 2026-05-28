@@ -149,22 +149,22 @@ const CcdxSocial = () => {
                   <div className="h-tag">Official Venue &amp; Co-Marketing Partnership · Season 1 · 2026</div>
                   <div className="hero-lockup"><Lockup size={56} /></div>
                   <h1 className="h-title">CATS<span className="y">CAN</span>DANCE<br />× SOCIAL</h1>
-                  <p className="h-sub">India's first curated pet lifestyle festival — 4 shows at Social BLR + a grand season finale. Co-hosted, co-marketed, built for the city's 24–45 pet parent crowd.</p>
+                  <p className="h-sub">India's first curated pet lifestyle festival — 3 shows at Social BLR + a grand season finale. Co-hosted, co-marketed, built for the city's 24–45 pet parent crowd.</p>
                   <div className="h-pills">
-                    <div className="h-pill hi">4 Shows at Social BLR</div>
+                    <div className="h-pill hi">3 Shows at Social BLR</div>
                     <div className="h-pill hi">1 Grand Finale</div>
                     <div className="h-pill">Co-Marketing Partnership</div>
                     <div className="h-pill">Season 1 · BLR → National</div>
                   </div>
                 </div>
                 <div className="h-badges">
-                  <div className="hb"><div className="hb-n">4</div><div className="hb-l">Shows</div></div>
+                  <div className="hb"><div className="hb-n">3</div><div className="hb-l">Shows</div></div>
                   <div className="hb" style={{ background: "var(--magenta)" }}>
                     <div className="hb-n" style={{ color: "var(--cream)" }}>1</div>
                     <div className="hb-l" style={{ color: "var(--cream)" }}>Finale</div>
                   </div>
                   <div className="hb" style={{ background: "var(--lime)" }}>
-                    <div className="hb-n">3K</div><div className="hb-l">Pax</div>
+                    <div className="hb-n">2K</div><div className="hb-l">Pax</div>
                   </div>
                 </div>
               </div>
@@ -285,10 +285,9 @@ const CcdxSocial = () => {
               <h2 className="slbl">Season 1 Calendar — Bengaluru</h2>
               <div className="tl">
                 {[
-                  ["Show 01 · Jun 2026", "The Debut", "Portrait Booth · Lookalike Contest"],
-                  ["Show 02 · Jul 2026", "The Groom Room", "Live Grooming Demo · Makeover Contest"],
-                  ["Show 03 · Aug 2026", "Zoomies", "2 Agility Courses · Speed Run"],
-                  ["Show 04 · Sep 2026", "The Big Tease", "Golden Paw Awards · Finale Ticket Drop"],
+                  ["Show 01 · 29 Jun 2026", "The Debut", "Portrait Booth · Lookalike Contest"],
+                  ["Show 02 · 27 Jul 2026", "The Heat", "Live Grooming Demo · Best-Dressed Contest"],
+                  ["Show 03 · 30 Aug 2026", "Loose Ends", "Agility Courses · Finale Ticket Drop"],
                 ].map(([mo, name, note]) => (
                   <div className="tc mini" key={mo}>
                     <div className="tc-top"><div className="tc-mo">{mo}</div></div>
@@ -301,17 +300,17 @@ const CcdxSocial = () => {
                   </div>
                 ))}
                 <div className="tc finale">
-                  <div className="tc-top"><div className="tc-mo">GRAND FINALE · Dec 2026</div></div>
+                  <div className="tc-top"><div className="tc-mo">THE GATHERING · Oct 2026</div></div>
                   <div className="tc-body">
                     <div className="tc-type">Co-Presented (Option)</div>
-                    <div className="tc-name">Season Finale</div>
-                    <div className="tc-pax">2,000–3,000 pax</div>
+                    <div className="tc-name">Grand Finale</div>
+                    <div className="tc-pax">2,000+ pax</div>
                     <div className="tc-note">Social has first right to co-present</div>
                   </div>
                 </div>
               </div>
               <div className="cta acid">
-                <p><strong>Jun–Sep 2026</strong> — 4 shows across different Social BLR locations (Indiranagar, Church Street, Koramangala, HSR). Grand Finale Dec 2026 — Social has first right to co-present.</p>
+                <p><strong>Jun–Aug 2026</strong> — 3 shows across different Social BLR locations. Grand Finale (The Gathering) Oct 2026 — Social has first right to co-present.</p>
               </div>
               <div className="footer">
                 <div className="ft-brand"><Lockup size={32} /></div>
@@ -334,12 +333,12 @@ const CcdxSocial = () => {
                 <div className="ops-tag">Operations Document · Confidential · 2026</div>
                 <div className="hero-lockup"><Lockup size={56} /></div>
                 <h1 className="ops-title">CATS<span className="y">CAN</span>DANCE<br />× SOCIAL</h1>
-                <p className="ops-sub">4 show themes, full run-of-show, responsibilities, venue requirements, co-marketing plan, and national expansion roadmap.</p>
+                <p className="ops-sub">3 show themes, full run-of-show, responsibilities, venue requirements, co-marketing plan, and national expansion roadmap.</p>
                 <div className="ops-meta">
                   {[
-                    ["Season 1", "Jun–Dec 2026"],
+                    ["Season 1", "Jun–Oct 2026"],
                     ["Home City", "Bengaluru"],
-                    ["Shows", "4 × Social BLR + Finale"],
+                    ["Shows", "3 × Social BLR + Finale"],
                     ["Expansion", "MUM + DEL Season 2"],
                   ].map(([l, v]) => (
                     <div className="ops-mp" key={l}>
@@ -354,13 +353,12 @@ const CcdxSocial = () => {
             <section className="ops-sec os1 pdf-block pdf-break-before" id="sec-ops-1">
               <div className="ops-sec-hd"><div className="ops-sec-num">01</div><div className="ops-sec-title">THE FOUR SHOWS — THEMES + ACTIVATIONS</div></div>
               <div className="ops-sec-body">
-                <p className="ops-body">Each show has a theme that goes progressively deeper into pet culture — four chapters of the same story, each building community and raising stakes for the next. Same DNA, different energy. The theme shapes the vendor edit, possible activities, and signature activation. Everything listed per show is what <em>could</em> happen — not all of it will, and the mix is refined closer to date.</p>
+                <p className="ops-body">Each show has a theme that goes progressively deeper into pet culture — three chapters of the same story, each building community and raising stakes for the next. Same DNA, different energy.</p>
                 <div className="mini-grid">
                   {[
-                    { cls: "mc1", month: "Show 01 · Jun 2026", name: "THE DEBUT", tag: "BROAD · WELCOMING · FIRST IMPRESSION", desc: "The introduction to CatsCaNDance — widest possible appeal. Vendor edit covers food, accessories, grooming, photography. 2–3 curated brands. Energy is curious and excited. Social promotes as a neighbourhood Saturday event.", actName: "🎨 Pet Portrait Booth · 👯 Lookalike Contest", actDesc: "Polaroid or digital print takeaway for every pet. Lookalike contest pits pet parents against their animals — crowd votes. The \"tell everyone you came\" moments of the season." },
-                    { cls: "mc2", month: "Show 02 · Jul 2026", name: "THE GROOM ROOM", tag: "FASHION · GROOMING · STYLE", desc: "All about looking good — pets and parents alike. Fashion, grooming, accessories. Vendor edit leans into apparel and grooming brands. A natural playground for partner integrations and style-forward content.", actName: "✂️ Live Grooming Demo · 👗 Best Dressed Contest · 📸 Style Booth", actDesc: "Partner grooming brand runs a live demo on stage. Best Dressed Pet + Parent voted by crowd. Dedicated style photography corner for content creation." },
-                    { cls: "mc3", month: "Show 03 · Aug 2026", name: "ZOOMIES", tag: "AGILITY · PERFORMANCE · SPEED", desc: "Dogs doing what dogs do best. The most physical show of the season — movement, competition, raw energy. Vendor edit includes nutrition, training and performance brands. First taste of the finale's agility competition.", actName: "🏃 Two Agility Courses · ⚡ Timed Speed Run · 🥇 Performance Contest", actDesc: "Two simultaneous obstacle courses — beginner and advanced. A timed speed run that seeds the competitive energy of the finale. Any breed, any age, any skill level welcome." },
-                    { cls: "mc4", month: "Show 04 · Sep 2026", name: "THE BIG TEASE", tag: "SHOWCASE · JUDGING · FINALE PREVIEW", desc: "Think dog show, cat show, pet parent show — structured judging, categories, ceremony. The community is fully formed. Grand Finale tickets drop exclusively at this event. Biggest buzz of the four shows.", actName: "🐾 Pet Showcase Judging · 🏆 Golden Paw Awards · 🎟️ Exclusive Finale Drop", actDesc: "Structured categories judged on stage — Most Dramatic Cat, Best Dressed Duo, Most Likely to Judge Everyone. Finale tickets go on sale on the night, first access for attendees only." },
+                    { cls: "mc1", month: "Show 01 · 29 Jun 2026", name: "THE DEBUT", tag: "BROAD · WELCOMING · FIRST IMPRESSION", desc: "The introduction — widest possible appeal. Vendor edit covers food, accessories, grooming, photography. 2–3 curated brands. Energy is curious and excited. Social promotes as a neighbourhood Saturday event.", actName: "🎨 Pet Portrait Booth · 👯 Lookalike Contest", actDesc: "Polaroid or digital print takeaway for every pet. Lookalike contest pits pet parents against their animals — crowd votes." },
+                    { cls: "mc2", month: "Show 02 · 27 Jul 2026", name: "THE HEAT", tag: "STYLE · FASHION · MIDSUMMER ENERGY", desc: "All about looking good — pets and parents alike. Fashion, grooming, accessories. Vendor edit leans into apparel and grooming brands. A natural playground for partner integrations and style-forward content.", actName: "✂️ Live Grooming Demo · 👗 Best Dressed Contest · 📸 Style Booth", actDesc: "Partner grooming brand runs a live demo on stage. Best Dressed Pet + Parent voted by crowd. Dedicated style photography corner for content." },
+                    { cls: "mc3", month: "Show 03 · 30 Aug 2026", name: "LOOSE ENDS", tag: "AGILITY · FINALE PREVIEW · ONE MORE", desc: "The most physical show of the season. Agility, competition, raw energy. Grand Finale tickets drop exclusively here. The community is fully formed — one more before everything.", actName: "🏃 Two Agility Courses · ⚡ Timed Speed Run · 🎟️ Exclusive Finale Drop", actDesc: "Two simultaneous obstacle courses. A timed speed run. Finale tickets on sale on the night, first access for attendees only." },
                   ].map(s => (
                     <div className={`mini-card ${s.cls}`} key={s.name}>
                       <div className="mini-card-hd">
@@ -383,7 +381,7 @@ const CcdxSocial = () => {
                     </div>
                   ))}
                 </div>
-                <div className="cta ink"><p><strong>Every show has:</strong> 2–3 curated vendors, designated pet zone, DJ set, and a mix of pet + pet parent activities rotating per show. The Grand Finale brings it all together — runway, cat showcase, full agility competition, vendors, DJ, and more.</p></div>
+                <div className="cta ink"><p><strong>Every show has:</strong> 2–3 curated vendors, designated pet zone, DJ set, and a mix of pet + pet parent activities rotating per show. The Grand Finale (The Gathering) brings it all together — runway, agility finals, vendors, DJ, and more.</p></div>
               </div>
             </section>
 

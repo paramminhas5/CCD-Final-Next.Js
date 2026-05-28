@@ -1122,6 +1122,104 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return ok ? res.json({ ok: true }) : res.status(500).json({ error: "Failed" });
   }
 
+  // ── AI Poster Generation (fal.ai nano-banana-2) ─────────────────────────────
+  // POST /api/generate-poster
+  // Body: { title, date, venue, city, lineup?, series_label?, eyebrow? }
+  // Requires: FAL_KEY env var
+  //
+  // Workflow:
+  // 1. Build a detailed, brand-accurate prompt from event data
+  // 2. Call fal-ai/nano-banana-2 (Gemini 3.1 Flash Image — reasoning model, great text rendering)
+  // 3. Return { image_url } — admin previews it, clicks "Use This Poster" → saves to event
+  if (path === "generate-poster" && m === "POST") {
+    const FAL_KEY = process.env.FAL_KEY;
+
+    const {
+      title = "EVENT",
+      date = "",
+      venue = "",
+      city = "Bengaluru",
+      lineup = "",
+      series_label = "",
+      eyebrow = "",
+    } = body;
+
+    if (!FAL_KEY) {
+      // Graceful fallback — return placeholder so dev flow isn't blocked
+      return res.json({
+        ok: false,
+        image_url: null,
+        message: "FAL_KEY not set. Add it to your Vercel environment variables.",
+      });
+    }
+
+    // ── Prompt engineering ────────────────────────────────────────────────────
+    // Core idea: neobrutalist rave poster. CCD brand palette (acid-yellow, magenta,
+    // electric-blue, cream, ink/black). Cat DJ character — white cat with sunglasses
+    // and headphones, streetwear style — as the centrepiece.
+    // Nano Banana 2 has excellent text rendering — explicitly include all text elements.
+    const lineupLine = lineup ? `Lineup: ${lineup}. ` : "";
+    const seriesLine = series_label ? `Series: ${series_label}. ` : "";
+    const eyebrowLine = eyebrow ? `Sub-heading: "${eyebrow}". ` : "";
+
+    const prompt = [
+      `A bold neobrutalist event poster in portrait orientation (3:4 ratio).`,
+      `Design style: underground rave poster, thick black outlines, flat graphic shapes, chunky drop shadows, no gradients, no photorealism.`,
+      `Colour palette: acid yellow (#f5e642), hot magenta (#e02070), electric blue (#1a56e8), off-white cream (#f5f0e8), and black ink. High contrast.`,
+      `Central character: a stylised white cartoon cat with big round sunglasses and over-ear headphones, streetwear outfit (oversized tee or hoodie), standing confidently at a DJ booth with turntables. The cat has a mischievous expression. This is the "Cats Can Dance" brand cat — friendly but underground.`,
+      `Typography: use Bowlby One or similar chunky bold condensed display font. All text in UPPERCASE.`,
+      `Poster text to render (render all text exactly as given):`,
+      `Main title (largest text, centred, heavy drop shadow): "${title.toUpperCase()}"`,
+      date ? `Date (prominent): "${date}"` : "",
+      venue ? `Venue (below date): "${venue}, ${city}"` : `City: "${city}"`,
+      lineupLine,
+      seriesLine,
+      eyebrowLine,
+      `Bottom: "CATS CAN DANCE" brand name in acid yellow on black bar.`,
+      `Layout: cat character takes up ~40% of the poster. Title above or beside cat. Date and venue below. Strong graphic frame around the entire poster with thick black border.`,
+      `No photography. No realistic textures. Flat vector-style illustration. Suitable for Instagram stories and print flyers.`,
+    ].filter(Boolean).join(" ");
+
+    try {
+      // Call fal.ai nano-banana-2 via the REST endpoint
+      const falRes = await fetch("https://fal.run/fal-ai/nano-banana-2", {
+        method: "POST",
+        headers: {
+          "Authorization": `Key ${FAL_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          image_size: "portrait_4_3",
+          num_inference_steps: 4,
+          num_images: 1,
+          enable_safety_checker: false,
+          sync_mode: true,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+
+      if (!falRes.ok) {
+        const errText = await falRes.text();
+        console.error("[generate-poster] fal error:", falRes.status, errText);
+        return res.status(502).json({ ok: false, error: `fal.ai error ${falRes.status}` });
+      }
+
+      const falData = await falRes.json();
+      // fal returns { images: [{ url, content_type, width, height }] }
+      const imageUrl = falData?.images?.[0]?.url ?? falData?.image?.url ?? null;
+
+      if (!imageUrl) {
+        return res.status(502).json({ ok: false, error: "fal.ai returned no image URL", raw: falData });
+      }
+
+      return res.json({ ok: true, image_url: imageUrl, prompt_used: prompt });
+    } catch (e: any) {
+      console.error("[generate-poster] error:", e.message);
+      return res.status(500).json({ ok: false, error: e.message });
+    }
+  }
+
   return res.status(404).json({ error: `No handler for ${m} /${path}` });
   } catch (err: any) {
     console.error("[proxy] unhandled error:", err);

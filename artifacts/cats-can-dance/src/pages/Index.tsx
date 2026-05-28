@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "@/lib/compat-router";
 import { useSmoothScroll } from "@/hooks/useSmoothScroll";
 import Nav from "@/components/Nav";
@@ -31,6 +31,28 @@ const SectionFallback = ({ bg = "bg-cream" }: { bg?: string }) => (
 const Index = () => {
   useSmoothScroll();
   const location = useLocation();
+
+  // ── Section visibility (loaded from site_settings) ──
+  const [sectionVis, setSectionVis] = useState({
+    show_scene_map: false,
+    show_pick_your_sound: false,
+    show_featured_artists: false,
+  });
+
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.home_content?.section_visibility) {
+          setSectionVis((prev) => ({
+            ...prev,
+            ...data.home_content.section_visibility,
+          }));
+        }
+      })
+      .catch(() => {/* fail silently — defaults already off */});
+  }, []);
+
   useEffect(() => {
     if (location.hash === "#early-access") {
       setTimeout(() => {
@@ -108,10 +130,16 @@ const Index = () => {
         <SectionReveal><About /></SectionReveal>
         <MarqueeBySlot id="above-events" />
         <SectionReveal><Events /></SectionReveal>
-        {/* ── Scene Discovery Sections ── */}
-        <SectionReveal><SceneSnapshot /></SectionReveal>
-        <SectionReveal><GenreWheel /></SectionReveal>
-        <SectionReveal><ArtistSpotlight /></SectionReveal>
+        {/* ── Scene Discovery Sections (toggled from Admin > Homepage) ── */}
+        {sectionVis.show_scene_map && (
+          <SectionReveal><SceneSnapshot /></SectionReveal>
+        )}
+        {sectionVis.show_pick_your_sound && (
+          <SectionReveal><GenreWheel /></SectionReveal>
+        )}
+        {sectionVis.show_featured_artists && (
+          <SectionReveal><ArtistSpotlight /></SectionReveal>
+        )}
         <MarqueeBySlot id="above-videos" />
         <Suspense fallback={<SectionFallback bg="bg-ink" />}>
           <SectionReveal><Videos /></SectionReveal>
