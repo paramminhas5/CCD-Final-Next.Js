@@ -80,16 +80,20 @@ const Events = () => {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .order("sort_order", { ascending: true });
-      if (data) setAll(data as unknown as EventRow[]);
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("*")
+          .order("sort_order", { ascending: true });
+        if (Array.isArray(data) && data.length > 0) setAll(data as unknown as EventRow[]);
+      } catch {
+        // API unreachable — keep static fallback (empty array) in state
+      }
     })();
   }, []);
 
-  const upcoming = useMemo(() => all.filter((e) => e.status === "upcoming"), [all]);
-  const past     = useMemo(() => all.filter((e) => e.status === "past"),     [all]);
+  const upcoming = useMemo(() => (all ?? []).filter((e) => e.status === "upcoming"), [all]);
+  const past     = useMemo(() => (all ?? []).filter((e) => e.status === "past"),     [all]);
   const featured = upcoming[0] ?? all[0];
   const restUpcoming = upcoming.slice(1);
 
@@ -104,7 +108,7 @@ const Events = () => {
   const seriesGroup = useMemo(() => {
     const upcomingSeries = upcoming.find((e) => !!e.series);
     if (!upcomingSeries?.series) return null;
-    const events = all.filter((e) => e.series === upcomingSeries.series);
+    const events = (all ?? []).filter((e) => e.series === upcomingSeries.series);
     return {
       key: upcomingSeries.series,
       label: upcomingSeries.series_label || (upcomingSeries.series ?? "").toUpperCase(),

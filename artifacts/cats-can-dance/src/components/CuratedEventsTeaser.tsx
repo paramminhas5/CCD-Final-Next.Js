@@ -108,9 +108,9 @@ function TeaserCard({ event, index }: { event: CuratedEvent; index: number }) {
           <span className="truncate">{[event.venue, event.city].filter(Boolean).join(", ") || "TBA"}</span>
         </div>
         {/* Genre pills */}
-        {event.genre.length > 0 && (
+        {(event.genre ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-auto">
-            {event.genre.slice(0, 2).map(g => (
+            {(event.genre ?? []).slice(0, 2).map(g => (
               <span key={g} className="px-1.5 py-0.5 text-[10px] font-display uppercase bg-acid-yellow text-ink border border-ink">
                 {g}
               </span>
