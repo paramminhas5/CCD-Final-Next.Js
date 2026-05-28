@@ -78,14 +78,16 @@ export default function CuratedEvents() {
   const [isLoading,    setIsLoading]    = useState(true);
   const [showFilters,  setShowFilters]  = useState(false);
   const [total,        setTotal]        = useState(0);
-  const [offset,       setOffset]       = useState(0);
   const [hasMore,      setHasMore]      = useState(true);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  // Track offset in a ref so fetchEvents doesn't re-create on every page load,
+  // which would trigger the infinite-scroll effect and cause an infinite fetch loop.
+  const offsetRef = useRef(0);
 
   const fetchEvents = useCallback(async (reset = false) => {
-    const cur = reset ? 0 : offset;
+    const cur = reset ? 0 : offsetRef.current;
     const params = new URLSearchParams({ tab: activeTab, limit: "12", offset: String(cur) });
     if (selCity)  params.set("city",  selCity);
     if (selGenre) params.set("genre", selGenre);
@@ -93,13 +95,14 @@ export default function CuratedEvents() {
     try {
       const res  = await fetch(`/api/events/recommended?${params}`);
       const data = await res.json();
+      const nextOffset = cur + (data.events?.length ?? 0);
       if (reset) {
         setEvents(data.events   || []);
         setSections(data.sections || []);
-        setOffset(12);
+        offsetRef.current = data.events?.length ?? 12;
       } else {
         setEvents(prev => [...prev, ...(data.events || [])]);
-        setOffset(cur + 12);
+        offsetRef.current = nextOffset;
       }
       setTotal(data.total || 0);
       setHasMore((data.events || []).length === 12);
@@ -108,9 +111,12 @@ export default function CuratedEvents() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, selCity, selGenre, offset]);
+  }, [activeTab, selCity, selGenre]); // offset intentionally excluded — tracked via offsetRef
 
-  useEffect(() => { fetchEvents(true); }, [activeTab, selCity, selGenre]);
+  useEffect(() => {
+    offsetRef.current = 0;
+    fetchEvents(true);
+  }, [activeTab, selCity, selGenre]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Infinite scroll
   useEffect(() => {
