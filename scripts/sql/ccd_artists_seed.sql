@@ -81,13 +81,13 @@ on conflict (slug) do update set
 
 do $conn_ccd$
 declare
-  v_s text; v_m text; v_k text; v_d text; v_ak text;
+  v_s uuid; v_m uuid; v_k uuid; v_d uuid; v_ak uuid;
 begin
-  select id::text into v_s  from artists where slug = 'startdawg'  limit 1;
-  select id::text into v_m  from artists where slug = 'merman'     limit 1;
-  select id::text into v_k  from artists where slug = 'kohra'      limit 1;
-  select id::text into v_d  from artists where slug = 'dotdat'     limit 1;
-  select id::text into v_ak from artists where slug = 'ak-sports'  limit 1;
+  select id into v_s  from artists where slug = 'startdawg'  limit 1;
+  select id into v_m  from artists where slug = 'merman'     limit 1;
+  select id into v_k  from artists where slug = 'kohra'      limit 1;
+  select id into v_d  from artists where slug = 'dotdat'     limit 1;
+  select id into v_ak from artists where slug = 'ak-sports'  limit 1;
 
   -- Startdawg b2b Merman — the CCD core pair
   if v_s is not null and v_m is not null then
@@ -136,7 +136,6 @@ end $conn_ccd$;
 
 do $appearances$
 declare
-  ids record;
   v_s text; v_m text; v_k text; v_d text; v_sand text; v_dui text;
   v_nikki text; v_ak text; v_kk text; v_sheral text; v_mt text;
   v_bull text; v_sick text; v_indo text; v_lost text; v_prabh text;
