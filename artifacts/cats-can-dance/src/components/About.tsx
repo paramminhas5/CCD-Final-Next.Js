@@ -5,9 +5,24 @@ import catDancer from "@/assets/cat-dancer.svg";
 import { imgUrl } from "@/lib/img";
 import { useHomeContent } from "@/hooks/useHomeContent";
 
+const ABOUT_FALLBACK = {
+  kicker: "Bangalore underground crew",
+  title: "WE MAKE\nNIGHTS\nHAPPEN.",
+  body: "Cats Can Dance is a Bengaluru-based collective throwing underground dance music nights — House, Disco, Jungle, Garage, Drum & Bass — and dropping limited streetwear rooted in the culture.",
+  ctaLabel: "Our Story →",
+  ctaHref: "/about",
+};
+
 const About = () => {
   const ref = useRef<HTMLDivElement>(null);
-  const { about } = useHomeContent();
+  const { about: aboutRaw } = useHomeContent();
+  const about = {
+    kicker:   aboutRaw?.kicker   || ABOUT_FALLBACK.kicker,
+    title:    aboutRaw?.title    || ABOUT_FALLBACK.title,
+    body:     aboutRaw?.body     || ABOUT_FALLBACK.body,
+    ctaLabel: aboutRaw?.ctaLabel || ABOUT_FALLBACK.ctaLabel,
+    ctaHref:  aboutRaw?.ctaHref  || ABOUT_FALLBACK.ctaHref,
+  };
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
 
@@ -51,6 +66,8 @@ const About = () => {
             src={imgUrl(catDancer)}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             style={{ x: xMobile, y: bob, rotate: rot }}
             className="md:hidden absolute top-0 mt-2 left-0 w-3/4 max-w-[220px] pointer-events-none drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           />
@@ -59,6 +76,8 @@ const About = () => {
             src={imgUrl(catDancer)}
             alt=""
             aria-hidden
+            loading="lazy"
+            decoding="async"
             style={{ x: xDesktop, y: bob, rotate: rot }}
             className="hidden md:block absolute top-0 mt-2 left-0 w-2/3 max-w-sm pointer-events-none drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           />

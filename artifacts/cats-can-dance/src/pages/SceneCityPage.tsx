@@ -271,6 +271,33 @@ export default function SceneCityPage({ slug }: Props) {
         </section>
       )}
 
+      {/* ── Starter Playlist ── */}
+      {scene.starterPlaylistEmbed && (
+        <section className="bg-ink border-b-4 border-ink py-14">
+          <div className="container">
+            <p className="font-display text-acid-yellow text-xs uppercase tracking-widest mb-2">/ LISTEN</p>
+            <h2 className="font-display text-cream text-3xl md:text-4xl uppercase mb-8">
+              Start Here: {scene.name}
+            </h2>
+            <div className="max-w-2xl">
+              <div className="aspect-video border-4 border-cream/20 overflow-hidden">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/videoseries?list=${scene.starterPlaylistEmbed}`}
+                  title={`${scene.name} starter playlist`}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+              <p className="text-cream/50 text-sm mt-3 font-medium">
+                A curated introduction to the {scene.name} underground. Updated regularly.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       <Footer />
     </main>
   );

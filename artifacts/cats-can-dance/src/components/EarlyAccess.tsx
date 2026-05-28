@@ -46,7 +46,7 @@ const EarlyAccess = () => {
       if (data?.duplicate || res.status === 409) {
         toast("You're already on the list. See you soon. 🐾");
       } else {
-        toast.success("You're in! Welcome to the litter.");
+        toast.success("You're in! Welcome to the litter. Check your inbox.");
       }
       setEmail("");
       setBurst(false);

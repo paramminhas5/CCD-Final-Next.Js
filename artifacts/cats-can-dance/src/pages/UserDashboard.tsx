@@ -516,12 +516,18 @@ function ArtistPortal({ user, roleInfo }: { user: any; roleInfo: any }) {
   const save = async () => {
     if (!artist || !Object.keys(editing).length) return;
     setSaving(true);
-    const res = await fetch(`/api/artists/${artist.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": "84838281" },
-      body: JSON.stringify(editing),
+    // Artist portal uses the /api/artists/:id/self-update route which verifies
+    // ownership via the Clerk session — no admin password needed here.
+    const res = await fetch(`/api/artists/${artist.id}/self-update`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, ...editing }),
     });
     if (res.ok) { toast.success("Saved!"); setArtist((prev: any) => ({...prev,...editing})); setEditing({}); }
-    else toast.error("Save failed");
+    else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err?.error ?? "Save failed — check you own this profile");
+    }
     setSaving(false);
   };
 

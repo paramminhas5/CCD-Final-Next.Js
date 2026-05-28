@@ -61,7 +61,7 @@ const RsvpDialog = ({ open, onOpenChange, eventSlug, eventTitle }: Props) => {
       if ((data as any)?.duplicate) {
         toast("You're already on the list. See you on the floor. 🐾");
       } else {
-        toast.success(`RSVP confirmed for ${eventTitle}!`);
+        toast.success(`RSVP confirmed for ${eventTitle}! Check your inbox for confirmation.`);
       }
       setBurst(true);
       setTimeout(() => setBurst(false), 1300);

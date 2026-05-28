@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -186,7 +184,13 @@ function WhatsOnStrip() {
           {!loading && cityCounts.length > 0 && (
             <>
               <div className="w-px h-4 bg-ink/30 shrink-0" />
-              <button className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap">
+              <button
+                className="shrink-0 font-display text-xs uppercase text-ink/60 hover:text-ink transition-colors whitespace-nowrap"
+                onClick={() => {
+                  const el = document.getElementById("events");
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
                 See all below ↓
               </button>
             </>
@@ -571,6 +575,27 @@ export default function DiscoverPage() {
               Browse Promoters
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* ── Cross-link: Discover ↔ CCD Events ── */}
+      <section className="bg-acid-yellow border-b-4 border-ink py-8">
+        <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <p className="font-display text-ink text-xs uppercase tracking-widest mb-1">/ CCD ORIGINALS</p>
+            <p className="font-display text-ink text-xl md:text-2xl leading-tight">
+              Want CCD's own underground episodes?
+            </p>
+            <p className="text-ink/60 text-sm font-medium mt-0.5">
+              RSVP-only nights — House, Disco, Jungle, Garage, D&B.
+            </p>
+          </div>
+          <Link
+            href="/events"
+            className="shrink-0 bg-ink text-cream font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform whitespace-nowrap"
+          >
+            See CCD Events →
+          </Link>
         </div>
       </section>
 

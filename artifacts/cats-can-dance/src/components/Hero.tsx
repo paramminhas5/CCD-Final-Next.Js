@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import Image from "next/image";
 import heroCenter from "@/assets/hero-center.svg";
 import catLeft from "@/assets/cat-left.svg";
 import catRight from "@/assets/cat-right.svg";
@@ -7,39 +8,18 @@ import catHeadphones from "@/assets/cat-headphones.png";
 import catHandstand from "@/assets/cat-handstand.png";
 import catCap from "@/assets/cat-cap.png";
 import catHpDance from "@/assets/cat-headphones-dance.png";
-import { imgUrl } from "@/lib/img";
 import { useDisco } from "@/contexts/DiscoContext";
 import DiscoBall from "@/components/DiscoBall";
 import Lasers from "@/components/Lasers";
-import { useIsMobile } from "@/hooks/use-mobile";
 
-// Only preload critical paint assets (DJ + 4 flank PNGs). Tiny SVGs (catLeft/catRight) load naturally.
-const CRITICAL_CAT_SRCS = [heroCenter, catHeadphones, catHandstand, catCap, catHpDance].map(imgUrl);
+// next/image with priority handles critical image preloading automatically.
+// No manual preload needed.
 
 const Hero = () => {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const { disco } = useDisco();
   const reduce = useReducedMotion();
-  const isMobile = useIsMobile();
-  const [imagesReady, setImagesReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadOne = (src: string) =>
-      new Promise<void>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve();
-        img.onerror = () => resolve(); // resolve on error so we don't block forever
-        img.src = src;
-      });
-    Promise.all(CRITICAL_CAT_SRCS.map(loadOne)).then(() => {
-      if (!cancelled) setImagesReady(true);
-    });
-    // Safety timeout — show after 1.5s even if something hangs
-    const t = setTimeout(() => !cancelled && setImagesReady(true), 1500);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, []);
 
   // Big bottom side cats (existing)
   const leftX = useTransform(scrollYProgress, [0, 1], reduce ? ["0%", "0%"] : ["0%", "-180%"]);
@@ -115,44 +95,31 @@ const Hero = () => {
           </p>
         </div>
 
-        {/* Loading spinner — shows until all cats preload */}
-        {!imagesReady && (
-          <div className="absolute inset-0 z-[35] flex items-center justify-center pointer-events-none" aria-hidden>
-            <div
-              className="w-12 h-12 border-4 border-cream border-t-magenta rounded-full animate-spin"
-              style={{ filter: "drop-shadow(3px 3px 0 hsl(var(--ink)))" }}
-            />
-          </div>
-        )}
-
-        {/* All cats grouped — fade in together once preloaded */}
-        <motion.div
-          animate={{ opacity: imagesReady ? 1 : 0 }}
-          transition={{ duration: 0.4 }}
-          className="contents"
-        >
+        {/* All cats grouped */}
+        <div className="contents">
           {/* DJ cat — slightly overlaps the headline */}
-          <motion.img
-            src={imgUrl(heroCenter)}
-            alt=""
-            aria-hidden
-            fetchPriority="high"
-            decoding="sync"
-            loading="eager"
+          <motion.div
             style={{ y: djY, willChange: "transform" }}
-            className="absolute inset-x-0 mx-auto bottom-20 md:-bottom-8 z-30 w-[100%] md:w-[92%] min-w-[300px] max-w-[820px] drop-shadow-[10px_10px_0_hsl(var(--ink))] pointer-events-none"
-          />
+            className="absolute inset-x-0 mx-auto bottom-20 md:-bottom-8 z-30 w-[100%] md:w-[92%] min-w-[300px] max-w-[820px] pointer-events-none"
+          >
+            <Image
+              src={heroCenter}
+              alt=""
+              aria-hidden
+              priority
+              className="w-full h-auto drop-shadow-[10px_10px_0_hsl(var(--ink))]"
+            />
+          </motion.div>
 
           {/* Four flank cats bracketing the wordmark */}
           {FLANK_CATS.map((c) => (
-            <motion.img
+            <motion.div
               key={c.id}
-              src={imgUrl(c.src)}
-              alt=""
-              aria-hidden
               style={{ x: c.x, rotate: c.rot, opacity: flankOpacity, willChange: "transform" }}
               className={`${flankBase} ${c.pos}`}
-            />
+            >
+              <Image src={c.src} alt="" aria-hidden priority className="w-full h-auto" />
+            </motion.div>
           ))}
 
           {/* Big bottom side cats */}
@@ -160,22 +127,22 @@ const Hero = () => {
             style={{ x: leftX, y: leftY, rotate: leftRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 left-1 md:left-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={imgUrl(catLeft)} alt="" decoding="async" loading="eager" className="w-full wiggle" />
+            <Image src={catLeft} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
           <motion.div
             style={{ x: rightX, y: rightY, rotate: rightRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 right-1 md:right-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={imgUrl(catRight)} alt="" decoding="async" loading="eager" className="w-full wiggle" />
+            <Image src={catRight} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
-        </motion.div>
+        </div>
 
         {/* Desktop buttons */}
         <div className="hidden md:flex absolute inset-x-0 bottom-16 z-50 flex-row gap-3 justify-center px-4">
           <a href="#early-access" className="bg-magenta text-cream font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center">
             JOIN THE PACK
           </a>
-          <a href="#events" className="bg-acid-yellow text-ink font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center">
+          <a href="#drops" className="bg-acid-yellow text-ink font-display text-xl px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-center">
             SEE THE DROPS
           </a>
         </div>
@@ -185,7 +152,7 @@ const Hero = () => {
           <a href="#early-access" className="bg-magenta text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow text-center">
             JOIN THE PACK
           </a>
-          <a href="#events" className="bg-acid-yellow text-ink font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow text-center">
+          <a href="#drops" className="bg-acid-yellow text-ink font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow text-center">
             SEE THE DROPS
           </a>
         </div>

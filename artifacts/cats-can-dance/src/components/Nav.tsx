@@ -11,19 +11,21 @@ import { imgUrl } from "@/lib/img";
 import { useSafeUser, useSafeClerk } from "@/lib/clerk-safe";
 
 const primaryLinks = [
-  { to: "/about", label: "About" },
+  { to: "/about",    label: "About"    },
   { to: "/discover", label: "Discover" },
-  { to: "/events", label: "Events" },
-  { to: "/ccdxsocial", label: "CCD × SOCIAL" },
-  { to: "/artists", label: "Artists" },
-  { to: "/talent", label: "Talent" },
-  { to: "/shop", label: "Shop" },
+  { to: "/events",   label: "Events"   },
+  { to: "/ccdxsocial", label: "Series" },
+  { to: "/artists",  label: "Artists"  },
+  { to: "/shop",     label: "Shop"     },
 ];
 
 const partnersLinks = [
-  { to: "/for-venues", label: "For Venues" },
-  { to: "/for-artists", label: "For Artists" },
-  { to: "/for-investors", label: "For Investors" },
+  { to: "/talent",        label: "Talent Directory" },
+  { to: "/for-venues",    label: "For Venues"       },
+  { to: "/for-artists",   label: "For Artists"      },
+  { to: "/for-investors", label: "For Investors"    },
+  { to: "/book",          label: "Book an Artist"   },
+  { to: "/promoters",     label: "Promoters"        },
 ];
 
 const moreLinks: { to: string; label: string; external?: boolean }[] = [
@@ -35,7 +37,7 @@ const moreLinks: { to: string; label: string; external?: boolean }[] = [
   { to: "https://learn.catscandance.com", label: "Learn", external: true },
 ];
 
-// Flat list for mobile hamburger — primary + partners + more (no Book/Promoters in primary)
+// Flat list for mobile hamburger — primary + partners + more (no Talent in primary, it's in Work With Us)
 const mobileLinks: { to: string; label: string; external?: boolean }[] = [...primaryLinks, ...partnersLinks, ...moreLinks];
 
 const scrollToEarlyAccess = () => {
@@ -208,7 +210,7 @@ const Nav = () => {
               </RouterNavLink>
             </li>
           ))}
-          <Dropdown label="Partners" links={partnersLinks} scrolled={effectiveScrolled} />
+          <Dropdown label="Work With Us" links={partnersLinks} scrolled={effectiveScrolled} />
           <Dropdown label="More" links={moreLinks} scrolled={effectiveScrolled} />
         </ul>
         <div className="hidden lg:flex items-center gap-3">
@@ -296,6 +298,11 @@ const Nav = () => {
               <a href="/#early-access" onClick={goToEarlyAccess} className="block font-display text-2xl text-magenta py-2">
                 Early Access →
               </a>
+            </li>
+            {/* Disco mode toggle in mobile menu */}
+            <li className="pt-3 border-t-2 border-ink/10 flex items-center gap-3">
+              <span className="font-display text-sm uppercase text-ink/40 tracking-widest">Disco Mode</span>
+              <DiscoButton compact />
             </li>
           </ul>
         </div>
