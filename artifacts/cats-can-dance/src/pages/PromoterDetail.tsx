@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Music, ExternalLink, Instagram, Globe, Mail } from "lucide-react";
+import { useUser } from "@clerk/react";
+import { ArrowLeft, MapPin, Music, ExternalLink, Instagram, Globe, Mail, CheckCircle, Lock } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import { toast } from "sonner";
 
 interface Promoter {
   id: string; slug: string; name: string;
@@ -12,6 +14,7 @@ interface Promoter {
   instagram: string | null; website: string | null;
   booking_email: string | null; logo_url: string | null;
   trusted: boolean; crawl_urls?: any[];
+  claimed_by?: string | null;
 }
 interface CuratedEvent {
   id: string; title: string; url: string;
@@ -21,9 +24,73 @@ interface CuratedEvent {
 const ensureUrl = (s: string | null) =>
   s ? (/^https?:\/\//i.test(s) ? s : `https://${s}`) : null;
 
+// ── Claim button — shown when promoter is unclaimed and user is signed in ──
+function ClaimButton({ promoter, userId }: { promoter: Promoter; userId: string | null }) {
+  const [status, setStatus] = useState<"idle" | "claiming" | "claimed" | "already_claimed">(
+    promoter.claimed_by ? "already_claimed" : "idle"
+  );
+
+  const claim = async () => {
+    if (!userId) { toast.error("Sign in first"); return; }
+    setStatus("claiming");
+    try {
+      const res = await fetch(`/api/promoters/${promoter.slug}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("claimed");
+        toast.success("Profile claimed! An admin will link your events shortly.");
+      } else if (res.status === 409) {
+        setStatus("already_claimed");
+        toast.error("This profile has already been claimed.");
+      } else {
+        setStatus("idle");
+        toast.error(data.error ?? "Claim failed — try again.");
+      }
+    } catch {
+      setStatus("idle");
+      toast.error("Something went wrong.");
+    }
+  };
+
+  if (status === "already_claimed") {
+    return (
+      <div className="flex items-center gap-2 border-4 border-ink bg-ink/5 px-5 py-3">
+        <Lock className="w-4 h-4 text-ink/40" />
+        <span className="font-display text-xs uppercase text-ink/50">Profile claimed</span>
+      </div>
+    );
+  }
+
+  if (status === "claimed") {
+    return (
+      <div className="flex items-center gap-2 border-4 border-lime bg-lime px-5 py-3">
+        <CheckCircle className="w-4 h-4 text-ink" />
+        <span className="font-display text-xs uppercase text-ink">Claim submitted</span>
+      </div>
+    );
+  }
+
+  if (!userId) return null;
+
+  return (
+    <button
+      onClick={claim}
+      disabled={status === "claiming"}
+      className="font-display text-xs uppercase bg-acid-yellow text-ink px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform disabled:opacity-60"
+    >
+      {status === "claiming" ? "Claiming…" : "🎪 Claim This Profile"}
+    </button>
+  );
+}
+
 interface Props { slug: string; }
 
 export default function PromoterDetail({ slug }: Props) {
+  const { user, isSignedIn } = useUser();
   const [promoter, setPromoter] = useState<Promoter | null>(null);
   const [events, setEvents] = useState<CuratedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +178,17 @@ export default function PromoterDetail({ slug }: Props) {
                 <p className="flex items-center gap-1 text-cream/70 mt-3 text-sm">
                   <MapPin className="w-3.5 h-3.5" /> {allCities.join(" · ")}
                 </p>
+              )}
+              {/* Claim button — show to signed-in users when unclaimed */}
+              {isSignedIn && (
+                <div className="mt-4">
+                  <ClaimButton promoter={promoter} userId={user?.id ?? null} />
+                  {!promoter.claimed_by && (
+                    <p className="text-cream/40 text-xs mt-2">
+                      Is this your collective? Claim it to submit events directly to the Discover feed.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>

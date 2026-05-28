@@ -31,7 +31,10 @@ import SEO from "@/components/SEO";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Marquee from "@/components/Marquee";
 import RsvpDialog from "@/components/RsvpDialog";
+import TicketTierPicker from "@/components/TicketTierPicker";
+import CheckoutDialog from "@/components/CheckoutDialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { getEventTicketingConfig } from "@/lib/ticketing-api";
 
 import EventCountdown from "@/components/EventCountdown";
 import EventVenueCard from "@/components/EventVenueCard";
@@ -93,6 +96,13 @@ const EventDetail = () => {
   const [loaded, setLoaded] = useState(false);
   const [lightbox, setLightbox] = useState<MediaItem | null>(null);
 
+  // Ticketing
+  const [ticketConfig, setTicketConfig] = useState<any>(null);
+  const [ticketTiers, setTicketTiers] = useState<any[]>([]);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutMode, setCheckoutMode] = useState<"direct_sale" | "rsvp_invite" | "free_rsvp">("rsvp_invite");
+  const [checkoutSelections, setCheckoutSelections] = useState<any[]>([]);
+
   // Fetch this event + its series siblings (single round-trip each).
   // Fall back to the static catalogue in src/content/events.ts when Supabase
   // is empty / unreachable so the page always renders.
@@ -115,6 +125,14 @@ const EventDetail = () => {
       if (cancelled) return;
       setEvent(row);
       setLoaded(true);
+
+      // Load ticketing config (non-blocking)
+      getEventTicketingConfig(slug).then(data => {
+        if (cancelled) return;
+        setTicketConfig(data.config ?? null);
+        setTicketTiers(data.tiers ?? []);
+        if (data.config) setCheckoutMode(data.config.ticketing_mode as any ?? "rsvp_invite");
+      }).catch(() => { /* no ticketing = normal RSVP flow */ });
 
       // If this event is part of a series, fetch the sibling rows in one query.
       const seriesKey = row?.series;
@@ -673,6 +691,24 @@ const EventDetail = () => {
           </section>
         )}
 
+        {/* TICKETING — shown when event has ticketing enabled */}
+        {isUpcoming && ticketConfig && ticketTiers.length > 0 && (
+          <section className="container py-12 md:py-16">
+            <p className="font-display text-magenta text-base md:text-lg mb-3">/ GET TICKETS</p>
+            <h2 className="font-display text-ink text-4xl md:text-5xl leading-[0.9] mb-8">
+              SECURE YOUR SPOT.
+            </h2>
+            <div className="max-w-md">
+              <TicketTierPicker
+                tiers={ticketTiers}
+                config={ticketConfig}
+                onBuyNow={sels => { setCheckoutSelections(sels); setCheckoutMode("direct_sale"); setCheckoutOpen(true); }}
+                onRsvp={sels => { setCheckoutSelections(sels); setCheckoutMode("rsvp_invite"); setCheckoutOpen(true); }}
+              />
+            </div>
+          </section>
+        )}
+
         {/* 8. VENUE */}
         <EventVenueCard
           venue={event.venue}
@@ -800,6 +836,21 @@ const EventDetail = () => {
         eventSlug={slug}
         eventTitle={`Cats Can Dance ${event.title}`}
       />
+
+      {/* Ticketing checkout — only when ticketing config is active */}
+      {ticketConfig && checkoutSelections.length > 0 && (
+        <CheckoutDialog
+          open={checkoutOpen}
+          onOpenChange={setCheckoutOpen}
+          eventSlug={slug}
+          eventTitle={`Cats Can Dance ${event.title}`}
+          eventDate={event.date}
+          mode={checkoutMode}
+          isFree={ticketConfig.is_free || checkoutSelections.every((s: any) => s.tier.is_free || s.tier.price_inr === 0)}
+          selections={checkoutSelections}
+          razorpayKeyId={process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "rzp_test_DUMMY_KEY_ID"}
+        />
+      )}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
         <DialogContent className="max-w-5xl bg-ink border-4 border-ink p-2">

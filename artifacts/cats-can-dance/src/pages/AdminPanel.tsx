@@ -18,7 +18,7 @@ import Nav from "@/components/Nav";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
 
-const ADMIN_PW_DEFAULT = "84838281";
+const ADMIN_PW_DEFAULT = "";  // No hardcoded fallback — set ADMIN_PASSWORD in Vercel
 const PASS_KEY = "ccd_admin_pass";
 
 function getStoredPw(): string {
@@ -27,7 +27,7 @@ function getStoredPw(): string {
 }
 
 async function adminFetch(path: string, method = "GET", body?: object) {
-  const pw = getStoredPw() || ADMIN_PW_DEFAULT;
+  const pw = getStoredPw();
   return fetch(path, {
     method,
     headers: { "Content-Type": "application/json", "x-admin-password": pw },
@@ -35,7 +35,7 @@ async function adminFetch(path: string, method = "GET", body?: object) {
   }).then(r => r.ok ? r.json() : null);
 }
 
-const ADMIN_PW = ADMIN_PW_DEFAULT; // legacy ref used by existing tabs below
+// Use the stored password for all inline fetch calls in sub-components
 
 /* ── Types ── */
 type Application = {
@@ -69,7 +69,7 @@ function ApplicationsTab({ userId }: { userId: string }) {
   const load = () => {
     setLoading(true);
     const q = filter === "pending" ? "?status=eq.pending" : "";
-    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": ADMIN_PW } })
+    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setApps(Array.isArray(d) ? d : []); setLoading(false); });
   };
@@ -78,7 +78,7 @@ function ApplicationsTab({ userId }: { userId: string }) {
   const review = async (id: string, status: "approved" | "rejected") => {
     const res = await fetch(`/api/role-applications/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": ADMIN_PW },
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
       body: JSON.stringify({ status, reviewer_id: userId }),
     });
     if (res.ok) {
@@ -171,7 +171,7 @@ function RolesTab({ userId }: { userId: string }) {
   const [form, setForm] = useState({ user_id: "", email: "", display_name: "", role: "artist", entity_slug: "" });
 
   useEffect(() => {
-    fetch("/api/admin-roles", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/admin-roles", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setRoles(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -180,7 +180,7 @@ function RolesTab({ userId }: { userId: string }) {
     if (!form.user_id || !form.email) { toast.error("user_id and email required"); return; }
     const res = await fetch("/api/user-role", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": ADMIN_PW },
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
       body: JSON.stringify({ ...form, granted_by: userId, granted_at: new Date().toISOString() }),
     });
     if (res.ok) {
@@ -275,7 +275,7 @@ function ArtistsTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/artists?limit=100", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/artists?limit=100", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setArtists(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -348,7 +348,7 @@ function XPTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": ADMIN_PW } })
+    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": getStoredPw() } })
       .then(r => r.ok ? r.json() : [])
       .then(d => { setFans(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
@@ -395,6 +395,310 @@ function XPTab() {
   );
 }
 
+function TicketingTab() {
+  const [subTab, setSubTab] = useState<"applications" | "orders" | "revenue">("applications");
+  const [applications, setApplications] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [revenue, setRevenue] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [clerkInput, setClerkInput] = useState<Record<string, string>>({});
+  const [generatedTokens, setGeneratedTokens] = useState<Record<string, string>>({}); // appId → token
+  const [regenId, setRegenId] = useState<string | null>(null);
+
+  const pw = getStoredPw() || ADMIN_PW_DEFAULT;
+  const tFetch = (path: string, method = "GET", body?: object) =>
+    fetch(path, {
+      method,
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "x-admin-password": pw },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }).then(r => r.json());
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      if (subTab === "applications") {
+        const d = await tFetch("/api/ticketing/admin/applications");
+        setApplications(d.applications ?? []);
+      } else if (subTab === "orders") {
+        const d = await tFetch("/api/ticketing/admin/orders");
+        setOrders(d.orders ?? []);
+      } else {
+        const d = await tFetch("/api/ticketing/admin/revenue");
+        setRevenue(d);
+      }
+    } catch { /* non-blocking */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [subTab]);
+
+  const approveApp = async (id: string) => {
+    setApprovingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/applications/${id}/approve`, "POST", {
+        clerk_user_id: clerkInput[id] || undefined,
+      });
+      if (res.ok) {
+        // Store the generated access token so admin can copy it to the promoter
+        if (res.access_token) {
+          setGeneratedTokens(prev => ({ ...prev, [id]: res.access_token }));
+        }
+        toast.success("Application approved — share the token below with the promoter");
+        load();
+      } else toast.error(res.error ?? "Failed");
+    } finally { setApprovingId(null); }
+  };
+
+  const rejectApp = async (id: string) => {
+    const notes = prompt("Reason for rejection (optional):");
+    try {
+      await tFetch(`/api/ticketing/admin/applications/${id}/reject`, "POST", { notes: notes ?? undefined });
+      toast.success("Application rejected"); load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const refundOrder = async (id: string) => {
+    if (!confirm("Issue a full refund for this order?")) return;
+    setRefundingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/orders/${id}/refund`, "POST");
+      if (res.ok) { toast.success(`Refund issued — Razorpay ID: ${res.refund_id}`); load(); }
+      else toast.error(res.error ?? "Refund failed");
+    } finally { setRefundingId(null); }
+  };
+
+  const STATUS_CHIP: Record<string, string> = {
+    pending:  "bg-acid-yellow text-ink",
+    approved: "bg-lime text-ink",
+    rejected: "bg-magenta/20 text-ink/50",
+  };
+  const ORDER_STATUS_CHIP: Record<string, string> = {
+    paid:        "bg-lime text-ink",
+    pending:     "bg-acid-yellow text-ink",
+    refunded:    "bg-magenta text-cream",
+    failed:      "bg-ink/20 text-ink/50",
+    complimentary: "bg-electric-blue text-cream",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl uppercase text-ink">Ticketing</h2>
+        <div className="flex border-2 border-ink">
+          {(["applications", "orders", "revenue"] as const).map(t => (
+            <button key={t} onClick={() => setSubTab(t)}
+              className={`font-display text-xs uppercase px-3 py-1.5 transition-colors ${subTab === t ? "bg-ink text-cream" : "text-ink hover:bg-acid-yellow"}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : (
+        <>
+          {/* ── Promoter Applications ── */}
+          {subTab === "applications" && (
+            <div className="space-y-3">
+              <p className="font-display text-xs uppercase text-ink/40">{applications.length} total applications</p>
+              {applications.length === 0 && (
+                <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+                  <p className="font-display text-2xl text-ink/30">NO APPLICATIONS</p>
+                </div>
+              )}
+              {applications.map(app => (
+                <div key={app.id} className={`border-4 p-5 ${app.status === "pending" ? "border-acid-yellow" : "border-ink/20"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-display text-lg text-ink uppercase">{app.name}</p>
+                        <span className={`font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${STATUS_CHIP[app.status] ?? "bg-ink/10 text-ink"}`}>{app.status}</span>
+                      </div>
+                      <p className="text-sm text-ink/60">{app.email}</p>
+                      {app.city && <p className="text-xs text-ink/40">{app.city} · {(app.genres ?? []).join(", ")}</p>}
+                      {app.instagram && <p className="text-xs text-ink/40">@{app.instagram.replace("@", "")}</p>}
+                      {app.bio && <p className="text-sm text-ink/70 bg-ink/5 p-3 mt-2 max-w-xl border border-ink/10">"{app.bio}"</p>}
+                      {app.sample_event && (
+                        <a href={app.sample_event} target="_blank" rel="noreferrer" className="text-xs text-magenta underline">Sample event ↗</a>
+                      )}
+                      <p className="text-[10px] text-ink/30">{new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+
+                    {app.status === "pending" && (
+                      <div className="flex flex-col gap-2 shrink-0 min-w-[200px]">
+                        <div>
+                          <label className="block font-display text-[9px] uppercase text-ink/40 mb-1">Clerk User ID (optional)</label>
+                          <input
+                            value={clerkInput[app.id] ?? ""}
+                            onChange={e => setClerkInput(p => ({ ...p, [app.id]: e.target.value }))}
+                            placeholder="user_2abc…"
+                            className="w-full border-2 border-ink px-2 py-1 bg-cream font-mono text-xs focus:outline-none focus:bg-acid-yellow"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => approveApp(app.id)} disabled={approvingId === app.id}
+                            className="font-display text-xs uppercase bg-ink text-cream px-3 py-2 border-4 border-ink hover:bg-lime hover:text-ink transition-colors disabled:opacity-50">
+                            {approvingId === app.id ? "…" : "✓ APPROVE"}
+                          </button>
+                          <button onClick={() => rejectApp(app.id)}
+                            className="font-display text-xs uppercase bg-cream text-ink px-3 py-2 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+                            ✗ REJECT
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {app.status === "approved" && app.linked_promoter_id && (
+                      <div className="min-w-[220px]">
+                        {/* Show generated token after fresh approval */}
+                        {generatedTokens[app.id] && (
+                          <div className="bg-lime border-4 border-ink p-3 mb-2">
+                            <p className="font-display text-[9px] uppercase text-ink mb-1">
+                              🔑 PROMOTER TOKEN — copy & share with {app.name}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <code className="font-mono text-[10px] text-ink bg-white px-2 py-1 border border-ink/20 flex-1 truncate">
+                                {generatedTokens[app.id]}
+                              </code>
+                              <button onClick={() => {
+                                navigator.clipboard.writeText(generatedTokens[app.id]);
+                                toast.success("Token copied!");
+                              }} className="font-display text-[9px] uppercase bg-ink text-cream px-2 py-1 hover:bg-magenta transition-colors shrink-0">
+                                COPY
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-ink/50 mt-1">
+                              Promoter pastes this at <strong>catscandance.com/promoter</strong>
+                            </p>
+                          </div>
+                        )}
+                        {/* Regenerate token for existing approved promoters */}
+                        {!generatedTokens[app.id] && (
+                          <button
+                            disabled={regenId === app.id}
+                            onClick={async () => {
+                              setRegenId(app.id);
+                              try {
+                                const res = await tFetch("/api/ticketing/admin/promoter-token/regenerate", "POST", { email: app.email });
+                                if (res.ok && res.access_token) {
+                                  setGeneratedTokens(p => ({ ...p, [app.id]: res.access_token }));
+                                  toast.success("New token generated");
+                                } else toast.error(res.error ?? "Failed");
+                              } finally { setRegenId(null); }
+                            }}
+                            className="font-display text-[9px] uppercase bg-cream text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors disabled:opacity-50">
+                            {regenId === app.id ? "…" : "🔑 GET LOGIN TOKEN"}
+                          </button>
+                        )}
+                        <p className="text-[9px] text-ink/30 mt-1 font-mono">{app.linked_promoter_id.slice(0, 8)}…</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── All Orders ── */}
+          {subTab === "orders" && (
+            <div className="space-y-4">
+              <p className="font-display text-xs uppercase text-ink/40">{orders.length} orders</p>
+              {orders.length === 0 && <p className="text-ink/40 text-sm">No orders yet.</p>}
+              {orders.length > 0 && (
+                <div className="border-4 border-ink overflow-hidden">
+                  <div className="bg-ink text-cream grid grid-cols-5 px-5 py-2 font-display text-[10px] uppercase">
+                    <span className="col-span-2">Buyer</span><span>Event</span><span>Amount</span><span>Status</span>
+                  </div>
+                  {orders.map(o => (
+                    <div key={o.id} className="grid grid-cols-5 items-center px-5 py-3 border-t border-ink/10 hover:bg-ink/3 transition-colors">
+                      <div className="col-span-2 min-w-0">
+                        <p className="font-display text-xs text-ink truncate">{o.buyer_name}</p>
+                        <p className="text-[10px] text-ink/40 truncate">{o.buyer_email}</p>
+                        <p className="text-[9px] text-ink/20 font-mono truncate">{o.id.slice(0, 8)}…</p>
+                      </div>
+                      <p className="text-xs text-ink/60 truncate">{o.event_slug}</p>
+                      <div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                        {o.status === "paid" && o.razorpay_payment_id && (
+                          <button onClick={() => refundOrder(o.id)} disabled={refundingId === o.id}
+                            className="font-display text-[9px] uppercase text-magenta hover:underline mt-0.5 disabled:opacity-40">
+                            {refundingId === o.id ? "…" : "REFUND"}
+                          </button>
+                        )}
+                      </div>
+                      <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit border border-ink/20 ${ORDER_STATUS_CHIP[o.status] ?? "bg-ink/10 text-ink"}`}>
+                        {o.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Revenue Summary ── */}
+          {subTab === "revenue" && revenue && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink border-4 border-ink">
+                {[
+                  { label: "Total Orders",    value: revenue.total_orders },
+                  { label: "Gross Revenue",   value: `₹${Number(revenue.gross_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "CCD Revenue",     value: `₹${Number(revenue.ccd_revenue_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "Buyer Fees",      value: `₹${Number(revenue.buyer_fees_inr ?? 0).toLocaleString("en-IN")}` },
+                ].map(s => (
+                  <div key={s.label} className="bg-cream p-5">
+                    <p className="font-display text-3xl text-ink">{s.value}</p>
+                    <p className="font-display text-[10px] uppercase tracking-widest text-ink/40 mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {revenue.by_event && Object.keys(revenue.by_event).length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ BY EVENT</p>
+                  <div className="border-4 border-ink overflow-hidden">
+                    <div className="bg-ink text-cream grid grid-cols-3 px-5 py-2 font-display text-[10px] uppercase">
+                      <span className="col-span-1">Event</span><span>Orders</span><span>CCD Revenue</span>
+                    </div>
+                    {Object.entries(revenue.by_event).sort((a: any, b: any) => b[1].ccd_paise - a[1].ccd_paise).map(([slug, data]: [string, any]) => (
+                      <div key={slug} className="grid grid-cols-3 items-center px-5 py-3 border-t border-ink/10">
+                        <p className="text-xs text-ink truncate">{slug}</p>
+                        <p className="font-display text-sm text-ink">{data.count}</p>
+                        <p className="font-display text-sm text-ink">₹{(data.ccd_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {revenue.recent_orders?.length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ RECENT PAID ORDERS</p>
+                  <div className="space-y-2">
+                    {revenue.recent_orders.slice(0, 10).map((o: any) => (
+                      <div key={o.id} className="flex items-center justify-between border-2 border-ink/10 px-4 py-2 hover:bg-ink/3">
+                        <div>
+                          <p className="font-display text-xs text-ink">{o.buyer_name}</p>
+                          <p className="text-[10px] text-ink/40">{o.event_slug} · {o.buyer_email}</p>
+                        </div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SystemTab() {
   const [scraperStatus, setScraperStatus] = useState<any>(null);
   const [running, setRunning] = useState(false);
@@ -403,7 +707,7 @@ function SystemTab() {
     setRunning(true);
     const res = await fetch("/api/cron/scrape-events", {
       method: "POST",
-      headers: { "x-admin-password": ADMIN_PW },
+      headers: { "x-admin-password": getStoredPw() },
     });
     const data = res.ok ? await res.json() : { error: "Failed" };
     setScraperStatus(data);
@@ -454,7 +758,7 @@ function SystemTab() {
 const AdminPanel = () => {
   const { user, isLoaded } = useSafeUser();
   const roleInfo = useUserRole();
-  const [activeTab, setActiveTab] = useState<"applications" | "roles" | "artists" | "xp" | "system">("applications");
+  const [activeTab, setActiveTab] = useState<"applications" | "roles" | "artists" | "xp" | "system" | "ticketing">("applications");
   const [pendingCount, setPendingCount] = useState(0);
 
   // Password-fallback state: lets admins in even when Clerk isn't configured
@@ -469,7 +773,7 @@ const AdminPanel = () => {
   useEffect(() => {
     if (!isAuthed) return;
     fetch("/api/role-applications?status=eq.pending", {
-      headers: { "x-admin-password": getStoredPw() || ADMIN_PW_DEFAULT },
+      headers: { "x-admin-password": getStoredPw() },
     })
       .then(r => r.ok ? r.json() : [])
       .then(d => setPendingCount(Array.isArray(d) ? d.length : 0))
@@ -541,8 +845,7 @@ const AdminPanel = () => {
             </button>
           </form>
           <p className="text-xs text-ink/50 mt-3">
-            Set <code className="font-mono bg-acid-yellow/30 px-1">ADMIN_PASSWORD</code> in Vercel env vars.
-            Falls back to <code className="font-mono bg-acid-yellow/30 px-1">{ADMIN_PW_DEFAULT}</code>.
+            Set <code className="font-mono bg-acid-yellow/30 px-1">ADMIN_PASSWORD</code> in Vercel env vars — no default exists.
           </p>
         </div>
 
@@ -561,6 +864,7 @@ const AdminPanel = () => {
     { key: "roles" as const, label: "Roles" },
     { key: "artists" as const, label: "Artists" },
     { key: "xp" as const, label: "XP / Fans" },
+    { key: "ticketing" as const, label: "🎟 Ticketing" },
     { key: "system" as const, label: "System" },
   ];
 
@@ -597,6 +901,7 @@ const AdminPanel = () => {
         {activeTab === "roles"        && <RolesTab userId={user?.id ?? "admin-pw"}/>}
         {activeTab === "artists"      && <ArtistsTab/>}
         {activeTab === "xp"           && <XPTab/>}
+        {activeTab === "ticketing"    && <TicketingTab/>}
         {activeTab === "system"       && <SystemTab/>}
       </div>
     </div>

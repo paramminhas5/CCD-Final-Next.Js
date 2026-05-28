@@ -6,10 +6,12 @@
  */
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Search, MapPin, Music, X, ChevronDown, Send, Check, Loader2 } from "lucide-react";
+import { Search, MapPin, Music, X, ChevronDown, CalendarDays, Zap, Clock, Bookmark, BookmarkCheck } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import BookingForm from "@/components/booking/BookingForm";
+import { useAuth } from "@clerk/react";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -18,55 +20,18 @@ interface Artist {
   fee_min_inr?: number; fee_max_inr?: number; fee_currency?: string;
   open_to_bookings: boolean; available_cities: string[];
   labels?: string; why?: string;
+  // v2 marketplace fields
+  availability_signal?: "available" | "tour_leg" | "unknown" | "busy";
+  city_match?: boolean;
 }
 
 // ─── Booking inquiry dialog ───────────────────────────────────────────────────
 function BookingDialog({ artist, onClose }: { artist: Artist; onClose: () => void }) {
-  const [form, setForm] = useState({
-    requester_name: "",
-    requester_email: "",
-    requester_phone: "",
-    purpose: "",
-    event_date: "",
-    venue: "",
-    budget: "",
-    notes: "",
-  });
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setSending(true); setError(null);
-    try {
-      const res = await fetch("/api/booking-inquiry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artist_slug: artist.slug,
-          artist_name: artist.name,
-          ...form,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setSent(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to send. Try again.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/80 backdrop-blur-sm">
-      <div className="bg-cream border-4 border-ink w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-cream border-4 border-ink w-full max-w-lg max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b-4 border-ink bg-acid-yellow">
+        <div className="flex items-center justify-between p-5 border-b-4 border-ink bg-acid-yellow sticky top-0 z-10">
           <div>
             <p className="font-display text-xs uppercase text-ink/60 tracking-widest">Booking Request</p>
             <h2 className="font-display text-2xl text-ink uppercase">{artist.name}</h2>
@@ -75,106 +40,63 @@ function BookingDialog({ artist, onClose }: { artist: Artist; onClose: () => voi
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {sent ? (
-          <div className="p-8 text-center">
-            <div className="w-16 h-16 border-4 border-ink bg-acid-yellow flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-ink" />
-            </div>
-            <h3 className="font-display text-2xl text-ink uppercase mb-2">Request Sent!</h3>
-            <p className="text-ink/70 mb-6">Your booking inquiry for <strong>{artist.name}</strong> has been submitted. They'll be in touch via your email.</p>
-            <button onClick={onClose} className="font-display text-sm uppercase px-6 py-3 border-4 border-ink bg-ink text-cream chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
-              Close
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={submit} className="p-5 space-y-4">
-            {/* Contact details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Your Name *</label>
-                <input required value={form.requester_name} onChange={set("requester_name")} placeholder="Venue / Promoter name"
-                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
-              </div>
-              <div>
-                <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Email *</label>
-                <input required type="email" value={form.requester_email} onChange={set("requester_email")} placeholder="your@email.com"
-                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Phone (optional)</label>
-              <input value={form.requester_phone} onChange={set("requester_phone")} placeholder="+91 98765 43210"
-                className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
-            </div>
-
-            {/* Event details */}
-            <div className="border-t-4 border-ink pt-4">
-              <p className="font-display text-xs uppercase text-ink/60 tracking-widest mb-3">Event Details</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Event Type *</label>
-                  <select required value={form.purpose} onChange={set("purpose")}
-                    className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-xs uppercase text-ink focus:outline-none">
-                    <option value="">Select…</option>
-                    <option value="Club night">Club Night</option>
-                    <option value="Festival">Festival</option>
-                    <option value="Rooftop party">Rooftop Party</option>
-                    <option value="Warehouse rave">Warehouse Rave</option>
-                    <option value="Corporate event">Corporate Event</option>
-                    <option value="Private party">Private Party</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Event Date</label>
-                  <input type="date" value={form.event_date} onChange={set("event_date")}
-                    className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Venue / City</label>
-                <input value={form.venue} onChange={set("venue")} placeholder="e.g. Bar Wild, Bengaluru"
-                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors" />
-              </div>
-              <div>
-                <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Budget (INR)</label>
-                <select value={form.budget} onChange={set("budget")}
-                  className="w-full border-4 border-ink bg-cream px-3 py-2 font-display text-xs uppercase text-ink focus:outline-none">
-                  <option value="">Not specified</option>
-                  <option value="Under ₹10,000">Under ₹10,000</option>
-                  <option value="₹10,000–₹25,000">₹10,000–₹25,000</option>
-                  <option value="₹25,000–₹50,000">₹25,000–₹50,000</option>
-                  <option value="₹50,000–₹1,00,000">₹50,000–₹1,00,000</option>
-                  <option value="₹1,00,000+">₹1,00,000+</option>
-                  <option value="Negotiable">Negotiable</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-display text-xs uppercase text-ink/60 tracking-widest mb-1">Additional Notes</label>
-              <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Expected crowd size, set duration, any other details…"
-                className="w-full border-4 border-ink bg-cream px-3 py-2 font-sans text-sm text-ink placeholder:text-ink/40 focus:outline-none focus:bg-acid-yellow/30 transition-colors resize-none" />
-            </div>
-
-            {error && (
-              <p className="text-sm text-cream bg-magenta border-2 border-ink px-3 py-2 font-display">{error}</p>
-            )}
-
-            <button type="submit" disabled={sending}
-              className="w-full flex items-center justify-center gap-2 py-3 border-4 border-ink bg-ink text-cream font-display text-sm uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-60">
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sending ? "Sending…" : "Send Booking Request"}
-            </button>
-          </form>
-        )}
+        <div className="p-0">
+          <BookingForm
+            artistSlug={artist.slug}
+            artistName={artist.name}
+            source="marketplace"
+            onSuccess={onClose}
+            onCancel={onClose}
+          />
+        </div>
       </div>
     </div>
+  );
+}
+
+// ─── Shortlist Button ─────────────────────────────────────────────────────────
+function ShortlistButton({ artistSlug, artistName }: { artistSlug: string; artistName: string }) {
+  const { getToken, isSignedIn } = useAuth();
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function toggle() {
+    if (!isSignedIn) {
+      window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`;
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = await getToken();
+      const hdrs = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      if (saved) {
+        await fetch(`/api/shortlist/${artistSlug}`, { method: "DELETE", headers: hdrs });
+        setSaved(false);
+      } else {
+        const r = await fetch("/api/shortlist", {
+          method: "POST", headers: hdrs,
+          body: JSON.stringify({ artist_slug: artistSlug }),
+        });
+        if (r.status === 404) {
+          // Promoter profile not registered yet
+          window.location.href = "/promoter/dashboard";
+          return;
+        }
+        setSaved(true);
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <button onClick={toggle} disabled={loading}
+      title={saved ? "Remove from shortlist" : "Add to shortlist"}
+      className={`w-10 shrink-0 border-4 border-ink flex items-center justify-center transition-colors disabled:opacity-50 ${
+        saved ? "bg-acid-yellow text-ink hover:bg-magenta hover:text-cream" : "bg-cream text-ink hover:bg-acid-yellow"
+      }`}>
+      {loading ? <Zap className="w-3.5 h-3.5 animate-pulse" /> :
+        saved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+    </button>
   );
 }
 
@@ -204,10 +126,23 @@ function ArtistBookCard({ artist, onBook }: { artist: Artist; onBook: (a: Artist
               From ₹{(artist.fee_min_inr / 1000).toFixed(0)}k
             </span>
           )}
-          {/* Booking status */}
-          <span className={`absolute top-3 left-3 font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${artist.open_to_bookings ? "bg-lime text-ink" : "bg-ink/60 text-cream"}`}>
-            {artist.open_to_bookings ? "Available" : "Check"}
-          </span>
+          {/* Availability signal badge — shown when searching by date */}
+          {artist.availability_signal ? (
+            <span className={`absolute top-3 left-3 font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${
+              artist.availability_signal === "available"  ? "bg-lime text-ink" :
+              artist.availability_signal === "tour_leg"   ? "bg-electric-blue text-cream" :
+              artist.availability_signal === "busy"       ? "bg-magenta text-cream" :
+              "bg-ink/60 text-cream"
+            }`}>
+              {artist.availability_signal === "available" ? "✓ Open slot" :
+               artist.availability_signal === "tour_leg"  ? "◎ Tour leg" :
+               artist.availability_signal === "busy"      ? "✗ Busy" : "Check"}
+            </span>
+          ) : (
+            <span className={`absolute top-3 left-3 font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${artist.open_to_bookings ? "bg-lime text-ink" : "bg-ink/60 text-cream"}`}>
+              {artist.open_to_bookings ? "Available" : "Check"}
+            </span>
+          )}
         </div>
       </Link>
 
@@ -246,12 +181,15 @@ function ArtistBookCard({ artist, onBook }: { artist: Artist; onBook: (a: Artist
           <p className="text-xs text-ink/60 line-clamp-2 mb-4">{artist.bio}</p>
         )}
 
-        <button
-          onClick={() => onBook(artist)}
-          className="w-full py-2.5 border-4 border-ink bg-ink text-cream font-display text-xs uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
-        >
-          Request Booking →
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onBook(artist)}
+            className="flex-1 py-2.5 border-4 border-ink bg-ink text-cream font-display text-xs uppercase chunk-shadow hover:bg-magenta hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+          >
+            Request Booking →
+          </button>
+          <ShortlistButton artistSlug={artist.slug} artistName={artist.name} />
+        </div>
       </div>
     </article>
   );
@@ -277,45 +215,66 @@ export default function BookArtistPage() {
   const [budgetIdx, setBudgetIdx] = useState(0);
   const [bookingArtist, setBookingArtist] = useState<Artist | null>(null);
 
+  // Date-aware search: when a date is set, we use /api/marketplace/artists-v2
+  const [searchDate, setSearchDate] = useState("");
+  const [dateSearchActive, setDateSearchActive] = useState(false);
+
+  // Fetch artists — switches endpoint based on whether a date+city is active
   useEffect(() => {
-    fetch("/api/artists?limit=100")
+    setLoading(true);
+    const cityParam = city !== "All Cities" ? city : "";
+    const genreParam = genre !== "All Genres" ? genre : "";
+    const selectedBudget = BUDGETS[budgetIdx];
+
+    let url: string;
+    if (dateSearchActive && searchDate && cityParam) {
+      // v2: date + city aware — returns availability_signal on each artist
+      const params = new URLSearchParams({ date: searchDate });
+      if (cityParam) params.set("city", cityParam);
+      if (genreParam) params.set("genre", genreParam);
+      if (selectedBudget.max) params.set("fee_max", String(selectedBudget.max));
+      url = `/api/marketplace/artists-v2?${params.toString()}`;
+    } else {
+      // v1: classic endpoint, filter client-side
+      url = "/api/artists?limit=100";
+    }
+
+    fetch(url)
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
           setArtists(data.filter((a: Artist) => a.open_to_bookings !== false));
         }
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [city, genre, budgetIdx, searchDate, dateSearchActive]);
 
   const selectedBudget = BUDGETS[budgetIdx];
 
+  // Client-side filtering (applied on top of server results for v1, text search always client-side)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return artists.filter(a => {
-      // Text search
       if (q && !(
         a.name.toLowerCase().includes(q) ||
         (a.bio ?? "").toLowerCase().includes(q) ||
         (a.genres ?? []).join(" ").toLowerCase().includes(q) ||
         (a.based_city ?? "").toLowerCase().includes(q)
       )) return false;
-      // City
-      if (city !== "All Cities") {
+      // City filter only needed in v1 mode (v2 handles server-side)
+      if (!dateSearchActive && city !== "All Cities") {
         const inCity = (a.based_city ?? "").toLowerCase().includes(city.toLowerCase()) ||
           (a.available_cities ?? []).some(c => c.toLowerCase().includes(city.toLowerCase()));
         if (!inCity) return false;
       }
-      // Genre
-      if (genre !== "All Genres") {
+      if (!dateSearchActive && genre !== "All Genres") {
         if (!(a.genres ?? []).some(g => g.toLowerCase().includes(genre.toLowerCase()))) return false;
       }
-      // Budget
-      if (selectedBudget.max && a.fee_min_inr && a.fee_min_inr > selectedBudget.max) return false;
+      if (!dateSearchActive && selectedBudget.max && a.fee_min_inr && a.fee_min_inr > selectedBudget.max) return false;
       return true;
     });
-  }, [artists, query, city, genre, budgetIdx]);
+  }, [artists, query, city, genre, budgetIdx, dateSearchActive]);
 
   return (
     <main className="bg-cream text-ink min-h-screen">
@@ -341,14 +300,76 @@ export default function BookArtistPage() {
             Send a direct booking inquiry — no middleman.
           </p>
 
-          {/* Search */}
-          <div className="relative max-w-lg">
+          {/* ── Airbnb-style date + city search bar ── */}
+          <div className="border-4 border-cream/30 bg-cream/10 backdrop-blur-sm max-w-2xl">
+            <div className="grid grid-cols-1 sm:grid-cols-3 divide-y-4 sm:divide-y-0 sm:divide-x-4 divide-cream/20">
+              {/* Date */}
+              <label className="block p-4 cursor-pointer group">
+                <span className="flex items-center gap-1.5 font-display text-[10px] uppercase text-acid-yellow tracking-widest mb-1.5">
+                  <CalendarDays className="w-3 h-3" /> Event Date
+                </span>
+                <input
+                  type="date"
+                  value={searchDate}
+                  onChange={e => setSearchDate(e.target.value)}
+                  className="w-full bg-transparent text-cream font-sans text-sm focus:outline-none placeholder:text-cream/40"
+                />
+              </label>
+              {/* City (reuse the city state) */}
+              <label className="block p-4 cursor-pointer">
+                <span className="flex items-center gap-1.5 font-display text-[10px] uppercase text-acid-yellow tracking-widest mb-1.5">
+                  <MapPin className="w-3 h-3" /> City
+                </span>
+                <select
+                  value={city}
+                  onChange={e => setCity(e.target.value)}
+                  className="w-full bg-transparent text-cream font-sans text-sm focus:outline-none appearance-none"
+                >
+                  {CITIES.map(c => <option key={c} value={c} className="text-ink">{c}</option>)}
+                </select>
+              </label>
+              {/* Search trigger */}
+              <div className="p-4 flex items-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (searchDate && city !== "All Cities") {
+                      setDateSearchActive(true);
+                    } else {
+                      setDateSearchActive(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border-4 border-acid-yellow bg-acid-yellow text-ink font-display text-xs uppercase hover:bg-cream transition-colors"
+                >
+                  <Search className="w-4 h-4" />
+                  {dateSearchActive ? "Searching" : "Find Artists"}
+                </button>
+              </div>
+            </div>
+            {dateSearchActive && searchDate && city !== "All Cities" && (
+              <div className="px-4 py-2 border-t-4 border-cream/20 flex items-center gap-3">
+                <span className="font-display text-xs uppercase text-acid-yellow flex items-center gap-1.5">
+                  <Zap className="w-3 h-3" />
+                  Showing availability for {city} on {new Date(searchDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+                <button
+                  onClick={() => { setDateSearchActive(false); setSearchDate(""); }}
+                  className="ml-auto text-cream/50 hover:text-cream font-display text-[10px] uppercase"
+                >
+                  Clear ×
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Text search */}
+          <div className="relative max-w-lg mt-4">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/40" />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search artists, genres, cities…"
-              className="w-full pl-10 pr-4 py-4 border-4 border-cream/40 bg-cream/10 text-cream placeholder:text-cream/40 font-sans focus:outline-none focus:border-acid-yellow transition-colors"
+              placeholder="Search by name, genre, city…"
+              className="w-full pl-10 pr-4 py-3 border-4 border-cream/20 bg-cream/5 text-cream placeholder:text-cream/40 font-sans text-sm focus:outline-none focus:border-acid-yellow/60 transition-colors"
             />
             {query && (
               <button onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-cream/40 hover:text-cream">
@@ -403,6 +424,23 @@ export default function BookArtistPage() {
             {loading ? "Loading…" : `${filtered.length} artist${filtered.length !== 1 ? "s" : ""}`}
           </p>
         </div>
+
+        {/* Availability signal legend — shown when date search is active */}
+        {dateSearchActive && (
+          <div className="container pb-2 flex flex-wrap gap-3 items-center">
+            <span className="font-display text-[10px] uppercase text-ink/50 tracking-widest">Signal:</span>
+            {[
+              { signal: "available", label: "Open slot", cls: "bg-lime text-ink" },
+              { signal: "tour_leg",  label: "Tour leg",  cls: "bg-electric-blue text-cream" },
+              { signal: "unknown",   label: "Unknown",   cls: "bg-ink/50 text-cream" },
+              { signal: "busy",      label: "Busy",      cls: "bg-magenta text-cream" },
+            ].map(s => (
+              <span key={s.signal} className={`font-display text-[10px] uppercase px-2 py-0.5 border border-ink ${s.cls}`}>
+                {s.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Artist Grid ── */}

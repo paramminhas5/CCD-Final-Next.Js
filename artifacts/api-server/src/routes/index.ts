@@ -9,6 +9,7 @@ import bookingsRouter from "./bookings";
 import integrationsRouter from "./integrations";
 import authRouter from "./auth";
 import adminRouter from "./admin";
+import ticketingRouter from "./ticketing";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use("/artists", artistsRouter);
 router.use("/events", eventsRouter);
 router.use("/artist-dates", portalRouter);
 router.use("/booking-requests", bookingsRouter);
+router.use("/ticketing", ticketingRouter);
 
 export default router;

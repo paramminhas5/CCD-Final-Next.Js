@@ -598,11 +598,81 @@ function ArtistPortal({ user, roleInfo }: { user: any; roleInfo: any }) {
 
 /* ── Promoter Portal ── */
 function PromoterPortal({ user }: { user: any }) {
+  const [events, setEvents]       = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [promoter, setPromoter]   = useState<any>(null);
+  const [deleting, setDeleting]   = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load the promoter profile linked to this user
+    fetch(`/api/promoters/by-user?user_id=${encodeURIComponent(user.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(p => {
+        setPromoter(p);
+        if (p?.slug) {
+          // Load events submitted by this promoter
+          fetch(`/api/curated-events/by-promoter?promoter_slug=${encodeURIComponent(p.slug)}`)
+            .then(r => r.ok ? r.json() : { events: [] })
+            .then(d => setEvents(d.events ?? []))
+            .catch(() => {})
+            .finally(() => setLoading(false));
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => setLoading(false));
+  }, [user.id]);
+
+  const deleteEvent = async (id: string) => {
+    if (!confirm("Delete this event from Discover?")) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/curated-events/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      if (res.ok) {
+        setEvents(prev => prev.filter(e => e.id !== id));
+        toast.success("Event removed");
+      } else {
+        toast.error("Delete failed");
+      }
+    } finally { setDeleting(null); }
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === "published") return "bg-lime text-ink";
+    if (status === "pending")   return "bg-acid-yellow text-ink";
+    return "bg-ink/10 text-ink/50";
+  };
+
+  const formatDate = (d: string | null) => {
+    if (!d) return "TBA";
+    return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div className="bg-magenta text-cream border-4 border-ink p-6">
-        <p className="font-display text-xs uppercase opacity-60 mb-1">Promoter Portal</p>
-        <h2 className="font-display text-3xl uppercase">{user.fullName || user.username}</h2>
+    <div className="space-y-6 max-w-3xl">
+      {/* Header */}
+      <div className="bg-magenta text-cream border-4 border-ink p-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="font-display text-xs uppercase opacity-60 mb-1">Promoter Portal</p>
+          <h2 className="font-display text-3xl uppercase">{user.fullName || user.username}</h2>
+          {promoter && (
+            <p className="text-cream/60 text-sm mt-1">
+              {promoter.trusted
+                ? "✓ Trusted — events publish immediately"
+                : "Events go to review queue before publishing"}
+            </p>
+          )}
+        </div>
+        <a
+          href="/submit-event/event"
+          className="shrink-0 font-display text-xs uppercase bg-acid-yellow text-ink px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+        >
+          + Submit Event
+        </a>
       </div>
       <div className="border-4 border-ink p-6 space-y-4">
         <p className="font-display text-sm uppercase text-ink">Your Events</p>
