@@ -674,119 +674,17 @@ function PromoterPortal({ user }: { user: any }) {
           + Submit Event
         </a>
       </div>
-
-      {/* No promoter profile yet */}
-      {!loading && !promoter && (
-        <div className="border-4 border-ink p-6 space-y-3">
-          <p className="font-display text-sm uppercase text-ink">No Profile Linked</p>
-          <p className="text-sm text-ink/50">
-            Your account doesn't have a promoter profile yet. Apply below, or claim an existing profile on the Promoters directory.
-          </p>
-          <div className="flex gap-3 flex-wrap">
-            <a href="/submit-event" className="font-display text-xs uppercase bg-ink text-cream px-5 py-3 border-4 border-ink hover:bg-magenta transition-colors">
-              Apply to Become a Promoter →
-            </a>
-            <a href="/promoters" className="font-display text-xs uppercase bg-cream text-ink px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
-              Browse Promoters Directory →
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* Your events list */}
-      {(loading || (promoter && events.length > 0) || (!loading && promoter && events.length === 0)) && (
-        <div className="border-4 border-ink">
-          <div className="bg-ink text-cream px-5 py-3 border-b-4 border-ink flex items-center justify-between">
-            <h3 className="font-display text-sm uppercase">Your Submitted Events ({events.length})</h3>
-            <a href="/discover" className="font-display text-[10px] uppercase text-cream/50 hover:text-acid-yellow transition-colors">
-              View on Discover →
-            </a>
-          </div>
-
-          {loading ? (
-            <div className="divide-y-4 divide-ink">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-ink/5 animate-pulse" />
-              ))}
-            </div>
-          ) : events.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="font-display text-xl text-ink uppercase mb-2">No Events Yet</p>
-              <p className="text-ink/50 text-sm mb-4">Events you submit will appear here with their status.</p>
-              <a href="/submit-event/event"
-                className="inline-block font-display text-xs uppercase bg-magenta text-cream px-5 py-3 border-4 border-ink chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform">
-                Submit Your First Event →
-              </a>
-            </div>
-          ) : (
-            <div className="divide-y-4 divide-ink">
-              {events.map(ev => (
-                <div key={ev.id} className="flex items-center gap-4 px-5 py-4 hover:bg-ink/5 transition-colors">
-                  {/* Thumbnail */}
-                  <div className="shrink-0 w-12 h-12 border-2 border-ink overflow-hidden bg-electric-blue">
-                    {ev.image_url ? (
-                      <img src={ev.image_url} alt={ev.title} className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-cream/30 text-lg">🎛</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display text-sm text-ink uppercase truncate">{ev.title}</p>
-                    <p className="text-xs text-ink/60">
-                      {formatDate(ev.event_date)}
-                      {ev.city ? ` · ${ev.city}` : ""}
-                      {ev.venue ? ` · ${ev.venue}` : ""}
-                    </p>
-                  </div>
-
-                  {/* Status badge */}
-                  <span className={`shrink-0 font-display text-[10px] uppercase px-2 py-1 border-2 border-ink ${statusBadge(ev.submission_status ?? "published")}`}>
-                    {ev.submission_status === "pending" ? "⏳ Pending" : "✓ Live"}
-                  </span>
-
-                  {/* Actions */}
-                  <div className="shrink-0 flex gap-2">
-                    <a href={ev.url} target="_blank" rel="noreferrer"
-                      className="font-display text-[10px] uppercase px-2 py-1 border-2 border-ink hover:bg-acid-yellow transition-colors"
-                      title="View event">
-                      ↗
-                    </a>
-                    <button
-                      onClick={() => deleteEvent(ev.id)}
-                      disabled={deleting === ev.id}
-                      className="font-display text-[10px] uppercase px-2 py-1 border-2 border-magenta text-magenta hover:bg-magenta hover:text-cream transition-colors disabled:opacity-50"
-                      title="Remove event"
-                    >
-                      {deleting === ev.id ? "…" : "✕"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Quick links */}
-      <div className="flex gap-3 flex-wrap">
-        <a href="/submit-event/event"
-          className="font-display text-xs uppercase bg-magenta text-cream px-5 py-3 border-4 border-ink hover:bg-ink transition-colors">
-          + Submit New Event
-        </a>
-        <a href="/discover"
-          className="font-display text-xs uppercase bg-cream text-ink px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
-          View Discover Feed →
-        </a>
-        {promoter?.slug && (
-          <a href={`/promoters/${promoter.slug}`}
-            className="font-display text-xs uppercase bg-cream text-ink px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
-            Your Promoter Profile →
+      <div className="border-4 border-ink p-6 space-y-4">
+        <p className="font-display text-sm uppercase text-ink">Your Events</p>
+        <p className="text-sm text-ink/50">Submit events directly to the CCD Discover feed. Trusted promoters publish immediately.</p>
+        <div className="flex gap-3 flex-wrap">
+          <a href="/submit-event/event" className="inline-block font-display text-xs uppercase bg-magenta text-cream px-5 py-3 border-4 border-ink hover:bg-ink transition-colors">
+            + Submit New Event
           </a>
-        )}
+          <a href="/discover" className="inline-block font-display text-xs uppercase bg-cream text-ink px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
+            View Discover Feed →
+          </a>
+        </div>
       </div>
     </div>
   );

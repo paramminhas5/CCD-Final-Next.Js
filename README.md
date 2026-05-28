@@ -23,6 +23,12 @@
 10. [Next Steps](#next-steps)
 11. [Design System](#design-system)
 12. [Known Issues Log](#known-issues-log)
+8. [Features In Progress / Broken](#features-in-progress--broken)
+9. [Database Schema](#database-schema)
+10. [API Reference](#api-reference)
+11. [Roadmap & Next Steps](#roadmap--next-steps)
+12. [Design System](#design-system)
+13. [Contributing](#contributing)
 
 ---
 
@@ -329,7 +335,11 @@ Run `scripts/sql/20260528_promoter_claimed_by_and_event_status.sql` in Supabase 
 | `artist_discography` | Releases/EPs/tracks |
 | `artist_press` | Press mentions |
 
----
+### New columns (migration: `20260528_promoter_claimed_by_and_event_status.sql`)
+- `promoters.claimed_by` — Clerk user ID of the promoter who owns the profile
+- `curated_events.submission_status` — `published` (default/live) | `pending` (awaiting review)
+- `curated_events.submitted_by` — Clerk user ID of submitter
+- `curated_events.promoter_slug` — slug of the submitting promoter
 
 ## API Reference
 
@@ -376,7 +386,7 @@ All routes proxied through `pages/api/[...proxy].ts` → Supabase REST.
 | GET | `/admin-roles` | List all role assignments |
 | GET/PATCH | `/role-applications/:id` | Review + approve role applications |
 
----
+### 🔥 Immediate (before next event)
 
 ## Next Steps
 
