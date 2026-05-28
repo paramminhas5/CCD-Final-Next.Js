@@ -94,7 +94,7 @@ const Events = () => {
 
   const upcoming = useMemo(() => (all ?? []).filter((e) => e.status === "upcoming"), [all]);
   const past     = useMemo(() => (all ?? []).filter((e) => e.status === "past"),     [all]);
-  const featured = upcoming[0] ?? all[0];
+  const featured = upcoming[0] ?? all[0] ?? null;
   const restUpcoming = upcoming.slice(1);
 
   // Dynamic next-show date — derived from the first upcoming event, never hardcoded

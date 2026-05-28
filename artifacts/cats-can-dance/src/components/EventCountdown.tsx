@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { parseEventDate } from "@/lib/parse-date";
 
 type Props = {
   /** The same string you'd put in events.date — e.g. "Sun, Jun 29, 2026". */
@@ -22,19 +23,6 @@ type Props = {
 };
 
 const PAD = (n: number) => n.toString().padStart(2, "0");
-
-/** Best-effort parse. Returns null on failure. */
-function parseEventDate(raw: string): Date | null {
-  if (!raw) return null;
-  // ISO (preferred)
-  const iso = new Date(raw);
-  if (!Number.isNaN(iso.getTime())) return iso;
-  // "Sun, Jun 29, 2026" — strip the day-of-week prefix
-  const stripped = raw.replace(/^[A-Za-z]+,\s*/, "");
-  const fallback = new Date(stripped);
-  if (!Number.isNaN(fallback.getTime())) return fallback;
-  return null;
-}
 
 const EventCountdown = ({ date, doorsTime, invert = false }: Props) => {
   const [now, setNow] = useState<number>(() => Date.now());

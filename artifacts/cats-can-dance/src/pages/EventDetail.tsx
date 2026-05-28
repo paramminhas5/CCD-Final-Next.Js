@@ -186,6 +186,11 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
     });
   }, [event, content]);
 
+  // Social proof — RSVP count for this event (fetched client-side, best-effort).
+  // Must be called here (top level) — before any early returns — to obey the
+  // Rules of Hooks (hooks must be called in the same order on every render).
+  const rsvpCount = useEventRsvpCount(slug);
+
   // ─── empty / loading states ───
   if (loaded && !event) {
     return (
@@ -224,10 +229,6 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
   })();
   const ctaLabel = content.cta_label ?? "RSVP NOW →";
   const stickyMeta = `${event.date} · ${content.price_text ?? "Free RSVP"}`;
-
-  // Social proof — RSVP count for this event (fetched client-side, best-effort)
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const rsvpCount = useEventRsvpCount(slug);
 
   // ─── JSON-LD ───
   const eventLd = {
