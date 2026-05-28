@@ -567,7 +567,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Curated events (public) ─────────────────────────────────────────────────
   if (path === "curated-events" && m === "GET") {
-    return res.json(await get("curated_events", pq(ord("event_date"))));
+    // Only return published events — pending promoter submissions are filtered out
+    const f: Record<string, string> = {
+      ...eqf("submission_status", "published"),
+      ...ord("event_date"),
+    };
+    if (rq.city)    f["city"]  = `ilike.%${rq.city}%`;
+    if (rq.limit)   f["limit"] = rq.limit;
+    if (rq.featured === "true") f["is_featured"] = "eq.true";
+    return res.json(await get("curated_events", pq(f)));
   }
 
   // ── Videos (public) ─────────────────────────────────────────────────────────

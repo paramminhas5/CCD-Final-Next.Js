@@ -44,11 +44,13 @@ const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
 
 // CCD design system: each source gets an acid-yellow/magenta/orange badge
 const sourceBadges: Record<string, { bg: string; label: string }> = {
-  insider:   { bg: "bg-electric-blue text-cream",  label: "Insider" },
-  district:  { bg: "bg-magenta text-cream",         label: "District" },
-  highape:   { bg: "bg-orange text-ink",            label: "HighApe" },
-  editorial: { bg: "bg-acid-yellow text-ink",       label: "Editorial" },
-  manual:    { bg: "bg-ink text-cream",             label: "Curated" },
+  insider:    { bg: "bg-electric-blue text-cream",  label: "Insider" },
+  district:   { bg: "bg-magenta text-cream",         label: "District" },
+  highape:    { bg: "bg-orange text-ink",            label: "HighApe" },
+  skillboxes: { bg: "bg-lime text-ink",              label: "Skillbox" },
+  editorial:  { bg: "bg-acid-yellow text-ink",       label: "Editorial" },
+  manual:     { bg: "bg-ink text-cream",             label: "Curated" },
+  promoter:   { bg: "bg-hot-pink text-cream",        label: "Promoter" },
 };
 
 const reasonLabels: Record<string, { icon: React.ElementType; text: string }> = {
@@ -336,7 +338,9 @@ function EventCard({
   index: number;
 }) {
   const daysUntil    = getDaysUntil(event.event_date);
-  const srcBadge     = sourceBadges[event.source] ?? sourceBadges.manual;
+  // Handle "promoter:<slug>" prefixed sources
+  const srcKey       = event.source?.startsWith("promoter:") ? "promoter" : event.source;
+  const srcBadge     = sourceBadges[srcKey] ?? sourceBadges.manual;
   const primaryR     = reasons[0];
   const reasonInfo   = primaryR ? reasonLabels[primaryR] : null;
   const headliners   = lineups.filter(l => l.is_featured || l.role === "headliner").slice(0, 3);

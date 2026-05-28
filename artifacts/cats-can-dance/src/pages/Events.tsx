@@ -22,7 +22,7 @@ import SEO from "@/components/SEO";
 import PageHero from "@/components/PageHero";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Marquee from "@/components/Marquee";
-import CuratedEvents from "@/components/CuratedEvents";
+import CuratedEventsTeaser from "@/components/CuratedEventsTeaser";
 import EventPosterPlaceholder from "@/components/EventPosterPlaceholder";
 import SeriesStrip from "@/components/SeriesStrip";
 
@@ -326,7 +326,7 @@ const Events = () => {
           </section>
         )}
 
-        <CuratedEvents />
+        <CuratedEventsTeaser />
 
         <section className="bg-ink border-y-4 border-ink py-10 md:py-14">
           <div className="container flex flex-col md:flex-row items-start md:items-center justify-between gap-6">

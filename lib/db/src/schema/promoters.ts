@@ -17,6 +17,8 @@ export const promotersTable = pgTable("promoters", {
   crawl_urls: jsonb("crawl_urls").notNull().default([]),
   trusted: boolean("trusted").notNull().default(false),
   status: text("status").notNull().default("active"),
+  /** Clerk user ID of the owner who claimed this promoter profile */
+  claimed_by: text("claimed_by"),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

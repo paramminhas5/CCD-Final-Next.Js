@@ -7,13 +7,18 @@
  * Venue:   applied → approved → venue profile
  * Admin:   redirect to /admin
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
+import {
+  Calendar, MapPin, Music, Heart, Compass, ExternalLink,
+  Sparkles, Users, ArrowRight, Ticket,
+} from "lucide-react";
 
 /* ── Types ── */
 type FanProfile = {
@@ -120,6 +125,236 @@ function EarnXPGuide() {
   );
 }
 
+/* ── Your Events Panel ────────────────────────────────────────────────────── */
+
+interface DashEvent {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  city: string | null;
+  venue: string | null;
+  event_date: string | null;
+  event_time: string | null;
+  genre: string[];
+  image_url: string | null;
+  is_featured: boolean;
+  reasons?: string[];
+}
+
+const sourceBadges: Record<string, { bg: string; label: string }> = {
+  insider:    { bg: "bg-electric-blue text-cream", label: "Insider" },
+  district:   { bg: "bg-magenta text-cream",        label: "District" },
+  highape:    { bg: "bg-orange text-ink",           label: "HighApe" },
+  skillboxes: { bg: "bg-lime text-ink",             label: "Skillbox" },
+  editorial:  { bg: "bg-acid-yellow text-ink",      label: "Editorial" },
+  manual:     { bg: "bg-ink text-cream",            label: "Curated" },
+  promoter:   { bg: "bg-hot-pink text-cream",       label: "Promoter" },
+};
+
+function formatEventDate(d: string | null): string {
+  if (!d) return "TBA";
+  const date  = new Date(d);
+  const today = new Date();
+  const tmrw  = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === tmrw.toDateString())  return "Tomorrow";
+  return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function MiniEventCard({ event }: { event: DashEvent }) {
+  const srcKey   = event.source?.startsWith("promoter:") ? "promoter" : event.source;
+  const srcBadge = sourceBadges[srcKey] ?? sourceBadges.manual;
+
+  return (
+    <a
+      href={event.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex gap-3 border-4 border-ink bg-cream p-3 hover:bg-acid-yellow transition-colors"
+    >
+      {/* Thumbnail */}
+      <div className="w-14 h-14 shrink-0 border-2 border-ink overflow-hidden bg-ink/10">
+        {event.image_url ? (
+          <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full bg-electric-blue flex items-center justify-center">
+            <Music className="w-4 h-4 text-cream/40" />
+          </div>
+        )}
+      </div>
+      {/* Info */}
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-xs text-ink uppercase line-clamp-1 leading-tight">{event.title}</p>
+        <p className="text-[10px] text-ink/60 mt-0.5 flex items-center gap-1">
+          <Calendar className="w-2.5 h-2.5 shrink-0" />
+          {formatEventDate(event.event_date)}
+          {event.event_time && ` · ${event.event_time}`}
+        </p>
+        <p className="text-[10px] text-ink/60 flex items-center gap-1">
+          <MapPin className="w-2.5 h-2.5 shrink-0" />
+          <span className="truncate">{[event.venue, event.city].filter(Boolean).join(", ") || "TBA"}</span>
+        </p>
+      </div>
+      {/* Source + arrow */}
+      <div className="shrink-0 flex flex-col items-end justify-between">
+        <span className={`text-[9px] font-display uppercase px-1.5 py-0.5 border border-ink ${srcBadge.bg}`}>
+          {srcBadge.label}
+        </span>
+        <ExternalLink className="w-3 h-3 text-ink/30 group-hover:text-ink transition-colors" />
+      </div>
+    </a>
+  );
+}
+
+function EventsStrip({
+  title, icon, events, emptyMsg, cta,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  events: DashEvent[];
+  emptyMsg: string;
+  cta?: React.ReactNode;
+}) {
+  return (
+    <div className="border-4 border-ink">
+      <div className="bg-ink text-cream px-5 py-3 border-b-4 border-ink flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="font-display text-sm uppercase">{title}</h3>
+        </div>
+        {cta}
+      </div>
+      {events.length === 0 ? (
+        <div className="p-5 text-center">
+          <p className="text-ink/40 text-sm font-display uppercase">{emptyMsg}</p>
+        </div>
+      ) : (
+        <div className="divide-y-4 divide-ink">
+          {events.map(ev => <MiniEventCard key={ev.id} event={ev} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function YourEventsPanel({ user }: { user: any }) {
+  const [forYou,   setForYou]   = useState<DashEvent[]>([]);
+  const [saved,    setSaved]    = useState<DashEvent[]>([]);
+  const [artists,  setArtists]  = useState<DashEvent[]>([]);
+  const [loading,  setLoading]  = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Recommended "For You" (personalised, uses Clerk token from cookie)
+      const forYouRes = await fetch("/api/events/recommended?tab=for_you&limit=5");
+      if (forYouRes.ok) {
+        const d = await forYouRes.json();
+        setForYou((d.events ?? []).slice(0, 5));
+      }
+
+      // 2. Saved events — interactions with action=save
+      const savedRes = await fetch(`/api/user/saved-events?user_id=${encodeURIComponent(user.id)}`);
+      if (savedRes.ok) {
+        const d = await savedRes.json();
+        setSaved((d.events ?? []).slice(0, 5));
+      }
+
+      // 3. Events from followed artists (lineup join via /api/events/artist-gigs)
+      const artistsRes = await fetch(`/api/user/artist-gigs?user_id=${encodeURIComponent(user.id)}&limit=5`);
+      if (artistsRes.ok) {
+        const d = await artistsRes.json();
+        setArtists((d.events ?? []).slice(0, 5));
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [user.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="border-4 border-ink bg-ink/5 h-40 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-2xl text-ink uppercase">Your Events</h2>
+        <Link
+          href="/discover"
+          className="flex items-center gap-1.5 font-display text-xs uppercase text-magenta hover:underline"
+        >
+          <Compass className="w-3.5 h-3.5" />
+          Discover more →
+        </Link>
+      </div>
+
+      {/* For You */}
+      <EventsStrip
+        title="For You"
+        icon={<Sparkles className="w-3.5 h-3.5 text-acid-yellow" />}
+        events={forYou}
+        emptyMsg="Set your genres and cities in your profile to get recommendations"
+        cta={
+          <Link href="/profile" className="font-display text-[10px] uppercase text-cream/60 hover:text-acid-yellow transition-colors">
+            Edit Taste →
+          </Link>
+        }
+      />
+
+      {/* Artist Gigs */}
+      <EventsStrip
+        title="Artists You Follow"
+        icon={<Users className="w-3.5 h-3.5 text-acid-yellow" />}
+        events={artists}
+        emptyMsg="Follow artists on their profile pages to see upcoming gigs here"
+        cta={
+          <Link href="/artists" className="font-display text-[10px] uppercase text-cream/60 hover:text-acid-yellow transition-colors">
+            Browse Artists →
+          </Link>
+        }
+      />
+
+      {/* Saved */}
+      <EventsStrip
+        title="Saved Events"
+        icon={<Heart className="w-3.5 h-3.5 text-acid-yellow" />}
+        events={saved}
+        emptyMsg="Save events from the Discover page to see them here"
+        cta={
+          <Link href="/discover" className="font-display text-[10px] uppercase text-cream/60 hover:text-acid-yellow transition-colors">
+            Find Events →
+          </Link>
+        }
+      />
+
+      {/* Discover CTA strip */}
+      <div className="border-4 border-ink bg-ink p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <p className="font-display text-cream text-lg uppercase">Find your next night out</p>
+          <p className="text-cream/50 text-xs mt-0.5">Daily-updated events from across India.</p>
+        </div>
+        <Link
+          href="/discover"
+          className="shrink-0 flex items-center gap-2 font-display text-sm uppercase bg-acid-yellow text-ink px-5 py-3 border-4 border-acid-yellow chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform"
+        >
+          <Compass className="w-4 h-4" />
+          Open Discover
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 /* ── Fan Dashboard ── */
 function FanDashboard({ user, fanProfile }: { user: any; fanProfile: FanProfile | null }) {
   const [xpHistory, setXpHistory] = useState<XPEvent[]>([]);
@@ -159,6 +394,9 @@ function FanDashboard({ user, fanProfile }: { user: any; fanProfile: FanProfile 
   return (
     <div className="space-y-6 max-w-2xl">
       <TierProgress fp={fp}/>
+
+      {/* ── Your Events ── */}
+      <YourEventsPanel user={user} />
 
       {/* XP History */}
       {xpHistory.length > 0 && (
@@ -368,10 +606,15 @@ function PromoterPortal({ user }: { user: any }) {
       </div>
       <div className="border-4 border-ink p-6 space-y-4">
         <p className="font-display text-sm uppercase text-ink">Your Events</p>
-        <p className="text-sm text-ink/50">Full event management dashboard coming soon. In the meantime, submit events via the form below.</p>
-        <a href="/submit-event" className="inline-block font-display text-xs uppercase bg-ink text-cream px-5 py-3 border-4 border-ink hover:bg-magenta transition-colors">
-          + Submit New Event
-        </a>
+        <p className="text-sm text-ink/50">Submit events directly to the CCD Discover feed. Trusted promoters publish immediately.</p>
+        <div className="flex gap-3 flex-wrap">
+          <a href="/submit-event/event" className="inline-block font-display text-xs uppercase bg-magenta text-cream px-5 py-3 border-4 border-ink hover:bg-ink transition-colors">
+            + Submit New Event
+          </a>
+          <a href="/discover" className="inline-block font-display text-xs uppercase bg-cream text-ink px-5 py-3 border-4 border-ink hover:bg-acid-yellow transition-colors">
+            View Discover Feed →
+          </a>
+        </div>
       </div>
     </div>
   );
