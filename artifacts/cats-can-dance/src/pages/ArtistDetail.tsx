@@ -44,7 +44,7 @@ interface Artist {
   based_city?: string; from_city?: string;
   bio?: string; genres: string[];
   photo_url?: string; instagram?: string; soundcloud?: string;
-  spotify?: string; website?: string; booking_email?: string;
+  spotify?: string; bandcamp?: string; website?: string; booking_email?: string;
   manager_email?: string; featured: boolean; claimed_by?: string;
   open_to_bookings: boolean; fee_min_inr?: number; fee_max_inr?: number;
   available_cities: string[]; labels?: string;
@@ -75,6 +75,17 @@ interface CoolFact { icon: string; label: string; value: string; detail: string;
 interface ArtistDate {
   id: string; city: string; venue?: string | null; event_date: string;
   status: "confirmed" | "tentative" | "available"; ticket_url?: string | null;
+}
+interface Discography {
+  id: string; title: string; release_type: string; release_date?: string | null;
+  year?: number | null; label?: string | null; artwork_url?: string | null;
+  spotify_url?: string | null; soundcloud_url?: string | null;
+  bandcamp_url?: string | null; description?: string | null;
+}
+interface PressItem {
+  id: string; title: string; publication: string; author?: string | null;
+  excerpt?: string | null; url?: string | null; type: string;
+  date_published?: string | null; is_featured: boolean; quote_for_epk?: string | null;
 }
 
 const TABS = [
@@ -347,6 +358,8 @@ export default function ArtistDetailPage() {
     artist: Artist | null; connections: Connection[]; appearances: Appearance[];
     milestones: Milestone[]; socialStats: SocialStats | null;
     stats: ArtistStats; facts: CoolFact[]; upcomingDates: ArtistDate[];
+    discography: Discography[]; press: PressItem[];
+    socialHistory: any[];
   } | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
@@ -376,6 +389,7 @@ export default function ArtistDetailPage() {
             artist: bd.artist, connections: [], appearances: bd.appearances || [],
             milestones: [], socialStats: null, stats: bd.stats || emptyStats, facts: [],
             upcomingDates: bd.upcomingDates || [],
+            discography: [], press: [], socialHistory: [],
           });
           return;
         }
@@ -385,6 +399,8 @@ export default function ArtistDetailPage() {
           milestones: d.milestones || [], socialStats: d.socialStats || null,
           stats: d.stats || emptyStats, facts: d.facts || [],
           upcomingDates: d.upcomingDates || [],
+          discography: d.discography || [], press: d.press || [],
+          socialHistory: d.socialHistory || [],
         });
       })
       .catch((e) => { setFetchError(e.message || "Failed to load artist"); })
@@ -436,7 +452,7 @@ export default function ArtistDetailPage() {
     </main>
   );
 
-  const { artist, connections, appearances, milestones, socialStats, stats, facts, upcomingDates } = data;
+  const { artist, connections, appearances, milestones, socialStats, stats, facts, upcomingDates, discography, press, socialHistory } = data;
   const years = [...new Set(appearances.map((a) => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
   const filteredAppearances = selectedYear === "all" ? appearances : appearances.filter((a) => a.year === parseInt(selectedYear));
 
@@ -502,6 +518,12 @@ export default function ArtistDetailPage() {
                   <span className="inline-block bg-magenta text-cream font-display text-xs px-3 py-1 border-2 border-cream">
                     ◉ BOOKINGS OPEN
                   </span>
+                )}
+                {!artist.claimed_by && (
+                  <Link href={`/artist/dashboard?claim=${artist.id}`}
+                    className="inline-block bg-cream/10 text-cream font-display text-xs px-3 py-1 border-2 border-cream/40 hover:border-cream hover:bg-cream/20 transition-colors">
+                    Are you {artist.name.split(" ")[0]}? Claim →
+                  </Link>
                 )}
               </div>
 
@@ -654,6 +676,7 @@ export default function ArtistDetailPage() {
                   <ArtistAudioEmbed
                     soundcloud={artist.soundcloud}
                     spotify={artist.spotify}
+                    bandcamp={(artist as any).bandcamp}
                     artistName={artist.name}
                   />
                   {(artist.fee_min_inr || artist.fee_max_inr) && (
@@ -935,7 +958,7 @@ export default function ArtistDetailPage() {
                     ))}
                   </div>
                   <div className="max-w-2xl">
-                    <ArtistGigChart appearances={appearances} />
+                    <ArtistGigChart appearances={appearances} socialHistory={socialHistory} />
                   </div>
                   {(() => {
                     const counts = appearances.reduce((acc: Record<string, number>, a) => { if (a.city) acc[a.city] = (acc[a.city] || 0) + 1; return acc; }, {});
@@ -966,8 +989,27 @@ export default function ArtistDetailPage() {
           {/* ════════════ EPK ════════════ */}
           {activeTab === "epk" && (
             <div className="space-y-8 max-w-3xl">
-              <h2 className="font-display text-3xl text-ink">ELECTRONIC PRESS KIT</h2>
+              {/* Header + share */}
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-display text-magenta text-xs uppercase tracking-[0.3em] mb-1">/ ELECTRONIC PRESS KIT</p>
+                  <h2 className="font-display text-3xl text-ink">EPK</h2>
+                </div>
+                <div className="flex gap-2">
+                  <a href={`/artists/${artist.slug}/epk`} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1.5 font-display text-xs uppercase px-4 py-2 border-4 border-ink bg-acid-yellow text-ink chunk-shadow hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-transform">
+                    <ExternalLink className="w-3 h-3" /> Share EPK
+                  </a>
+                  {!artist.claimed_by && (
+                    <Link href={`/artist/dashboard?claim=${artist.id}`}
+                      className="flex items-center gap-1.5 font-display text-xs uppercase px-4 py-2 border-4 border-ink bg-ink text-cream hover:bg-magenta transition-colors">
+                      Are you {artist.name.split(" ")[0]}? Claim →
+                    </Link>
+                  )}
+                </div>
+              </div>
 
+              {/* Artist card */}
               <div className="border-4 border-ink bg-cream chunk-shadow p-6 flex gap-5">
                 {artist.photo_url && (
                   <img src={artist.photo_url} alt={artist.name} className="w-24 h-24 object-cover border-4 border-ink shrink-0" />
@@ -986,6 +1028,81 @@ export default function ArtistDetailPage() {
                 </div>
               </div>
 
+              {/* Press quotes (featured first) */}
+              {press.filter(p => p.quote_for_epk).length > 0 && (
+                <div className="space-y-3">
+                  <p className="font-display text-xs uppercase text-ink/50 tracking-widest">/ PRESS QUOTES</p>
+                  {press.filter(p => p.quote_for_epk).map((p) => (
+                    <blockquote key={p.id} className="border-l-4 border-magenta pl-4 py-1">
+                      <p className="text-ink/80 italic text-base">"{p.quote_for_epk}"</p>
+                      <footer className="font-display text-xs text-ink/50 mt-1 uppercase">
+                        — {p.publication}{p.author ? `, ${p.author}` : ""}
+                        {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="ml-2 text-magenta hover:underline">↗</a>}
+                      </footer>
+                    </blockquote>
+                  ))}
+                </div>
+              )}
+
+              {/* Press coverage list */}
+              {press.length > 0 && (
+                <div className="border-4 border-ink bg-cream chunk-shadow p-5">
+                  <p className="font-display text-lg text-ink mb-4">PRESS COVERAGE</p>
+                  <div className="space-y-3">
+                    {press.map((p) => (
+                      <div key={p.id} className="flex items-start justify-between gap-3 border-b-2 border-ink/10 pb-3 last:border-b-0 last:pb-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-display text-[10px] uppercase bg-electric-blue text-cream px-2 py-0.5">{p.type}</span>
+                            {p.is_featured && <span className="font-display text-[10px] bg-acid-yellow text-ink px-2 py-0.5 border border-ink">★</span>}
+                          </div>
+                          <p className="font-display text-sm text-ink">{p.title}</p>
+                          <p className="text-xs text-ink/50">{p.publication}{p.date_published ? ` · ${p.date_published}` : ""}</p>
+                          {p.excerpt && <p className="text-xs text-ink/60 mt-1 line-clamp-2">{p.excerpt}</p>}
+                        </div>
+                        {p.url && (
+                          <a href={p.url} target="_blank" rel="noreferrer"
+                            className="shrink-0 font-display text-xs uppercase px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors flex items-center gap-1">
+                            <ExternalLink className="w-3 h-3" /> Read
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Discography */}
+              {discography.length > 0 && (
+                <div className="border-4 border-ink bg-cream chunk-shadow p-5">
+                  <p className="font-display text-lg text-ink mb-4">DISCOGRAPHY</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {discography.map((r) => (
+                      <div key={r.id} className="flex gap-3 border-2 border-ink/20 p-3">
+                        {r.artwork_url
+                          ? <img src={r.artwork_url} alt={r.title} className="w-14 h-14 object-cover border-2 border-ink shrink-0" />
+                          : <div className="w-14 h-14 bg-ink/10 border-2 border-ink flex items-center justify-center shrink-0"><Music className="w-5 h-5 text-ink/30" /></div>
+                        }
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="font-display text-[9px] uppercase bg-ink text-cream px-1.5 py-0.5">{r.release_type}</span>
+                            {r.year && <span className="font-display text-[9px] text-ink/40">{r.year}</span>}
+                          </div>
+                          <p className="font-display text-sm text-ink truncate">{r.title}</p>
+                          {r.label && <p className="text-[10px] text-ink/50">{r.label}</p>}
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                            {r.spotify_url && <a href={r.spotify_url} target="_blank" rel="noreferrer" className="font-display text-[9px] uppercase px-1.5 py-0.5 border border-ink hover:bg-acid-yellow transition-colors">Spotify</a>}
+                            {r.soundcloud_url && <a href={r.soundcloud_url} target="_blank" rel="noreferrer" className="font-display text-[9px] uppercase px-1.5 py-0.5 border border-ink hover:bg-acid-yellow transition-colors">SC</a>}
+                            {r.bandcamp_url && <a href={r.bandcamp_url} target="_blank" rel="noreferrer" className="font-display text-[9px] uppercase px-1.5 py-0.5 border border-ink hover:bg-acid-yellow transition-colors">BC</a>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Booking */}
               <div className="border-4 border-ink bg-orange chunk-shadow p-5">
                 <p className="font-display text-lg text-ink mb-3">BOOKING & CONTACT</p>
                 <div className="space-y-2">
@@ -996,7 +1113,7 @@ export default function ArtistDetailPage() {
                   )}
                   {artist.manager_email && (
                     <a href={`mailto:${artist.manager_email}`} className="flex items-center gap-2 text-ink hover:text-magenta font-display text-sm transition-colors">
-                      <Mail className="w-4 h-4" /> {artist.manager_email} <span className="text-ink/50 font-sans">(management)</span>
+                      <Mail className="w-4 h-4" /> {artist.manager_email} <span className="text-ink/50 font-sans text-xs">(management)</span>
                     </a>
                   )}
                   {artist.website && (
@@ -1029,6 +1146,20 @@ export default function ArtistDetailPage() {
                   <p className="text-sm text-ink/60 mt-1">Available in: {artist.available_cities.join(", ")}</p>
                 )}
               </div>
+
+              {/* Claim CTA for unclaimed profiles */}
+              {!artist.claimed_by && (
+                <div className="border-4 border-ink bg-ink text-cream p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <p className="font-display text-xl uppercase">Is this your profile?</p>
+                    <p className="text-cream/60 text-sm mt-1">Claim it to edit your bio, add releases, manage bookings and share your EPK.</p>
+                  </div>
+                  <Link href={`/artist/dashboard?claim=${artist.id}`}
+                    className="shrink-0 font-display text-sm uppercase bg-magenta text-cream px-5 py-3 border-4 border-cream chunk-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-transform whitespace-nowrap">
+                    CLAIM PROFILE →
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 

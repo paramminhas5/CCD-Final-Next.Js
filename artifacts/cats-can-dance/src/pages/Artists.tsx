@@ -26,6 +26,7 @@ interface DBArtist {
   labels?: string;
   fee_min_inr?: number;
   fee_max_inr?: number;
+  open_to_bookings?: boolean;
   videos?: any[];
   gallery?: any[];
 }
@@ -64,6 +65,7 @@ export default function ArtistsPage() {
   const [city, setCity] = useState("All");
   const [activeGenres, setActiveGenres] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortMode>("az");
+  const [bookingsOnly, setBookingsOnly] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -108,6 +110,7 @@ export default function ArtistsPage() {
     let rows = artists.filter((a) => {
       if (city !== "All" && !cityOf(a).toLowerCase().includes(city.toLowerCase())) return false;
       if (activeGenres.size > 0 && !(a.genres ?? []).some((g) => activeGenres.has(g))) return false;
+      if (bookingsOnly && !(a as any).open_to_bookings) return false;
       if (!ql) return true;
       return (
         a.name.toLowerCase().includes(ql) ||
@@ -121,7 +124,7 @@ export default function ArtistsPage() {
     else if (sort === "genre") rows = [...rows].sort((a, b) => ((a.genres ?? [])[0] ?? "").localeCompare((b.genres ?? [])[0] ?? "") || a.name.localeCompare(b.name));
     else rows = [...rows].sort((a, b) => a.name.localeCompare(b.name));
     return rows;
-  }, [artists, q, city, activeGenres, sort]);
+  }, [artists, q, city, activeGenres, sort, bookingsOnly]);
 
   return (
     <main className="bg-background text-foreground">
@@ -184,6 +187,16 @@ export default function ArtistsPage() {
               <option value="city">CITY</option>
               <option value="genre">GENRE</option>
             </select>
+
+            {/* Bookings Open toggle */}
+            <button
+              onClick={() => setBookingsOnly(b => !b)}
+              className={`px-3 py-2 border-4 border-ink font-display text-xs uppercase whitespace-nowrap transition-colors ${
+                bookingsOnly ? "bg-magenta text-cream" : "bg-transparent text-ink hover:bg-acid-yellow"
+              }`}
+            >
+              {bookingsOnly ? "◉ BOOKINGS OPEN ×" : "◉ BOOKINGS OPEN"}
+            </button>
           </div>
 
           {/* Genre pills */}
@@ -251,9 +264,9 @@ export default function ArtistsPage() {
                   ? "No artists found in the database."
                   : "Try adjusting your filters."}
               </p>
-              {(q || city !== "All" || activeGenres.size > 0) && (
+              {(q || city !== "All" || activeGenres.size > 0 || bookingsOnly) && (
                 <button
-                  onClick={() => { setQ(""); setCity("All"); setActiveGenres(new Set()); }}
+                  onClick={() => { setQ(""); setCity("All"); setActiveGenres(new Set()); setBookingsOnly(false); }}
                   className="bg-ink text-cream font-display px-5 py-2 border-4 border-ink hover:bg-ink/80 transition-colors"
                 >
                   CLEAR FILTERS
@@ -266,6 +279,7 @@ export default function ArtistsPage() {
               <p className="font-display text-sm text-ink/50 mb-4">
                 {filtered.length} ARTISTS
                 {activeGenres.size > 0 && " · FILTERED BY GENRE"}
+                {bookingsOnly && " · BOOKINGS OPEN"}
               </p>
 
               {/* Grid */}
@@ -314,12 +328,15 @@ export default function ArtistsPage() {
                         {(a.genres ?? []).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {(a.genres ?? []).slice(0, 2).map((g) => (
-                              <span
+                              <button
                                 key={g}
-                                className="text-[10px] px-1.5 py-0.5 bg-acid-yellow text-ink font-display border border-ink"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleGenre(g); }}
+                                className={`text-[10px] px-1.5 py-0.5 font-display border border-ink transition-colors ${
+                                  activeGenres.has(g) ? "bg-ink text-cream" : "bg-acid-yellow text-ink hover:bg-orange"
+                                }`}
                               >
                                 {g.toUpperCase()}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
