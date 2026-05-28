@@ -37,6 +37,7 @@ import ArtistGigChart from "@/components/ArtistGigChart";
 import ArtistConnectionGraph from "@/components/ArtistConnectionGraph";
 import SimilarArtists from "@/components/SimilarArtists";
 import FollowButton from "@/components/FollowButton";
+import BookingForm from "@/components/booking/BookingForm";
 
 // ───────────────────────── Types ─────────────────────────
 interface Artist {
@@ -262,22 +263,71 @@ function InlineBookingForm({ artist, onClose }: { artist: Artist; onClose?: () =
 // the artist's saved dates. Auto-updates as artist edits their calendar from
 // the portal.
 
-function AvailabilityStrip({ dates }: { dates: ArtistDate[] }) {
-  // Map of YYYY-MM-DD → status
-  const byDay = useMemo(() => {
-    const m: Record<string, "confirmed" | "tentative" | "available"> = {};
-    for (const d of dates) {
+// ───────────────────────── Availability Strip (v2) ───────────────────────────
+// Reads from /api/artist-calendar which merges availability_blocks + artist_dates
+// into a single day-status map. Falls back to the old upcomingDates prop if the
+// API is unavailable (backward compat).
+
+type DayStatus = "busy" | "tentative" | "available" | "open";
+
+interface CalendarAPIResponse {
+  days: Record<string, DayStatus>;
+  blocks: any[];
+  gigs: any[];
+  open_to_bookings: boolean;
+  available_cities: string[];
+}
+
+const STATUS_DISPLAY: Record<DayStatus, { bg: string; text: string; border: string; label: string }> = {
+  busy:      { bg: "bg-magenta",         text: "text-cream",   border: "border-ink",    label: "Busy" },
+  tentative: { bg: "bg-electric-blue",   text: "text-cream",   border: "border-ink",    label: "Tour leg" },
+  available: { bg: "bg-lime",            text: "text-ink",     border: "border-ink",    label: "Open slot" },
+  open:      { bg: "bg-cream",           text: "text-ink/50",  border: "border-ink/10", label: "Open" },
+};
+
+function AvailabilityStrip({
+  artistSlug,
+  dates: fallbackDates,
+}: {
+  artistSlug: string;
+  dates: ArtistDate[];
+}) {
+  const [calData, setCalData] = useState<CalendarAPIResponse | null>(null);
+  const [calLoading, setCalLoading] = useState(true);
+
+  useEffect(() => {
+    const today = new Date();
+    const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+    const toDate = new Date(today.getFullYear(), today.getMonth() + 6, 0);
+    const to = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
+
+    fetch(`/api/artist-calendar?slug=${encodeURIComponent(artistSlug)}&from=${from}&to=${to}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setCalData(data))
+      .catch(() => setCalData(null))
+      .finally(() => setCalLoading(false));
+  }, [artistSlug]);
+
+  // Merge: API data wins, fallback to old artist_dates prop
+  const byDay = useMemo<Record<string, DayStatus>>(() => {
+    if (calData?.days) return calData.days;
+    // Legacy fallback from upcomingDates
+    const m: Record<string, DayStatus> = {};
+    for (const d of fallbackDates) {
       const key = d.event_date.slice(0, 10);
-      if (!m[key] || d.status === "confirmed") m[key] = d.status;
+      const mapped: DayStatus =
+        d.status === "confirmed" ? "busy" :
+        d.status === "tentative" ? "tentative" :
+        "available";
+      if (!m[key] || mapped === "busy") m[key] = mapped;
     }
     return m;
-  }, [dates]);
+  }, [calData, fallbackDates]);
 
-  // Build next 6 months
+  // Build 6-month grid
   const months = useMemo(() => {
     const out: { label: string; year: number; month: number; days: { day: number; iso: string }[] }[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     for (let i = 0; i < 6; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
       const monthName = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
@@ -293,45 +343,101 @@ function AvailabilityStrip({ dates }: { dates: ArtistDate[] }) {
     return out;
   }, []);
 
-  if (dates.length === 0 && months.every(m => m.days.length === 0)) return null;
+  const hasAnyData = Object.keys(byDay).length > 0 || fallbackDates.length > 0;
+  if (!calLoading && !hasAnyData) return null;
+
+  // Blocks summary (from API)
+  const upcomingBlocks = (calData?.blocks ?? [])
+    .filter((b: any) => b.end_date >= new Date().toISOString().split("T")[0])
+    .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
+    .slice(0, 5);
 
   return (
-    <div className="border-4 border-ink bg-cream p-5">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className="font-display text-sm uppercase text-ink">Next 6 months</p>
-        <div className="flex flex-wrap gap-3 text-[10px] font-display uppercase">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-cream border-2 border-ink inline-block"/> open</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-magenta border-2 border-ink inline-block"/> busy</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-acid-yellow border-2 border-ink inline-block"/> tentative</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-lime border-2 border-ink inline-block"/> available slot</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {months.map(m => (
-          <div key={`${m.year}-${m.month}`} className="border-2 border-ink/20 p-3">
-            <p className="font-display text-xs uppercase text-ink/70 mb-2">{m.label}</p>
-            <div className="grid grid-cols-7 gap-1">
-              {m.days.map(({ day, iso }) => {
-                const status = byDay[iso];
-                const cls =
-                  status === "confirmed" ? "bg-magenta text-cream border-ink"
-                  : status === "tentative" ? "bg-acid-yellow text-ink border-ink"
-                  : status === "available" ? "bg-lime text-ink border-ink"
-                  : "bg-cream text-ink/60 border-ink/15";
-                return (
-                  <span
-                    key={iso}
-                    title={status ? `${iso} — ${status}` : iso}
-                    className={`text-[10px] font-display flex items-center justify-center w-full aspect-square border ${cls}`}
-                  >
-                    {day}
-                  </span>
-                );
-              })}
-            </div>
+    <div className="space-y-4">
+      <div className="border-4 border-ink bg-cream p-5">
+        {/* Header + legend */}
+        <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <p className="font-display text-sm uppercase text-ink">Next 6 Months</p>
+            {calData?.available_cities && calData.available_cities.length > 0 && (
+              <p className="text-xs text-ink/50 mt-0.5">
+                Available in: {calData.available_cities.slice(0, 4).join(" · ")}
+                {calData.available_cities.length > 4 ? ` +${calData.available_cities.length - 4}` : ""}
+              </p>
+            )}
           </div>
-        ))}
+          <div className="flex flex-wrap gap-3 text-[10px] font-display uppercase">
+            {(["available", "tentative", "busy"] as DayStatus[]).map(s => (
+              <span key={s} className="flex items-center gap-1.5">
+                <span className={`w-3 h-3 border-2 border-ink inline-block ${STATUS_DISPLAY[s].bg}`} />
+                {STATUS_DISPLAY[s].label}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-ink/15 bg-cream inline-block" /> Open
+            </span>
+          </div>
+        </div>
+
+        {calLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3].map(i => <div key={i} className="h-28 bg-ink/5 animate-pulse border-2 border-ink/10" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {months.map(m => (
+              <div key={`${m.year}-${m.month}`} className="border-2 border-ink/20 p-3">
+                <p className="font-display text-xs uppercase text-ink/70 mb-2">{m.label}</p>
+                <div className="grid grid-cols-7 gap-0.5">
+                  {m.days.map(({ day, iso }) => {
+                    const status: DayStatus = byDay[iso] ?? "open";
+                    const s = STATUS_DISPLAY[status];
+                    return (
+                      <span
+                        key={iso}
+                        title={`${iso} — ${s.label}`}
+                        className={`text-[10px] font-display flex items-center justify-center w-full aspect-square border ${s.bg} ${s.text} ${s.border}`}
+                      >
+                        {day}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Tour legs / blocks summary — only shown if the API returned structured blocks */}
+      {upcomingBlocks.length > 0 && (
+        <div className="space-y-2">
+          <p className="font-display text-xs uppercase text-ink/50 tracking-widest">Upcoming Activity</p>
+          {upcomingBlocks.map((b: any) => {
+            const kindMeta: Record<string, { bg: string; text: string; label: string }> = {
+              tour_leg:    { bg: "bg-electric-blue", text: "text-cream", label: "Tour leg" },
+              unavailable: { bg: "bg-magenta",       text: "text-cream", label: "Unavailable" },
+              available:   { bg: "bg-lime",           text: "text-ink",  label: "Open slot" },
+            };
+            const meta = kindMeta[b.kind] ?? kindMeta.available;
+            return (
+              <div key={b.id} className="flex items-center gap-3 border-2 border-ink/20 bg-cream p-3">
+                <span className={`shrink-0 font-display text-[10px] uppercase px-2 py-0.5 border border-ink ${meta.bg} ${meta.text}`}>
+                  {meta.label}
+                </span>
+                <span className="font-display text-xs text-ink/70 uppercase">
+                  {b.start_date === b.end_date ? b.start_date : `${b.start_date} → ${b.end_date}`}
+                </span>
+                {(b.label || (b.cities ?? []).length > 0) && (
+                  <span className="text-xs text-ink/50 truncate">
+                    {[b.label, (b.cities ?? []).slice(0, 2).join(", ")].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1100,11 +1206,11 @@ export default function ArtistDetailPage() {
 
                   {/* Inline form */}
                   <div className="space-y-5">
-                    <InlineBookingForm artist={artist} />
-                    <p className="text-xs text-ink/50">
-                      Submitting goes to <code className="bg-ink/10 px-1">/api/booking-inquiry</code> →
-                      stored in the booking_requests table → visible to the artist in their portal.
-                    </p>
+                    <BookingForm
+                      artistSlug={artist.slug}
+                      artistName={artist.name}
+                      source="artist_profile"
+                    />
                   </div>
                 </div>
               )}
@@ -1116,7 +1222,7 @@ export default function ArtistDetailPage() {
                   The artist updates their calendar from the portal. Days marked busy or
                   tentative typically aren't bookable; days marked as open slots are looking for a show.
                 </p>
-                <AvailabilityStrip dates={upcomingDates} />
+                <AvailabilityStrip artistSlug={artist.slug} dates={upcomingDates} />
               </section>
 
               {/* Browse other artists */}

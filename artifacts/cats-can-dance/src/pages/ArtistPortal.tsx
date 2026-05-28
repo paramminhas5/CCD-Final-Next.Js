@@ -1,12 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
+import { Loader2 } from "lucide-react";
 import { useNavigate, useSearchParams, Link } from "@/lib/compat-router";
-import { useUser, useClerk } from "@clerk/react";
+import { useUser, useClerk, useAuth } from "@clerk/react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { supabase } from "@/lib/supabase-shim";
 import { api } from "@/lib/api-client";
 import { toast } from "sonner";
+import PackagesManager from "@/components/portal/PackagesManager";
+import CalendarManager from "@/components/portal/CalendarManager";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 type Artist = {
@@ -258,48 +261,239 @@ function DateManager({ artistId }: { artistId: string }) {
 }
 
 /* ─── Booking Inbox ──────────────────────────────────────────────────────── */
-function BookingInbox({ artistId }: { artistId: string }) {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+const STATUS_META: Record<string, { label: string; bg: string; text: string }> = {
+  new:       { label: "New",       bg: "bg-acid-yellow",     text: "text-ink" },
+  quoted:    { label: "Quoted",    bg: "bg-electric-blue",   text: "text-cream" },
+  held:      { label: "Held",      bg: "bg-orange",          text: "text-ink" },
+  confirmed: { label: "Confirmed", bg: "bg-lime",            text: "text-ink" },
+  declined:  { label: "Declined",  bg: "bg-ink/40",          text: "text-cream" },
+  cancelled: { label: "Cancelled", bg: "bg-ink/20",          text: "text-ink" },
+  completed: { label: "Completed", bg: "bg-ink",             text: "text-cream" },
+};
 
-  useEffect(() => {
-    supabase
-      .from("booking_requests")
-      .select("*")
-      .eq("artist_id", artistId)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => { setBookings((data ?? []) as Booking[]); setLoading(false); });
-  }, [artistId]);
+const STATUS_TRANSITIONS: Record<string, { next: string; label: string; colour: string }[]> = {
+  new:    [{ next: "quoted",   label: "Send Quote",   colour: "bg-electric-blue text-cream" }, { next: "declined", label: "Decline", colour: "bg-magenta text-cream" }],
+  quoted: [{ next: "held",     label: "Place Hold",   colour: "bg-orange text-ink" },          { next: "declined", label: "Decline", colour: "bg-magenta text-cream" }],
+  held:   [{ next: "confirmed",label: "Confirm",      colour: "bg-lime text-ink" },             { next: "declined", label: "Decline", colour: "bg-magenta text-cream" }],
+  confirmed: [{ next: "completed", label: "Mark Done", colour: "bg-ink text-cream" },           { next: "cancelled", label: "Cancel", colour: "bg-magenta text-cream" }],
+};
+
+type BookingRequest = {
+  id: string; requester_email: string; requester_name?: string; requester_phone: string | null;
+  purpose: string | null; created_at: string; verified_at: string | null; forward_requested: boolean;
+  // New structured fields
+  status?: string; event_type?: string; event_date?: string; event_date_end?: string;
+  venue_name?: string; venue_city?: string; budget_inr?: number; notes?: string;
+  quoted_inr?: number; hold_expires_at?: string; confirmed_at?: string; source?: string;
+};
+
+function BookingInbox({ artistId }: { artistId: string }) {
+  const { getToken } = useAuth();
+  const [bookings, setBookings] = useState<BookingRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [quoteAmount, setQuoteAmount] = useState<Record<string, string>>({});
+
+  async function authHeaders(): Promise<Record<string, string>> {
+    const token = await getToken();
+    return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  }
+
+  async function load() {
+    setLoading(true);
+    try {
+      const hdrs = await authHeaders();
+      const qs = statusFilter !== "all" ? `?status=${statusFilter}` : "";
+      const r = await fetch(`/api/booking-requests/mine${qs}`, { headers: hdrs });
+      if (r.ok) {
+        const data = await r.json();
+        setBookings(Array.isArray(data) ? data : []);
+      } else {
+        // Fallback: old supabase direct query for backward compat
+        const { data } = await supabase
+          .from("booking_requests")
+          .select("*")
+          .eq("artist_id", artistId)
+          .order("created_at", { ascending: false });
+        setBookings((data ?? []) as BookingRequest[]);
+      }
+    } catch {
+      toast.error("Failed to load bookings");
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, [artistId, statusFilter]);
+
+  async function handleTransition(bookingId: string, nextStatus: string, quotedInr?: number) {
+    setActioning(bookingId);
+    try {
+      const hdrs = await authHeaders();
+      const r = await fetch(`/api/booking-requests/${bookingId}/status`, {
+        method: "PATCH", headers: hdrs,
+        body: JSON.stringify({ status: nextStatus, quoted_inr: quotedInr }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
+      toast.success(`Booking ${nextStatus}`);
+      load();
+    } catch (e: any) { toast.error(e.message ?? "Failed"); }
+    finally { setActioning(null); }
+  }
+
+  const statusCounts = bookings.reduce<Record<string, number>>((acc, b) => {
+    const s = b.status ?? "new";
+    acc[s] = (acc[s] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-5">
-      <h2 className="font-display text-2xl uppercase text-ink border-b-4 border-ink pb-2">Booking Requests</h2>
-      {loading
-        ? <p className="font-display text-sm text-ink/50 animate-pulse">Loading…</p>
-        : bookings.length === 0
-        ? <p className="font-display text-sm text-ink/50">No booking requests yet.</p>
-        : <div className="space-y-4">
-          {bookings.map((b) => (
-            <div key={b.id} className="border-4 border-ink bg-cream p-5 chunk-shadow">
-              <div className="flex justify-between items-start gap-4">
-                <div>
-                  <p className="font-display text-lg text-ink">{b.requester_email}</p>
-                  {b.requester_phone && <p className="text-sm text-ink/60">{b.requester_phone}</p>}
-                  {b.purpose && <p className="text-sm text-ink/80 mt-2 whitespace-pre-line">{b.purpose}</p>}
+      <div className="flex items-end justify-between gap-4 border-b-4 border-ink pb-4 flex-wrap">
+        <h2 className="font-display text-2xl uppercase text-ink">Booking Requests</h2>
+        {/* Status filter tabs */}
+        <div className="flex gap-1 flex-wrap">
+          {["all", "new", "quoted", "held", "confirmed", "completed"].map(s => {
+            const meta = s === "all" ? null : STATUS_META[s];
+            const count = s === "all" ? bookings.length : (statusCounts[s] ?? 0);
+            return (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`font-display text-xs uppercase px-3 py-1.5 border-2 border-ink transition-colors ${
+                  statusFilter === s ? "bg-ink text-cream" : "bg-cream text-ink hover:bg-acid-yellow"
+                }`}>
+                {s} {count > 0 && <span className="ml-0.5 opacity-70">({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="font-display text-sm text-ink/50 animate-pulse">Loading…</p>
+      ) : bookings.length === 0 ? (
+        <div className="border-4 border-ink bg-acid-yellow p-8 text-center">
+          <p className="font-display text-lg text-ink mb-1">No Requests Yet</p>
+          <p className="text-sm text-ink/60">
+            {statusFilter === "all" ? "Booking requests will appear here once promoters reach out." : `No ${statusFilter} bookings.`}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {bookings.map(b => {
+            const statusMeta = STATUS_META[b.status ?? "new"] ?? STATUS_META.new;
+            const transitions = STATUS_TRANSITIONS[b.status ?? "new"] ?? [];
+            const isActioning = actioning === b.id;
+
+            return (
+              <div key={b.id} className="border-4 border-ink bg-cream chunk-shadow">
+                {/* Status bar */}
+                <div className={`flex items-center justify-between px-5 py-2 border-b-4 border-ink ${statusMeta.bg}`}>
+                  <span className={`font-display text-xs uppercase tracking-widest ${statusMeta.text}`}>
+                    {statusMeta.label}
+                  </span>
+                  <span className={`font-display text-xs ${statusMeta.text} opacity-60`}>
+                    {new Date(b.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="font-display text-xs text-ink/50">{new Date(b.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</p>
-                  {b.verified_at && <span className="font-display text-xs bg-acid-yellow text-ink px-2 py-0.5 border border-ink">Verified</span>}
+
+                <div className="p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-4">
+                    {/* Contact */}
+                    <div>
+                      <p className="font-display text-xs uppercase text-ink/40 mb-0.5">From</p>
+                      <p className="font-sans text-sm text-ink font-medium">{b.requester_name ?? b.requester_email}</p>
+                      <p className="font-sans text-xs text-ink/60">{b.requester_email}</p>
+                      {b.requester_phone && <p className="font-sans text-xs text-ink/60">{b.requester_phone}</p>}
+                    </div>
+                    {/* Event details */}
+                    {(b.event_type || b.event_date || b.venue_city) && (
+                      <div>
+                        <p className="font-display text-xs uppercase text-ink/40 mb-0.5">Event</p>
+                        {b.event_type && <p className="font-sans text-sm text-ink">{b.event_type}</p>}
+                        {b.event_date && (
+                          <p className="font-sans text-xs text-ink/60">
+                            {b.event_date}{b.event_date_end ? ` → ${b.event_date_end}` : ""}
+                          </p>
+                        )}
+                        {(b.venue_name || b.venue_city) && (
+                          <p className="font-sans text-xs text-ink/60">{[b.venue_name, b.venue_city].filter(Boolean).join(", ")}</p>
+                        )}
+                        {b.budget_inr && <p className="font-sans text-xs text-ink/60">Budget: ₹{b.budget_inr.toLocaleString("en-IN")}</p>}
+                      </div>
+                    )}
+                    {/* Legacy purpose blob */}
+                    {!b.event_type && b.purpose && (
+                      <div className="sm:col-span-2">
+                        <p className="font-display text-xs uppercase text-ink/40 mb-0.5">Details</p>
+                        {b.purpose.split(" | ").map((p, i) => <p key={i} className="text-sm text-ink/80">{p}</p>)}
+                      </div>
+                    )}
+                    {/* Notes */}
+                    {b.notes && (
+                      <div className="sm:col-span-2">
+                        <p className="font-display text-xs uppercase text-ink/40 mb-0.5">Notes</p>
+                        <p className="text-sm text-ink/70 whitespace-pre-line">{b.notes}</p>
+                      </div>
+                    )}
+                    {/* Quote amount if set */}
+                    {b.quoted_inr && (
+                      <div>
+                        <p className="font-display text-xs uppercase text-ink/40 mb-0.5">Your Quote</p>
+                        <p className="font-display text-lg text-ink">₹{b.quoted_inr.toLocaleString("en-IN")}</p>
+                      </div>
+                    )}
+                    {/* Hold expiry */}
+                    {b.hold_expires_at && b.status === "held" && (
+                      <div>
+                        <p className="font-display text-xs uppercase text-ink/40 mb-0.5">Hold Expires</p>
+                        <p className="font-sans text-xs text-ink/70">
+                          {new Date(b.hold_expires_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action row */}
+                  <div className="flex flex-wrap gap-2 items-center border-t-4 border-ink/10 pt-4">
+                    {/* Quote amount input if transitioning to quoted */}
+                    {b.status === "new" && (
+                      <div className="flex items-center gap-2 border-4 border-ink bg-cream">
+                        <span className="pl-3 font-display text-xs text-ink/40">₹</span>
+                        <input
+                          type="number" min={0}
+                          value={quoteAmount[b.id] ?? ""}
+                          onChange={e => setQuoteAmount(q => ({ ...q, [b.id]: e.target.value }))}
+                          placeholder="Your quote amount"
+                          className="w-36 px-2 py-2 bg-transparent font-sans text-sm text-ink focus:outline-none"
+                        />
+                      </div>
+                    )}
+
+                    {transitions.map(t => (
+                      <button key={t.next} disabled={isActioning}
+                        onClick={() => handleTransition(b.id, t.next, t.next === "quoted" ? Number(quoteAmount[b.id]) : undefined)}
+                        className={`font-display text-xs uppercase px-4 py-2 border-2 border-ink transition-all ${t.colour} hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50`}>
+                        {isActioning ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : t.label}
+                      </button>
+                    ))}
+
+                    <a href={`mailto:${b.requester_email}?subject=Re: Your booking request`}
+                      className="ml-auto font-display text-xs uppercase px-4 py-2 border-2 border-ink bg-cream hover:bg-acid-yellow transition-colors">
+                      Reply by Email →
+                    </a>
+                    {b.requester_phone && (
+                      <a href={`https://wa.me/${b.requester_phone.replace(/\D/g, "")}`}
+                        target="_blank" rel="noreferrer"
+                        className="font-display text-xs uppercase px-4 py-2 border-2 border-ink bg-cream hover:bg-lime transition-colors">
+                        WhatsApp
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-              <a href={`mailto:${b.requester_email}`}
-                className="mt-3 inline-block font-display text-xs uppercase bg-magenta text-cream px-4 py-2 border-2 border-ink">
-                Reply →
-              </a>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      }
+      )}
     </div>
   );
 }
@@ -384,7 +578,7 @@ function MarketplaceInbox({ artistSlug, artistName }: { artistSlug: string; arti
 }
 
 /* ─── Main Dashboard ─────────────────────────────────────────────────────── */
-type Tab = "profile" | "dates" | "bookings" | "inquiries";
+type Tab = "profile" | "calendar" | "packages" | "bookings" | "inquiries";
 
 const ArtistPortal = () => {
   const navigate = useNavigate();
@@ -516,9 +710,10 @@ const ArtistPortal = () => {
   );
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "profile", label: "Profile" },
-    { key: "dates", label: "Dates" },
-    { key: "bookings", label: "Bookings" },
+    { key: "profile",   label: "Profile" },
+    { key: "calendar",  label: "📅 Calendar" },
+    { key: "packages",  label: "💰 Packages" },
+    { key: "bookings",  label: "Bookings" },
     { key: "inquiries", label: "📩 Inquiries" },
   ];
 
@@ -565,7 +760,8 @@ const ArtistPortal = () => {
         </div>
 
         {tab === "profile" && <ProfileEditor artist={artist} onSaved={setArtist} />}
-        {tab === "dates" && <DateManager artistId={artist.id} />}
+        {tab === "calendar" && <CalendarManager artistId={artist.id} />}
+        {tab === "packages" && <PackagesManager artistId={artist.id} />}
         {tab === "bookings" && <BookingInbox artistId={artist.id} />}
         {tab === "inquiries" && <MarketplaceInbox artistSlug={artist.slug} artistName={artist.name} />}
       </div>
