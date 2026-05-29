@@ -48,7 +48,7 @@ const SeriesStrip = ({ events, currentSlug, seriesLabel, variant = "detail" }: P
             </Link>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {events
+            {[...events]
               .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
               .slice(0, 4)
               .map((e) => (
