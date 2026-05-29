@@ -28,10 +28,13 @@ import SeriesStrip from "@/components/SeriesStrip";
 import { parseEventDate } from "@/lib/parse-date";
 
 // ── Countdown hook — driven by actual next-event date, not hardcoded ────────
+// IMPORTANT: initialise with { over: true } (not Date.now()) so the SSR HTML
+// and the client's first render agree — avoids React hydration errors #418/#425.
+// The real value is set in the useEffect which only runs on the client.
 function useCountdown(target: Date | null) {
-  const calc = () => {
+  const calc = (now: number) => {
     if (!target) return { days: 0, hours: 0, mins: 0, over: true };
-    const diff = target.getTime() - Date.now();
+    const diff = target.getTime() - now;
     if (diff <= 0) return { days: 0, hours: 0, mins: 0, over: true };
     const secs = Math.floor(diff / 1000);
     return {
@@ -41,10 +44,12 @@ function useCountdown(target: Date | null) {
       over: false,
     };
   };
-  const [t, setT] = useState(calc);
+  // Start with a stable "over" state so SSR and first client render match.
+  const [t, setT] = useState({ days: 0, hours: 0, mins: 0, over: true });
   useEffect(() => {
-    setT(calc());
-    const id = setInterval(() => setT(calc()), 60000);
+    // Immediately update on the client side after hydration
+    setT(calc(Date.now()));
+    const id = setInterval(() => setT(calc(Date.now())), 60000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.getTime()]);
@@ -92,9 +97,10 @@ const Events = () => {
     })();
   }, []);
 
-  const upcoming = useMemo(() => (all ?? []).filter((e) => e.status === "upcoming"), [all]);
-  const past     = useMemo(() => (all ?? []).filter((e) => e.status === "past"),     [all]);
-  const featured = upcoming[0] ?? all[0] ?? null;
+  const safeAll  = Array.isArray(all) ? all : [];
+  const upcoming = useMemo(() => safeAll.filter((e) => e.status === "upcoming"), [safeAll]);
+  const past     = useMemo(() => safeAll.filter((e) => e.status === "past"),     [safeAll]);
+  const featured = upcoming[0] ?? safeAll[0] ?? null;
   const restUpcoming = upcoming.slice(1);
 
   // Dynamic next-show date — derived from the first upcoming event, never hardcoded
@@ -108,16 +114,18 @@ const Events = () => {
   const seriesGroup = useMemo(() => {
     const upcomingSeries = upcoming.find((e) => !!e.series);
     if (!upcomingSeries?.series) return null;
-    const events = (all ?? []).filter((e) => e.series === upcomingSeries.series);
+    const events = safeAll.filter((e) => e.series === upcomingSeries.series);
     return {
       key: upcomingSeries.series,
       label: upcomingSeries.series_label || (upcomingSeries.series ?? "").toUpperCase(),
       events,
     };
-  }, [all, upcoming]);
+  }, [safeAll, upcoming]);
 
   // ─── JSON-LD ───
-  const eventLd = all.map((e) => ({
+  // NOTE: validFrom uses a fixed build-time string (not Date.now()) to avoid
+  // SSR/client hydration mismatches from time-dependent values.
+  const eventLd = safeAll.map((e) => ({
     "@context": "https://schema.org",
     "@type": "MusicEvent",
     name: `Cats Can Dance — ${e.title}`,
@@ -145,7 +153,7 @@ const Events = () => {
       price: "0",
       priceCurrency: "INR",
       availability: "https://schema.org/InStock",
-      validFrom: new Date().toISOString(),
+      validFrom: "2026-01-01T00:00:00Z",
     },
     url: `https://catscandance.com/events/${e.slug}`,
   }));
