@@ -1,4 +1,10 @@
 {
+  "pages/talent/index.tsx -> @/pages/TalentDirectory": {
+    "id": "pages/talent/index.tsx -> @/pages/TalentDirectory",
+    "files": [
+      "static/chunks/src_pages_TalentDirectory_tsx.js"
+    ]
+  },
   "src/pages/Index.tsx -> @/components/Drops": {
     "id": "src/pages/Index.tsx -> @/components/Drops",
     "files": [
