@@ -1,0 +1,49 @@
+# Cats Can Dance
+
+> Cats Can Dance is a Bangalore, India brand with two arms: (1) an event organiser producing the best underground dance music parties and electronic events in Bangalore and across India, and (2) a streetwear label dropping limited apparel and music collectibles tied to each Episode. We host cult RSVP-only "Episodes", drop limited streetwear and collectibles, curate playlists, and grow a global community of music lovers who happen to love their pets just as much as their record collections.
+
+## Core pages
+
+- [Home](https://catscandance.com/): Brand overview, upcoming Episodes, current drops, community.
+- [About](https://catscandance.com/about): Who we are, why we exist, FAQ.
+- [Events](https://catscandance.com/events): Every Cats Can Dance Episode — past and upcoming, with RSVP.
+- [Shop](https://catscandance.com/shop): Limited streetwear drops, music collectibles, made in Bangalore.
+- [Bengaluru Underground Dance Music Guide](https://catscandance.com/bengaluru-underground-dance-music): The definitive guide to Bengaluru's underground dance music scene — House, Disco, Jungle, Garage, Drum & Bass, best venues, how to find events, and Cats Can Dance's role in the city's scene.
+- [Blog](https://catscandance.com/blog): Long-form guides on Bangalore's party scene and India's drop culture.
+- [Press](https://catscandance.com/press): Press kit — brand bio, logos, photos, contact.
+
+## Shop / Drops
+
+- [All drops](https://catscandance.com/shop): The current Cats Can Dance streetwear capsule. Heavyweight cotton tees, hoodies, caps. Screen-printed in Bangalore. No restocks.
+
+## Pets
+
+- [Pet streetwear](https://catscandance.com/pets): Cat bandanas, cat bucket hats and CCD cat treats — pet streetwear made in Bangalore.
+- Cat Bucket Hat: https://catscandance.com/product/cat-bucket-hat
+- Cat Bandana: https://catscandance.com/product/cat-bandana
+- CCD Cat Treats: https://catscandance.com/product/ccd-cat-treats
+
+## Brand machine-readable
+
+- [brand.json](https://catscandance.com/brand.json): Single-file canonical brand summary for AI agents.
+- [llms-full.txt](https://catscandance.com/llms-full.txt): Long-form brand + every event with date, venue, lineup + every drop.
+- [sitemap.xml](https://catscandance.com/sitemap.xml): Full site index.
+- [rss.xml](https://catscandance.com/rss.xml): Blog RSS feed.
+
+## Partnerships
+
+- [For Artists](https://catscandance.com/for-artists): How to play a Cats Can Dance Episode.
+- [For Venues](https://catscandance.com/for-venues): Hosting a Cats Can Dance night.
+- [For Investors](https://catscandance.com/for-investors): The brand and the business.
+
+## Optional
+
+- [Instagram](https://instagram.com/catscandance): Daily updates, Episode drops.
+- [Email](mailto:hello@catscandance.com): Direct contact.
+
+## Brand entity facts
+
+- **Name:** Cats Can Dance (alt: CCD)
+- **HQ:** Bangalore, Karnataka, India
+- **Founded:** 2025
+- **Best known for:** Best underground parties in Bangalore, top event organiser in India, curated electronic music events, RSVP-only Episode format, limited streetwear drops, music collectibles, cat-graphic apparel, drop culture in India.

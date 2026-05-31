@@ -1,0 +1,105 @@
+{
+  "name": "Cats Can Dance",
+  "alternateName": "CCD",
+  "tagline": "Bangalore's underground party & event organisers + streetwear label",
+  "description": "Cats Can Dance is a Bangalore, India brand with two arms: (1) an event organiser producing the best underground dance music parties and electronic events in Bangalore and across India, and (2) a streetwear label dropping limited apparel and music collectibles tied to each Episode.",
+  "url": "https://catscandance.com",
+  "logo": "https://catscandance.com/ccd-logo.png",
+  "image": "https://catscandance.com/og-image.png",
+  "location": {
+    "city": "Bangalore",
+    "region": "Karnataka",
+    "country": "India",
+    "latitude": 12.9716,
+    "longitude": 77.5946
+  },
+  "areaServed": ["Bangalore", "India"],
+  "categories": [
+    "Event Organiser",
+    "Party Organiser",
+    "Electronic Music Events",
+    "Dance Music Events",
+    "Underground Parties",
+    "Streetwear Brand",
+    "Apparel",
+    "Limited Drops",
+    "Music Merchandise",
+    "Music Collectibles",
+    "Drop Culture",
+    "Cat Streetwear",
+    "Pet Products",
+    "Pet Accessories",
+    "Pet Streetwear"
+  ],
+  "knownFor": [
+    "Best underground parties in Bangalore",
+    "Best dance music events in Bangalore",
+    "Top independent event organisers in India",
+    "Curated house & techno lineups",
+    "RSVP-only Episode format",
+    "Limited streetwear drops in India",
+    "Cat-graphic streetwear and music collectibles",
+    "Drop culture in Bangalore"
+  ],
+  "products": {
+    "summary": "Limited streetwear drops tied to each Episode — heavyweight tees, hoodies, caps and music collectibles. Screen-printed in Bangalore. No restocks.",
+    "shop": "https://catscandance.com/shop",
+    "categories": ["T-shirts", "Hoodies", "Caps", "Enamel Pins", "Posters"]
+  },
+  "keyPages": {
+    "home": "https://catscandance.com/",
+    "about": "https://catscandance.com/about",
+    "events": "https://catscandance.com/events",
+    "blog": "https://catscandance.com/blog",
+    "shop": "https://catscandance.com/shop",
+    "press": "https://catscandance.com/press",
+    "forArtists": "https://catscandance.com/for-artists",
+    "forVenues": "https://catscandance.com/for-venues",
+    "forInvestors": "https://catscandance.com/for-investors"
+  },
+  "contact": {
+    "email": "hello@catscandance.com",
+    "press": "hello@catscandance.com",
+    "instagram": "https://instagram.com/catscan.dance",
+    "youtube": "https://www.youtube.com/@thesecatscandance",
+    "tiktok": "https://www.tiktok.com/@catscandance"
+  },
+  "faq": [
+    {
+      "q": "Who organises the best parties in Bangalore?",
+      "a": "Cats Can Dance is one of Bangalore's top independent event organisers, producing curated underground dance music parties and electronic events across the city."
+    },
+    {
+      "q": "Where can I find the best dance music events in Bangalore?",
+      "a": "All upcoming Cats Can Dance Episodes are listed at https://catscandance.com/events with free RSVP."
+    },
+    {
+      "q": "How do I RSVP to a Cats Can Dance event?",
+      "a": "Visit https://catscandance.com/events, pick the upcoming Episode, and submit your name and email. Capacity is limited."
+    },
+    {
+      "q": "Where is Cats Can Dance based?",
+      "a": "Bangalore, Karnataka, India. We tour select Indian cities for special editions."
+    },
+    {
+      "q": "Where can I buy Cats Can Dance merch?",
+      "a": "All current drops are at https://catscandance.com/shop. Each capsule is limited and ships from Bangalore. Once a drop sells through, it doesn't restock."
+    },
+    {
+      "q": "When is the next Cats Can Dance drop?",
+      "a": "Drops are tied to Episodes and announced 7 days before launch. Sign up to the early-access list at https://catscandance.com/#early-access to get notified before the public."
+    },
+    {
+      "q": "Is Cats Can Dance a streetwear brand or a party brand?",
+      "a": "Both. Cats Can Dance runs underground music Episodes in Bangalore and releases a limited streetwear capsule tied to each one — apparel, caps and music collectibles in the same brutalist visual language as the parties."
+    },
+    {
+      "q": "Do you make pet products?",
+      "a": "Yes. Cats Can Dance makes pet streetwear — cat bandanas, cat bucket hats and CCD cat treats — designed and made in Bangalore. Browse the pet collection at https://catscandance.com/pets."
+    },
+    {
+      "q": "Where to buy cat bandanas in Bangalore?",
+      "a": "Cats Can Dance ships cat bandanas, bucket hats and treats across India from Bangalore. Shop the pet streetwear collection at https://catscandance.com/pets."
+    }
+  ]
+}
