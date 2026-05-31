@@ -8,70 +8,6 @@
  */
 import type { NextApiRequest, NextApiResponse } from "next";
 
-// ── Static artist fallback — shown when Supabase artists table is empty ───────
-// Derived from src/content/artists.ts — top 40 entries normalised to DB shape.
-const STATIC_ARTISTS = [
-  { id: "static-1",  slug: "indo-warehouse",   name: "INDO WAREHOUSE",   status: "approved", featured: true,  based_city: "New York, USA",  from_city: "India",      genres: ["Indo House","Melodic Techno"],          bio: "First South Asian electronic collective at Coachella. Coined 'Indo House'. The biggest Indian electronic export right now.", instagram: "indowarehouse",  booking_email: null,          open_to_bookings: true },
-  { id: "static-2",  slug: "nikki-nair",        name: "NIKKI NAIR",        status: "approved", featured: true,  based_city: "USA",            from_city: "India",      genres: ["Breakbeat","Techno","Electro"],          bio: "Most booked Indian-origin producer in global underground. Pure electronic.",                                                  instagram: "nikkinair",      booking_email: null,          open_to_bookings: true },
-  { id: "static-3",  slug: "kohra",             name: "KOHRA",             status: "approved", featured: true,  based_city: "New Delhi",      from_city: "India",      genres: ["Techno","House","Minimal"],              bio: "Most Boiler Room appearances by an Indian solo electronic artist. Founder of Qilla Records.",                                 instagram: "kohra",          booking_email: "booking@artistivity.com", open_to_bookings: true },
-  { id: "static-4",  slug: "sheral",            name: "SHERAL",            status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Electronic","Techno"],                   bio: "Rising female DJ in Indian electronic scene. Boiler Room Delhi NCR 2024.",                                                   instagram: "sheral",         booking_email: null,          open_to_bookings: true },
-  { id: "static-5",  slug: "kandy-kuri",        name: "KANDY KURI",        status: "approved", featured: false, based_city: "Bengaluru",      from_city: "India",      genres: ["Electronic"],                            bio: "South Indian electronic representative on Boiler Room. Bengaluru scene.",                                                    instagram: "kandykuri",      booking_email: null,          open_to_bookings: true },
-  { id: "static-6",  slug: "dj-sartek",         name: "DJ SARTEK",         status: "approved", featured: false, based_city: "New Delhi",      from_city: "New Delhi",  genres: ["Folk House","Desi Techno","Progressive"], bio: "First Indian on Hardwell's Revealed Recordings. Meta Awards winner 2024.",                                                   instagram: "sartek",         booking_email: null,          open_to_bookings: true },
-  { id: "static-7",  slug: "anish-sood",        name: "ANISH SOOD",        status: "approved", featured: false, based_city: "Goa",            from_city: "India",      genres: ["Progressive Trance","Deep House"],       bio: "Only Indian on Anjunadeep. 15+ years experience.",                                                                          instagram: "anyasa.music",   booking_email: "hello@anyasa.com", open_to_bookings: true },
-  { id: "static-8",  slug: "lost-stories",      name: "LOST STORIES",      status: "approved", featured: true,  based_city: "Mumbai",         from_city: "Mumbai",     genres: ["Indian Folk + Electronic","Progressive House"], bio: "Pioneers of Indian folk-electronic fusion. International festival regulars. 500K+ followers.",                              instagram: "loststoriesmusic", booking_email: null,        open_to_bookings: true },
-  { id: "static-9",  slug: "dualist-inquiry",   name: "DUALIST INQUIRY",   status: "approved", featured: false, based_city: "Goa",            from_city: "Goa",        genres: ["Indie Electronic","Experimental"],       bio: "Goa's indie electronic pioneer. Founder of Field Works. Lollapalooza 2024.",                                                  instagram: "dualistinquiry", booking_email: null,          open_to_bookings: true },
-  { id: "static-10", slug: "sandunes",          name: "SANDUNES",          status: "approved", featured: true,  based_city: "Mumbai",         from_city: "India",      genres: ["Electronic","Experimental","Live"],      bio: "Apple Music Up Next Artist 2022. Red Bull Music Academy BaseCamp Dubai.",                                                    instagram: "sandunesmusic",  booking_email: "sandunesmusic@gmail.com", open_to_bookings: true },
-  { id: "static-11", slug: "murthovic",         name: "MURTHOVIC",         status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Electronic"],                            bio: "Part of India's original Boiler Room class. Magnetic Fields regular.",                                                      instagram: "murthovic",      booking_email: null,          open_to_bookings: true },
-  { id: "static-12", slug: "midnight-traffic",  name: "MIDNIGHT TRAFFIC",  status: "approved", featured: false, based_city: "Hyderabad",      from_city: "India",      genres: ["Electronic","House"],                    bio: "Active Hyderabad electronic duo, regional scene builders.",                                                                 instagram: "midnighttraffic", booking_email: null,         open_to_bookings: true },
-  { id: "static-13", slug: "bullzeye",          name: "BULLZEYE",          status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Techno","House"],                        bio: "One of the most booked DJs in India. Only Indian DJ to play Ellum Audio showcase in Goa.",                                   instagram: "bullzeye",       booking_email: null,          open_to_bookings: true },
-  { id: "static-14", slug: "dotdat",            name: "DOTDAT",            status: "approved", featured: false, based_city: "Goa",            from_city: "Pune",       genres: ["Techno"],                                bio: "Standout figure in Indian techno scene. Groove-infused sci-fi techno. Rising force.",                                        instagram: "dotdatofficial", booking_email: "rajat@oddx.in", open_to_bookings: true },
-  { id: "static-15", slug: "monophonik",        name: "MONOPHONIK",        status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Analog Synth","Electronic"],             bio: "Analog synth enthusiast. Regular on India's most credible electronic festival lineup.",                                      instagram: "monophonik",     booking_email: null,          open_to_bookings: false },
-  { id: "static-16", slug: "hamza-rahimtula",   name: "HAMZA RAHIMTULA",   status: "approved", featured: false, based_city: "Rajasthan",      from_city: "India",      genres: ["Folk","Electronic","House"],             bio: "Rajasthan folk meets electronic. Regular at Echoes of Earth.",                                                              instagram: "hamzarahimtula", booking_email: null,          open_to_bookings: true },
-  { id: "static-17", slug: "sid-vashi",         name: "SID VASHI",         status: "approved", featured: false, based_city: "Mumbai",         from_city: "Michigan, USA", genres: ["Jazz","Electronic","Experimental"],   bio: "Trained jazz saxophonist + electronic producer. Signed to Only Much Louder.",                                               instagram: "sidvashi",       booking_email: null,          open_to_bookings: true },
-  { id: "static-18", slug: "komorebi",          name: "KOMOREBI",          status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Electronic","Indie"],                    bio: "Singer-producer bridging electronic and indie. Lollapalooza 2024 performer.",                                               instagram: "komorebimind",   booking_email: null,          open_to_bookings: true },
-  { id: "static-19", slug: "dreamstates",       name: "DREAMSTATES",       status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Electronic","Psychedelic"],              bio: "DGTL India 2025. Psychedelic electronic sound.",                                                                            instagram: "dreamstates",    booking_email: null,          open_to_bookings: true },
-  { id: "static-20", slug: "startdawg",         name: "STARTDAWG",         status: "approved", featured: true,  based_city: "Bengaluru",      from_city: "Bengaluru",  genres: ["House","Disco","Garage"],                bio: "Bangalore staple. House selector with a soft spot for disco edits and the long build. CCD resident.",                        instagram: "startdawg",      booking_email: null,          open_to_bookings: true },
-  { id: "static-21", slug: "merman",            name: "MERMAN",            status: "approved", featured: true,  based_city: "Bengaluru",      from_city: "Bengaluru",  genres: ["Garage","Jungle","D&B"],                 bio: "Garage, jungle, and the kind of low-end that fixes posture problems. CCD resident.",                                         instagram: "merman",         booking_email: null,          open_to_bookings: true },
-  { id: "static-22", slug: "project-91",        name: "PROJECT 91",        status: "approved", featured: false, based_city: "Pune",           from_city: "Pune",       genres: ["EDM","House"],                           bio: "India's most credible electronic duo on international labels. Performed in 8 countries.",                                    instagram: "project91music", booking_email: null,          open_to_bookings: true },
-  { id: "static-23", slug: "sickflip",          name: "SICKFLIP",          status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Bass","Electronic"],                     bio: "Bass music producer. Across Artists management. Strong in Indian bass scene.",                                               instagram: "sickflip",       booking_email: "ayush@acrossartists.com", open_to_bookings: true },
-  { id: "static-24", slug: "lost-stories",      name: "LOST STORIES",      status: "approved", featured: false, based_city: "Mumbai",         from_city: "Mumbai",     genres: ["Indian Folk + Electronic"],              bio: "Pioneers of Indian folk-electronic fusion. Hits 'Mahi', 'Bombay Dreams'.",                                                  instagram: "loststoriesmusic", booking_email: null,        open_to_bookings: true },
-  { id: "static-25", slug: "karan-kanchan",     name: "KARAN KANCHAN",     status: "approved", featured: false, based_city: "Mumbai",         from_city: "India",      genres: ["Hip-Hop","Electronic","Beats"],          bio: "Beatmaker/producer bridging hip-hop and electronic. Lollapalooza curated set.",                                              instagram: "karankanchan",   booking_email: "contact@karankanchan.com", open_to_bookings: true },
-  { id: "static-26", slug: "jatayu",            name: "JATAYU",            status: "approved", featured: false, based_city: "Chennai",        from_city: "Chennai",    genres: ["Carnatic Jazz","Funk","Electronic"],     bio: "Chennai band. Carnatic foundations with funk, rock, jazz. Lollapalooza 2024 + Echoes of Earth 2025.",                       instagram: "jatayu",         booking_email: null,          open_to_bookings: true },
-  { id: "static-27", slug: "the-f16s",          name: "THE F16s",          status: "approved", featured: false, based_city: "Chennai",        from_city: "Chennai",    genres: ["Rock","Electronic"],                     bio: "Chennai rock act. Echoes of Earth 2025. NH7 Weekender regular.",                                                            instagram: "thef16s",        booking_email: null,          open_to_bookings: true },
-  { id: "static-28", slug: "long-distances",    name: "LONG DISTANCES",    status: "approved", featured: false, based_city: "Mumbai",         from_city: "Mumbai",     genres: ["Post-Punk","Shoegaze","Electronic"],     bio: "Mumbai post-punk/shoegaze band with electronic elements. Lollapalooza 2024.",                                               instagram: "longdistances",  booking_email: null,          open_to_bookings: true },
-  { id: "static-29", slug: "kaleekarma",        name: "KALEEKARMA",        status: "approved", featured: false, based_city: "India",          from_city: "India",      genres: ["Electronic","House"],                    bio: "Magnetic Fields regular. Part of India's forward-thinking electronic community.",                                           instagram: "kaleekarma",     booking_email: null,          open_to_bookings: false },
-  { id: "static-30", slug: "prabh-deep",        name: "PRABH DEEP",        status: "approved", featured: false, based_city: "New Delhi",      from_city: "India",      genres: ["Hip-Hop","Electronic"],                  bio: "Indian rapper with electronic production. Azadi Records. Lollapalooza 2024.",                                               instagram: "prabhdeep",      booking_email: null,          open_to_bookings: true },
-] as any[];
-
-// ── Static curated events fallback — shown when curated_events table is empty ──
-// These give the Discover page and the "What's On" strip real content from day 1.
-const STATIC_CURATED_EVENTS = [
-  {
-    id: "static-ce-1", title: "CCDXSOCIAL 01 — Cats Can Dance × Social", url: "https://catscandance.com/events/ccdxsocial-01",
-    source: "editorial", city: "Bangalore", venue: "Indiranagar Social", event_date: "2026-06-29", event_time: "8:00 PM",
-    blurb: "India's first curated pet lifestyle festival meets underground dance music. Outdoor pet zone from 4 PM, vendor market, then Startdawg b2b Merman take the floor at 9.",
-    genre: ["House","Disco","Garage"], image_url: null, is_featured: true, submission_status: "published",
-  },
-  {
-    id: "static-ce-2", title: "CCDXSOCIAL 02 — Style Edition", url: "https://catscandance.com/events/ccdxsocial-02",
-    source: "editorial", city: "Bangalore", venue: "Social BLR", event_date: "2026-07-27", event_time: "8:00 PM",
-    blurb: "The style chapter. Live grooming demo on stage, best-dressed contest for pets and parents, dedicated photography corner. Startdawg b2b Merman bring the floor into the night.",
-    genre: ["House","Disco"], image_url: null, is_featured: true, submission_status: "published",
-  },
-  {
-    id: "static-ce-3", title: "CCDXSOCIAL 03 — Agility Edition", url: "https://catscandance.com/events/ccdxsocial-03",
-    source: "editorial", city: "Bangalore", venue: "Social BLR", event_date: "2026-08-30", event_time: "8:00 PM",
-    blurb: "The most physical show. Two agility courses, timed speed runs, performance contest open to any breed. MEGA tickets drop exclusively at this event.",
-    genre: ["House","Jungle"], image_url: null, is_featured: true, submission_status: "published",
-  },
-  {
-    id: "static-ce-4", title: "MEGA — Season Finale", url: "https://catscandance.com/events/ccdxsocial-mega",
-    source: "editorial", city: "Bangalore", venue: "Venue TBA — Large Format", event_date: "2026-10-01", event_time: "TBA",
-    blurb: "The season finale. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA.",
-    genre: ["House","Disco","Jungle","Garage"], image_url: null, is_featured: true, submission_status: "published",
-  },
-] as any[];
-
 const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
 // SUPABASE_SERVICE_KEY must be set in Vercel env vars.
 // Without it the proxy returns empty arrays — admin panel and scraper will not function.
@@ -434,13 +370,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (rq.featured === "true") f["featured"] = "eq.true";
     const limitVal = rq.limit ? parseInt(rq.limit) : null;
     let rows = (await get("artists", pq(f))) as any[];
-    // ── Static fallback: if DB returned nothing, serve bundled artist list ──
-    if (!rows || rows.length === 0) {
-      rows = (STATIC_ARTISTS as any[]).filter((a) => {
-        if (rq.featured === "true" && !a.featured) return false;
-        return true;
-      });
-    }
     if (limitVal && limitVal > 0) rows = rows.slice(0, limitVal);
     return res.json(rows ?? []);
   }
@@ -758,17 +687,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (rq.city)    f["city"]  = `ilike.%${rq.city}%`;
     if (rq.limit)   f["limit"] = rq.limit;
     if (rq.featured === "true") f["is_featured"] = "eq.true";
-    let rows = await get("curated_events", pq(f)) as any[];
-    // ── Static fallback when DB is empty ──────────────────────────────────────
-    if (!rows || rows.length === 0) {
-      rows = (STATIC_CURATED_EVENTS as any[]).filter((e) => {
-        if (rq.city && !e.city?.toLowerCase().includes(rq.city.toLowerCase())) return false;
-        if (rq.featured === "true" && !e.is_featured) return false;
-        return true;
-      });
-      if (rq.limit) rows = rows.slice(0, parseInt(rq.limit));
-    }
-    return res.json(rows);
+    return res.json(await get("curated_events", pq(f)));
   }
 
   // ── Videos (public) ─────────────────────────────────────────────────────────
