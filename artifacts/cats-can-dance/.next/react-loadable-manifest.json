@@ -1,10 +1,4 @@
 {
-  "pages/events/[slug].tsx -> @/pages/EventDetail": {
-    "id": "pages/events/[slug].tsx -> @/pages/EventDetail",
-    "files": [
-      "static/chunks/src_pages_EventDetail_tsx.js"
-    ]
-  },
   "src/pages/Index.tsx -> @/components/Drops": {
     "id": "src/pages/Index.tsx -> @/components/Drops",
     "files": [

@@ -20,6 +20,11 @@ const nextConfig = {
   },
   reactStrictMode: true,
   allowedDevOrigins: ["*"],
+  experimental: {
+    // Limit build worker threads to avoid OOM on large pages (Admin.tsx ~3500 lines)
+    cpus: 2,
+    workerThreads: false,
+  },
   images: {
     // Locked to known CDN hosts — avoids open wildcard in production
     remotePatterns: [
