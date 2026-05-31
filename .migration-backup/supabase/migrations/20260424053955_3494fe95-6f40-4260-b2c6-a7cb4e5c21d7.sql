@@ -1,1 +1,0 @@
-ALTER TABLE public.curated_events ADD COLUMN IF NOT EXISTS city text;

@@ -1,20 +1,20 @@
-export * from "./artists";
-export * from "./artist_connections";
-export * from "./artist_dates";
-export * from "./schema_artist_discography";
-export * from "./schema_artist_milestones";
-export * from "./schema_artist_press";
-export * from "./schema_artist_social_stats";
-export * from "./bookings";
-export * from "./curated_events";
-export * from "./event_appearances";
-export * from "./schema_event_artist_lineups";
-export * from "./events";
-export * from "./forms";
-export * from "./promoters";
-export * from "./site_settings";
-export * from "./site_videos";
-export * from "./schema_user_event_interactions";
-export * from "./schema_user_taste_profiles";
-export * from "./venue_profiles";
-export * from "./ticketing";
+// Export your models here. Add one export per file
+// export * from "./posts";
+//
+// Each model/table should ideally be split into different files.
+// Each model/table should define a Drizzle table, insert schema, and types:
+//
+//   import { pgTable, text, serial } from "drizzle-orm/pg-core";
+//   import { createInsertSchema } from "drizzle-zod";
+//   import { z } from "zod/v4";
+//
+//   export const postsTable = pgTable("posts", {
+//     id: serial("id").primaryKey(),
+//     title: text("title").notNull(),
+//   });
+//
+//   export const insertPostSchema = createInsertSchema(postsTable).omit({ id: true });
+//   export type InsertPost = z.infer<typeof insertPostSchema>;
+//   export type Post = typeof postsTable.$inferSelect;
+
+export {}

@@ -1,1 +1,0 @@
-ALTER TABLE public.site_settings ADD COLUMN IF NOT EXISTS blog_posts jsonb NOT NULL DEFAULT '[]'::jsonb;
