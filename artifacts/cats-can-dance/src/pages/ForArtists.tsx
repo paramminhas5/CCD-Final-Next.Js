@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import PageHero from "@/components/PageHero";

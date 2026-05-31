@@ -6,8 +6,8 @@
  */
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/react";
-import { Link } from "wouter";
-import { useLocation } from "wouter";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   Music, Heart, MapPin, Calendar, Settings, Users,
   Loader2, ExternalLink, Bell, BellOff,
@@ -181,14 +181,14 @@ function PreferencesPanel({
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function UserProfilePage() {
   const { user, isLoaded, isSignedIn } = useUser();
-  const [, navigate] = useLocation();
+  const router = useRouter();
   const [profile, setProfile] = useState<TasteProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"following" | "preferences">("following");
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn) { navigate("/sign-in"); return; }
+    if (!isSignedIn) { router.push("/sign-in"); return; }
     const userId = user.id;
     fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`)
       .then(r => r.json())

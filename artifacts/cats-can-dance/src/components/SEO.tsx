@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import Head from "next/head";
 
 type Props = {
   title: string;
@@ -24,53 +24,55 @@ const SEO = ({ title, description, path = "/", image, imageAlt, jsonLd, type = "
   const ogType = isJpg ? "image/jpeg" : "image/png";
   const alt = imageAlt ?? title;
   const ldArray = Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [];
-  useEffect(() => {
-    document.title = title;
-    const setMeta = (sel: string, content: string) => {
-      let el = document.querySelector(sel) as HTMLMetaElement | null;
-      if (!el) {
-        el = document.createElement("meta");
-        if (sel.includes("property=")) el.setAttribute("property", sel.match(/property="([^"]+)"/)?.[1] ?? "");
-        else if (sel.includes("name=")) el.setAttribute("name", sel.match(/name="([^"]+)"/)?.[1] ?? "");
-        document.head.appendChild(el);
-      }
-      el.setAttribute("content", content);
-    };
-    setMeta('meta[name="description"]', description);
-    setMeta('meta[name="robots"]', noindex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1");
-    if (keywords) setMeta('meta[name="keywords"]', keywords);
-    setMeta('meta[property="og:title"]', title);
-    setMeta('meta[property="og:description"]', description);
-    setMeta('meta[property="og:url"]', url);
-    setMeta('meta[property="og:type"]', type === "article" ? "article" : "website");
-    setMeta('meta[property="og:image"]', og);
-    setMeta('meta[property="og:image:secure_url"]', og);
-    setMeta('meta[property="og:image:type"]', ogType);
-    setMeta('meta[property="og:image:alt"]', alt);
-    setMeta('meta[name="twitter:title"]', title);
-    setMeta('meta[name="twitter:description"]', description);
-    setMeta('meta[name="twitter:image"]', og);
-    setMeta('meta[name="twitter:image:alt"]', alt);
+  return (
+    <Head>
+      <title>{title}</title>
+      <meta name="description" content={description} />
+      {keywords && <meta name="keywords" content={keywords} />}
+      <meta name="author" content="Cats Can Dance" />
+      <meta
+        name="robots"
+        content={
+          noindex
+            ? "noindex, nofollow"
+            : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      />
+      <meta name="theme-color" content="#ff2bd6" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
+      <link rel="canonical" href={url} />
+      <link rel="alternate" hrefLang="x-default" href={url} />
 
-    // Canonical link
-    let canon = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canon) { canon = document.createElement("link"); canon.rel = "canonical"; document.head.appendChild(canon); }
-    canon.href = url;
+      {/* Open Graph */}
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      <meta property="og:url" content={url} />
+      <meta property="og:type" content={type === "article" ? "article" : "website"} />
+      <meta property="og:site_name" content="Cats Can Dance" />
+      <meta property="og:locale" content="en_IN" />
+      <meta property="og:image" content={og} />
+      <meta property="og:image:secure_url" content={og} />
+      <meta property="og:image:type" content={ogType} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={alt} />
 
-    // JSON-LD
-    document.querySelectorAll('script[data-seo-ld]').forEach(el => el.remove());
-    ldArray.forEach((obj) => {
-      const s = document.createElement("script");
-      s.type = "application/ld+json";
-      s.setAttribute("data-seo-ld", "true");
-      s.textContent = JSON.stringify(obj);
-      document.head.appendChild(s);
-    });
-    return () => { document.querySelectorAll('script[data-seo-ld]').forEach(el => el.remove()); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, path, image, type, keywords, noindex]);
+      {/* Twitter */}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:site" content="@catscandance" />
+      <meta name="twitter:creator" content="@catscandance" />
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={og} />
+      <meta name="twitter:image:alt" content={alt} />
 
-  return null;
+      {ldArray.map((obj, i) => (
+        <script key={i} type="application/ld+json">
+          {JSON.stringify(obj)}
+        </script>
+      ))}
+    </Head>
+  );
 };
 
 export default SEO;

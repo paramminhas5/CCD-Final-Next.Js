@@ -4,7 +4,7 @@
  * Also handles direct-sale orders that need a dedicated payment page.
  */
 import { useEffect, useState } from "react";
-import { useLocation, useParams } from "wouter";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
@@ -14,8 +14,8 @@ import { getPaymentLinkDetails, verifyOrder } from "@/lib/ticketing-api";
 declare global { interface Window { Razorpay: any; } }
 
 export default function CheckoutPage() {
-  const [, navigate] = useLocation();
-  const { orderId, token } = useParams<{ orderId?: string; token?: string }>();
+  const router = useRouter();
+  const { orderId, token } = router.query as { orderId?: string; token?: string };
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
   const [event, setEvent] = useState<any>(null);
@@ -69,7 +69,7 @@ export default function CheckoutPage() {
       if (!loaded) { toast.error("Payment gateway failed to load"); setStep("pay"); return; }
 
       const rzp = new window.Razorpay({
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID ?? "rzp_test_DUMMY_KEY_ID",
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "rzp_test_DUMMY_KEY_ID",
         amount: order.total_paise,
         currency: "INR",
         name: "Cats Can Dance",

@@ -15,7 +15,7 @@
  *   - Availability signal badges when searching by date
  */
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import {
   Search, MapPin, X, ChevronDown, CalendarDays,
   Zap, Bookmark, BookmarkCheck, Music,

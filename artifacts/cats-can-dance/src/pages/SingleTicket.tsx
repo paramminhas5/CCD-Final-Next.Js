@@ -4,7 +4,7 @@
  * Also used as a direct link so recipients can view a transferred ticket.
  */
 import { useEffect, useState } from "react";
-import { useLocation, useParams } from "wouter";
+import { useRouter } from "next/router";
 import { getTicketByToken } from "@/lib/ticketing-api";
 import Nav from "@/components/Nav";
 import { Link } from "@/lib/compat-router";
@@ -19,8 +19,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 };
 
 export default function SingleTicket() {
-  const [, navigate] = useLocation();
-  const { token } = useParams<{ token?: string }>();
+  const router = useRouter();
+  const { token } = router.query as { token?: string };
   const [ticket, setTicket] = useState<any>(null);
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);

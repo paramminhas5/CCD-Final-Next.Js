@@ -13,7 +13,7 @@
 
 const RESEND_KEY = process.env.RESEND_API_KEY;
 const FROM = "CCD Bookings <bookings@catscandance.com>";
-const BASE_URL = import.meta.env.VITE_SITE_URL ?? "https://catscandance.com";
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://catscandance.com";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type BookingEmailEvent =

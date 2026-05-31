@@ -15,7 +15,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import Marquee from "@/components/Marquee";

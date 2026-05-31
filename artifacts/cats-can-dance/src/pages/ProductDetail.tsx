@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
-import { useLocation } from "wouter";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { PRODUCT_BY_HANDLE_QUERY, storefrontApiRequest } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
 import { Button } from "@/components/ui/button";
@@ -68,8 +68,8 @@ function SizeGuideModal({ onClose }: { onClose: () => void }) {
 }
 
 const ProductDetail = () => {
-  const [, navigate] = useLocation();
-  const { handle } = useParams<{ handle?: string }>();
+  const router = useRouter();
+  const handle = router.query?.handle as string | undefined;
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");

@@ -7,7 +7,7 @@ import {
   Sparkles, Star, Filter, X, Share2, Users, Zap,
   Compass, Flame, Ticket
 } from "lucide-react";
-import { Link } from "wouter";
+import Link from "next/link";
 
 interface CuratedEvent {
   id: string;

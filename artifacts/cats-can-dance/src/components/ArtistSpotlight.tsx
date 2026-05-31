@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, useCallback, useRef } from "react";
 import useEmblaCarousel from "embla-carousel-react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { MapPin, Music, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Artist {

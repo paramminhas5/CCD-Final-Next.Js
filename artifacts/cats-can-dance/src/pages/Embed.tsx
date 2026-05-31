@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import Head from "next/head";
 import { supabase } from "@/lib/supabase-shim";
 
 type Ev = { id: string; slug: string; title: string; date: string; city: string; venue: string; status: string };
@@ -20,7 +20,12 @@ const Embed = () => {
   }, []);
 
   return (
-    <div style={{ margin: 0, fontFamily: "system-ui, sans-serif" }}>
+    <html lang="en">
+      <Head>
+        <meta name="robots" content="noindex, nofollow" />
+        <title>CCD Upcoming · Embed</title>
+      </Head>
+      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif" }}>
         <div
           style={{
             background: "#FBF6E2",
@@ -69,7 +74,8 @@ const Embed = () => {
             RSVP →
           </a>
         </div>
-    </div>
+      </body>
+    </html>
   );
 };
 

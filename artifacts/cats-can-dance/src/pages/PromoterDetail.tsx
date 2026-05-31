@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { useUser } from "@clerk/react";
 import { ArrowLeft, MapPin, Music, ExternalLink, Instagram, Globe, Mail, CheckCircle, Lock } from "lucide-react";
 import Nav from "@/components/Nav";

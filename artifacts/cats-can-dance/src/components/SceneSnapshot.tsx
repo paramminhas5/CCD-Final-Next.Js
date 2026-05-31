@@ -5,7 +5,7 @@
  * and LIVE event count badges pulled from the curated-events API.
  */
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { CITY_SCENES } from "@/content/scenes";
 import { ArrowRight, Calendar } from "lucide-react";
 

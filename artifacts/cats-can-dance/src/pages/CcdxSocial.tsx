@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import Head from "next/head";
 import ccdLogo from "@/assets/ccd-logo.png";
 import socialLogo from "@/assets/social-logo.png";
 import { imgUrl } from "@/lib/img";
@@ -85,6 +85,20 @@ const CcdxSocial = () => {
 
   return (
     <>
+      <Head>
+        <title>CatsCaNDance × Social — Partnership Proposal</title>
+        <meta name="robots" content="noindex, nofollow" />
+        <meta
+          name="description"
+          content="CatsCaNDance × Social: India's first curated pet lifestyle festival. Partnership one-pager and operations document."
+        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=DM+Sans:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
       <div className={`ccd ${pdfMode ? "is-pdf" : ""}`}>
         <nav className="ccd-nav">
           <div className="ccd-brand"><Lockup /></div>

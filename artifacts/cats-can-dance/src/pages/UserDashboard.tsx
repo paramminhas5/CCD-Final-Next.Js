@@ -9,8 +9,8 @@
  */
 import { useEffect, useState, useCallback } from "react";
 import { useUser, useClerk } from "@clerk/react";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useRouter } from "next/router";
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -700,7 +700,7 @@ function PromoterPortal({ user }: { user: any }) {
 const UserDashboard = () => {
   const { user, isLoaded } = useUser();
   const { openSignIn } = useClerk();
-  const [, navigate] = useLocation();
+  const router = useRouter();
   const roleInfo = useUserRole();
   const [fanProfile, setFanProfile] = useState<FanProfile|null>(null);
 
@@ -736,7 +736,7 @@ const UserDashboard = () => {
     </div>
   );
 
-  if (roleInfo.isAdmin) { navigate("/admin"); return null; }
+  if (roleInfo.isAdmin) { router.push("/admin"); return null; }
 
   return (
     <div className="min-h-screen bg-cream">

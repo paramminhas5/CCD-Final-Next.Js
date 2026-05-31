@@ -7,7 +7,7 @@
  * Interactions: drag nodes, pan canvas, zoom with wheel/pinch, click to navigate.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { Users, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 interface Connection {

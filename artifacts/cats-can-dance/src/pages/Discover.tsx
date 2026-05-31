@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
-import { useLocation } from "wouter";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -218,7 +218,7 @@ function UniversalSearch() {
   const [loadingArtists, setLoadingArtists] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [, navigate] = useLocation();
+  const router = useRouter();
 
   const staticResults: SearchResult[] = [
     ...CITY_SCENES.map(c => ({
@@ -323,7 +323,7 @@ function UniversalSearch() {
   function handleSelect(href: string) {
     setOpen(false);
     setQuery("");
-    navigate(href);
+    router.push(href);
   }
 
   const showDropdown = open && q.length >= 2;

@@ -871,7 +871,7 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
           mode={checkoutMode}
           isFree={ticketConfig.is_free || checkoutSelections.every((s: any) => s.tier.is_free || s.tier.price_inr === 0)}
           selections={checkoutSelections}
-          razorpayKeyId={import.meta.env.VITE_RAZORPAY_KEY_ID ?? "rzp_test_DUMMY_KEY_ID"}
+          razorpayKeyId={process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "rzp_test_DUMMY_KEY_ID"}
         />
       )}
 

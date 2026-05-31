@@ -18,8 +18,8 @@
  * "tentative" mark days busy on the calendar. status = "available" marks
  * open slots. Form is gated by `open_to_bookings`.
  */
-import { useLocation, useParams } from "wouter";
-import { Link } from "wouter";
+import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MapPin, Calendar, Music, Share2, Copy, Check, ExternalLink, Instagram,
@@ -469,9 +469,8 @@ interface ArtistDetailProps {
 }
 
 export default function ArtistDetailPage({ initialArtist, slug: slugProp }: ArtistDetailProps = {}) {
-  const [, navigate] = useLocation();
-  const { slug: routeSlug } = useParams<{ slug?: string }>();
-  const slug = slugProp || routeSlug || "";
+  const router = useRouter();
+  const slug = slugProp || (router.query?.slug as string) || "";
   const { toast } = useToast();
 
   // Seed the data state from SSR props so content renders on first paint.

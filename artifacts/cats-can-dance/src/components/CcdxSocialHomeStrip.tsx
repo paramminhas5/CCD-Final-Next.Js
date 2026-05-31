@@ -80,12 +80,13 @@ function useCountdown(target: Date) {
       over: false,
     };
   };
-  const [t, setT] = useState(calc);
+  const [t, setT] = useState<ReturnType<typeof calc> | null>(null);
   useEffect(() => {
+    setT(calc());
     const id = setInterval(() => setT(calc()), 1000);
     return () => clearInterval(id);
   }, []);
-  return t;
+  return t ?? { days: 0, hours: 0, mins: 0, secs: 0, over: false };
 }
 
 const Pad = (n: number) => String(n).padStart(2, "0");

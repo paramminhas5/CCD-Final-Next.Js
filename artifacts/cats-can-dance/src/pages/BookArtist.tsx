@@ -5,7 +5,7 @@
  * and send a booking inquiry directly.
  */
 import { useEffect, useState, useMemo } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { Search, MapPin, Music, X, ChevronDown, CalendarDays, Zap, Clock, Bookmark, BookmarkCheck } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";

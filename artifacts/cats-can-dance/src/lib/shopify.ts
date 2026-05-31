@@ -4,14 +4,14 @@
 // The shop will show "SHOP OFFLINE" gracefully if they are missing —
 // never fall back to hardcoded credentials in source.
 export const SHOPIFY_API_VERSION =
-  import.meta.env.VITE_SHOPIFY_API_VERSION || "2025-10";
+  process.env.NEXT_PUBLIC_SHOPIFY_API_VERSION || "2025-10";
 export const SHOPIFY_STORE_PERMANENT_DOMAIN =
-  import.meta.env.VITE_SHOPIFY_STORE_DOMAIN || "ccd-final-bv8ld.myshopify.com";
+  process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN || "ccd-final-bv8ld.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
 // ⚠️ No hardcoded fallback — set NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN in Vercel.
 // Missing token → storefrontApiRequest returns null → Shop page shows "SHOP OFFLINE".
 export const SHOPIFY_STOREFRONT_TOKEN =
-  import.meta.env.VITE_SHOPIFY_STOREFRONT_TOKEN || "";
+  process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN || "";
 
 export interface ShopifyProduct {
   node: {

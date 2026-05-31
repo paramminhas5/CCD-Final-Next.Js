@@ -3,8 +3,8 @@
  * Route: /artists/[slug]/epk
  * Clean, printable layout. No Nav distractions. Share link first.
  */
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Mail, Globe, Instagram, Headphones, Music, MapPin,
@@ -45,8 +45,8 @@ function fmt(n: number) {
 }
 
 export default function ArtistEPK() {
-  const [, navigate] = useLocation();
-  const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
+  const slug = router.query.slug as string;
 
   const [artist, setArtist] = useState<Artist | null>(null);
   const [discography, setDiscography] = useState<Discography[]>([]);

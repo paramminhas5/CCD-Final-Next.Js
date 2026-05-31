@@ -13,7 +13,7 @@
  * Phase 4B: credential badges (festival circuit, Boiler Room, verified)
  */
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { Music, MapPin, Users, Zap } from "lucide-react";
 
 interface Artist {

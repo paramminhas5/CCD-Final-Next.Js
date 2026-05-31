@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";

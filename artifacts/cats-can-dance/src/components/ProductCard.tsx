@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import type { ShopifyProduct } from "@/lib/shopify";

@@ -1,13 +1,15 @@
 /**
- * React Router DOM → wouter compatibility shim.
- * Drop-in replacement that uses wouter under the hood.
+ * React Router DOM → Next.js compatibility shim.
+ * Replace `import { ... } from "@/lib/compat-router"` with this module.
  */
-import { Link as WouterLink, useLocation as useWouterLocation, useParams as useWouterParams, useRouter } from "wouter";
+import NextLink from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, ReactNode } from "react";
 import React from "react";
 
 type AnyProps = Record<string, unknown>;
 
+/** Coerce a react-router `to` value (string or location object) to a plain string. */
 function toHref(raw: unknown): string {
   if (!raw) return "#";
   if (typeof raw === "string") return raw;
@@ -38,47 +40,54 @@ export function Link({
   style?: React.CSSProperties;
 } & AnyProps) {
   const dest = toHref(to ?? href);
-  if (target === "_blank" || dest.startsWith("http") || dest.startsWith("mailto:")) {
-    return (
-      <a href={dest} className={className} target={target} rel={rel ?? (target === "_blank" ? "noopener noreferrer" : undefined)} onClick={onClick} style={style}>
-        {children}
-      </a>
-    );
-  }
   return (
-    <WouterLink href={dest} className={className} target={target} rel={rel} onClick={onClick as any} style={style}>
-      {children as any}
-    </WouterLink>
+    <NextLink href={dest} className={className} target={target} rel={rel} onClick={onClick} style={style}>
+      {children}
+    </NextLink>
   );
 }
 
 export function useNavigate() {
-  const [, navigate] = useWouterLocation();
+  const router = useRouter();
   return (path: string | object, opts?: { replace?: boolean }) => {
     const dest = toHref(path);
     if (dest === "#") return;
-    navigate(dest, { replace: opts?.replace });
+    if (opts?.replace) router.replace(dest);
+    else router.push(dest);
   };
 }
 
 export function useParams<T extends Record<string, string> = Record<string, string>>(): T {
-  // @ts-ignore — wouter params typing
-  return useWouterParams() as T;
+  const router = useRouter();
+  return (router.query || {}) as T;
 }
 
 export function useSearchParams(): [URLSearchParams, (params: URLSearchParams) => void] {
-  const [location, navigate] = useWouterLocation();
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const router = useRouter();
+  // Build URLSearchParams from router.query so the value is reactive across
+  // navigation (unlike reading window.location.search directly which only
+  // captures the value at mount time).
+  const params = new URLSearchParams(
+    Object.entries(router.query)
+      .filter(([k]) => k !== "proxy") // strip Next.js catch-all param
+      .flatMap(([k, v]) =>
+        Array.isArray(v) ? v.map((val) => [k, val]) : [[k, v as string]]
+      )
+  );
+
   const setParams = (next: URLSearchParams) => {
-    navigate(`${location}?${next.toString()}`);
+    const query: Record<string, string> = {};
+    next.forEach((v, k) => { query[k] = v; });
+    router.push({ pathname: router.pathname, query }, undefined, { shallow: true });
   };
+
   return [params, setParams];
 }
 
 export function useLocation() {
-  const [pathname] = useWouterLocation();
+  const router = useRouter();
   return {
-    pathname,
+    pathname: router.pathname,
     search: typeof window !== "undefined" ? window.location.search : "",
     hash: typeof window !== "undefined" ? window.location.hash : "",
     state: null,
@@ -86,14 +95,16 @@ export function useLocation() {
 }
 
 export function Navigate({ to, replace }: { to: string; replace?: boolean }) {
-  const [, navigate] = useWouterLocation();
+  const router = useRouter();
   useEffect(() => {
-    navigate(to, { replace });
+    if (replace) router.replace(to);
+    else router.push(to);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
 }
 
+// Stubs — not used in leaf pages, but needed if any component imports them
 export const BrowserRouter = ({ children }: { children: ReactNode }) => <>{children}</>;
 export const Routes = ({ children }: { children: ReactNode }) => <>{children}</>;
 export const Route = () => null;
@@ -113,6 +124,13 @@ export type NavLinkProps = {
   end?: boolean;
 } & AnyProps;
 
+/**
+ * NavLink — supports react-router-dom's function-as-className API:
+ * `className={({ isActive }) => isActive ? "active" : ""}`
+ *
+ * Uses router.pathname consistently (no window.location) to avoid SSR/client
+ * hydration mismatches.
+ */
 export function NavLink({
   to,
   href,
@@ -124,26 +142,21 @@ export function NavLink({
   style,
   end: _end,
 }: NavLinkProps) {
-  const [pathname] = useWouterLocation();
+  const router = useRouter();
   const dest = toHref(to ?? href);
-  const isActive = pathname === dest || pathname.startsWith(dest + "/");
+  // Use router.pathname for both SSR and client — no window.location which
+  // causes a hydration mismatch because the server never has window access.
+  const isActive =
+    router.pathname === dest || router.pathname.startsWith(dest + "/");
 
   const resolvedClass =
     typeof className === "function" ? className({ isActive }) : className;
   const resolvedStyle =
     typeof style === "function" ? style({ isActive }) : style;
 
-  if (target === "_blank" || dest.startsWith("http") || dest.startsWith("mailto:")) {
-    return (
-      <a href={dest} className={resolvedClass} target={target} rel={rel ?? (target === "_blank" ? "noopener noreferrer" : undefined)} onClick={onClick} style={resolvedStyle}>
-        {children}
-      </a>
-    );
-  }
-
   return (
-    <WouterLink href={dest} className={resolvedClass} target={target} rel={rel} onClick={onClick as any} style={resolvedStyle}>
-      {children as any}
-    </WouterLink>
+    <NextLink href={dest} className={resolvedClass} target={target} rel={rel} onClick={onClick} style={resolvedStyle}>
+      {children}
+    </NextLink>
   );
 }

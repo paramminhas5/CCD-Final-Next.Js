@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Music, ArrowRight, Compass } from "lucide-react";
 

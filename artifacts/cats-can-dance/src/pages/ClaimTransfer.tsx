@@ -3,7 +3,7 @@
  * Recipient lands here from transfer email, enters their name and claims the ticket.
  */
 import { useEffect, useState } from "react";
-import { useLocation, useParams } from "wouter";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import { claimTransfer, getTicketByToken } from "@/lib/ticketing-api";
@@ -13,8 +13,8 @@ import Confetti from "@/components/Confetti";
 import { Link } from "@/lib/compat-router";
 
 export default function ClaimTransfer() {
-  const [, navigate] = useLocation();
-  const { claimToken } = useParams<{ claimToken?: string }>();
+  const router = useRouter();
+  const { claimToken } = router.query as { claimToken?: string };
   const { user } = useSafeUser();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);

@@ -1,11 +1,10 @@
 import { SignIn } from "@clerk/react";
-import { useLocation } from "wouter";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 
 export default function SignInPage() {
-  const [, navigate] = useLocation();
-  const params = new URLSearchParams(window.location.search);
-  const redirectUrl = params.get("redirect_url") || undefined;
+  const router = useRouter();
+  const redirectUrl = router.query.redirect_url as string | undefined;
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">

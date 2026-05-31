@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
-
-import { Link } from "wouter";
+import Image from "next/image";
+import Link from "next/link";
 import heroCenter from "@/assets/hero-center.svg";
 import catLeft from "@/assets/cat-left.svg";
 import catRight from "@/assets/cat-right.svg";
@@ -14,7 +14,7 @@ import DiscoBall from "@/components/DiscoBall";
 import Lasers from "@/components/Lasers";
 import { parseEventDate } from "@/lib/parse-date";
 
-// next/image with handles critical image preloading automatically.
+// next/image with priority handles critical image preloading automatically.
 // No manual preload needed.
 
 /** Fetches the next upcoming event and returns a countdown + slug for the urgency strip. */
@@ -129,11 +129,11 @@ const Hero = () => {
             style={{ y: djY, willChange: "transform" }}
             className="absolute inset-x-0 mx-auto bottom-20 md:-bottom-8 z-30 w-[100%] md:w-[92%] min-w-[300px] max-w-[820px] pointer-events-none"
           >
-            <img
+            <Image
               src={heroCenter}
               alt=""
               aria-hidden
-             
+              priority
               className="w-full h-auto drop-shadow-[10px_10px_0_hsl(var(--ink))]"
             />
           </motion.div>
@@ -145,7 +145,7 @@ const Hero = () => {
               style={{ x: c.x, rotate: c.rot, opacity: flankOpacity, willChange: "transform" }}
               className={`${flankBase} ${c.pos}`}
             >
-              <img src={c.src} alt="" aria-hidden className="w-full h-auto" />
+              <Image src={c.src} alt="" aria-hidden priority className="w-full h-auto" />
             </motion.div>
           ))}
 
@@ -154,13 +154,13 @@ const Hero = () => {
             style={{ x: leftX, y: leftY, rotate: leftRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 left-1 md:left-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={catLeft} alt="" aria-hidden className="w-full h-auto wiggle" />
+            <Image src={catLeft} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
           <motion.div
             style={{ x: rightX, y: rightY, rotate: rightRot, willChange: "transform" }}
             className="absolute bottom-28 md:bottom-4 right-1 md:right-10 z-40 w-32 md:w-56 drop-shadow-[6px_6px_0_hsl(var(--ink))]"
           >
-            <img src={catRight} alt="" aria-hidden className="w-full h-auto wiggle" />
+            <Image src={catRight} alt="" aria-hidden priority className="w-full h-auto wiggle" />
           </motion.div>
         </div>
 

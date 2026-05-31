@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import { Music, MapPin, Search, X, AlertTriangle } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";

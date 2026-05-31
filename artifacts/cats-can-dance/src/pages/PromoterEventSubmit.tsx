@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { useLocation } from "wouter";
+import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -31,7 +31,7 @@ type Step = "form" | "submitting" | "success" | "not_promoter";
 
 export default function PromoterEventSubmit() {
   const { user, isLoaded, isSignedIn } = useUser();
-  const [, navigate] = useLocation();
+  const router = useRouter();
 
   const [step,   setStep]   = useState<Step>("form");
   const [result, setResult] = useState<any>(null);
@@ -49,7 +49,7 @@ export default function PromoterEventSubmit() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn) { navigate("/sign-in?redirect_url=/submit-event/event"); return; }
+    if (!isSignedIn) { router.push("/sign-in?redirect_url=/submit-event/event"); return; }
   }, [isLoaded, isSignedIn, router]);
 
   const upd = (k: keyof typeof form, v: string | string[]) =>

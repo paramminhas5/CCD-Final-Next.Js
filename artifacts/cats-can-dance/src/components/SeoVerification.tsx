@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import Head from "next/head";
 import { supabase } from "@/lib/supabase-shim";
 
 type Verifications = {
@@ -23,28 +23,19 @@ const SeoVerification = () => {
     })();
   }, []);
 
-  useEffect(() => {
-    if (v.google) {
-      let m = document.querySelector('meta[name="google-site-verification"]') as HTMLMetaElement | null;
-      if (!m) { m = document.createElement("meta"); m.name = "google-site-verification"; document.head.appendChild(m); }
-      m.content = v.google;
-    }
-    if (v.bing) {
-      let m = document.querySelector('meta[name="msvalidate.01"]') as HTMLMetaElement | null;
-      if (!m) { m = document.createElement("meta"); m.name = "msvalidate.01"; document.head.appendChild(m); }
-      m.content = v.bing;
-    }
-    if (v.plausible_domain) {
-      if (!document.querySelector(`script[data-domain="${v.plausible_domain}"]`)) {
-        const s = document.createElement("script"); s.defer = true;
-        s.setAttribute("data-domain", v.plausible_domain);
-        s.src = "https://plausible.io/js/script.js";
-        document.head.appendChild(s);
-      }
-    }
-  }, [v]);
-
-  return null;
+  return (
+    <Head>
+      {v.google && <meta name="google-site-verification" content={v.google} />}
+      {v.bing && <meta name="msvalidate.01" content={v.bing} />}
+      {v.plausible_domain && (
+        <script
+          defer
+          data-domain={v.plausible_domain}
+          src="https://plausible.io/js/script.js"
+        />
+      )}
+    </Head>
+  );
 };
 
 export default SeoVerification;

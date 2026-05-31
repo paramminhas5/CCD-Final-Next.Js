@@ -1,0 +1,1 @@
+- [Cats Can Dance Next.js setup](cats-can-dance-nextjs.md) — runs Next.js 14 on Replit; postcss must use CommonJS; allowedDevOrigins needed for proxy.

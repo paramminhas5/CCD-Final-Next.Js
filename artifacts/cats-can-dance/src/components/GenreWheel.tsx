@@ -2,7 +2,7 @@
  * GenreWheel — homepage genre navigation grid.
  * Six genre tiles, each in its own accent colour, linking to /genres/:slug
  */
-import { Link } from "wouter";
+import Link from "next/link";
 import { GENRE_PAGES } from "@/content/scenes";
 
 export default function GenreWheel() {

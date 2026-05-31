@@ -10,7 +10,7 @@
  *   5. Profile        — company profile editor + registration gate
  */
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "wouter";
+import Link from "next/link";
 import {
   Users, ListChecks, MessageSquare, Zap, Building2,
   Plus, Trash2, Send, Check, Loader2, X, MapPin,

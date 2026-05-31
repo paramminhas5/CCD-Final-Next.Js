@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
+import { useRouter } from "next/router";
+import Link from "next/link";
 import { useUser, useClerk } from "@clerk/react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -802,8 +802,8 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 const ArtistPortal = () => {
-  const [, navigate] = useLocation();
-  const claimId = new URLSearchParams(window.location.search).get("claim") || undefined;
+  const router = useRouter();
+  const claimId = router.query.claim as string | undefined;
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
 
@@ -834,7 +834,7 @@ const ArtistPortal = () => {
     })();
   }, [isLoaded, user, claimId]);
 
-  const handleSignOut = async () => { await signOut(); navigate("/artists"); };
+  const handleSignOut = async () => { await signOut(); router.push("/artists"); };
 
   if (!isLoaded || (!user && loading)) return (
     <div className="min-h-screen bg-cream"><Nav />
