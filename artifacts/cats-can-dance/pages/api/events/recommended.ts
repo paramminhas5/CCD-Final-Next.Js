@@ -29,6 +29,42 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
+// ── Static fallback events — used when curated_events table is empty ──────────
+const STATIC_EVENTS = [
+  {
+    id: "static-ce-1", title: "CCDXSOCIAL 01 — Cats Can Dance × Social",
+    url: "https://catscandance.com/events/ccdxsocial-01",
+    source: "editorial", city: "Bangalore", venue: "Indiranagar Social",
+    event_date: "2026-06-29", event_time: "8:00 PM",
+    blurb: "India's first curated pet lifestyle festival meets underground dance music. Outdoor pet zone from 4 PM, vendor market, then Startdawg b2b Merman take the floor at 9.",
+    genre: ["House","Disco","Garage"], image_url: null, is_featured: true, submission_status: "published",
+  },
+  {
+    id: "static-ce-2", title: "CCDXSOCIAL 02 — Style Edition",
+    url: "https://catscandance.com/events/ccdxsocial-02",
+    source: "editorial", city: "Bangalore", venue: "Social BLR",
+    event_date: "2026-07-27", event_time: "8:00 PM",
+    blurb: "The style chapter. Live grooming demo on stage, best-dressed contest for pets and parents, dedicated photography corner.",
+    genre: ["House","Disco"], image_url: null, is_featured: true, submission_status: "published",
+  },
+  {
+    id: "static-ce-3", title: "CCDXSOCIAL 03 — Agility Edition",
+    url: "https://catscandance.com/events/ccdxsocial-03",
+    source: "editorial", city: "Bangalore", venue: "Social BLR",
+    event_date: "2026-08-30", event_time: "8:00 PM",
+    blurb: "The most physical show. Two agility courses, timed speed runs, performance contest open to any breed. MEGA tickets drop exclusively at this event.",
+    genre: ["House","Jungle"], image_url: null, is_featured: true, submission_status: "published",
+  },
+  {
+    id: "static-ce-4", title: "MEGA — CCD Season Finale",
+    url: "https://catscandance.com/events/ccdxsocial-mega",
+    source: "editorial", city: "Bangalore", venue: "Venue TBA — Large Format",
+    event_date: "2026-10-01", event_time: "TBA",
+    blurb: "The season finale. 2,000+ people, full outdoor stage, pet runway, agility finals, complete DJ lineup TBA.",
+    genre: ["House","Disco","Jungle","Garage"], image_url: null, is_featured: true, submission_status: "published",
+  },
+];
+
 const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
 const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
 
@@ -127,7 +163,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   );
 
   if (!allEvents.length) {
-    return res.json({ events: [], sections: [], total: 0, tab });
+    // ── Static fallback: serve bundled CCD events so the UI is never blank ──
+    const staticFiltered = STATIC_EVENTS.filter((e) => {
+      if (genre) {
+        const gLower = (genre as string).toLowerCase();
+        if (!e.genre.some((g) => g.toLowerCase().includes(gLower))) return false;
+      }
+      if (city && !e.city.toLowerCase().includes((city as string).toLowerCase())) return false;
+      return true;
+    });
+    const lim = parseInt(limit as string, 10) || 12;
+    const off = parseInt(offset as string, 10) || 0;
+    const paginated = staticFiltered.slice(off, off + lim);
+    const sections = paginated.length > 0 ? [{
+      title: "Editor's Picks",
+      subtitle: "Hand-curated CCD events — check back as more are added",
+      events: paginated.map((e) => ({ event: e, score: 100, reasons: ["editors_pick"], lineups: [] })),
+    }] : [];
+    return res.json({ events: paginated, sections, total: staticFiltered.length, tab, user_id: null, _source: "static_fallback" });
   }
 
   // ── 2. Read user context (taste profile + interactions + lineups) ─────────

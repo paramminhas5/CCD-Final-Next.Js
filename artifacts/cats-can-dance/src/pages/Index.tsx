@@ -36,10 +36,11 @@ const Index = () => {
   const platformStats = usePlatformStats();
 
   // ── Section visibility (loaded from site_settings) ──
+  // Defaults are ON so content shows immediately; admin can turn sections off.
   const [sectionVis, setSectionVis] = useState({
-    show_scene_map: false,
-    show_pick_your_sound: false,
-    show_featured_artists: false,
+    show_scene_map: true,
+    show_pick_your_sound: true,
+    show_featured_artists: true,
   });
 
   useEffect(() => {
