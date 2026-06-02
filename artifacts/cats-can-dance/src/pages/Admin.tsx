@@ -2015,6 +2015,246 @@ const emptyCurated = (): CuratedRow => ({
   image_url: "",
 });
 
+// ── Storage Test Panel ──────────────────────────────────────────────────────
+type StorageStatus = {
+  service_key_set: boolean;
+  bucket_exists: boolean;
+  bucket_public: boolean;
+  signed_url_works: boolean;
+  error: string | null;
+};
+
+function StorageTestPanel({ pwd, onSetup }: { pwd: string; onSetup: () => void }) {
+  const [status, setStatus]     = useState<StorageStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [testResult, setTestResult] = useState<{ url: string; ok: boolean; msg: string } | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const runCheck = async () => {
+    setChecking(true);
+    setStatus(null);
+    setTestResult(null);
+    try {
+      const r = await fetch("/api/admin/test-storage", {
+        headers: { "x-admin-password": pwd },
+      });
+      const data = await r.json();
+      setStatus(data);
+    } catch (e: any) {
+      setStatus({ service_key_set: false, bucket_exists: false, bucket_public: false, signed_url_works: false, error: e.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const runUploadTest = async (file: File) => {
+    setUploading(true);
+    setTestResult(null);
+    try {
+      // Step 1: get signed URL
+      const signRes = await fetch("/api/functions/v1/admin-upload-poster", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({
+          slug: "upload-test",
+          ext: file.name.split(".").pop() ?? "jpg",
+          mimeType: file.type || "image/jpeg",
+        }),
+      });
+      const signData = await signRes.json();
+      if (!signRes.ok) {
+        setTestResult({ url: "", ok: false, msg: `❌ Sign step failed (${signRes.status}): ${signData?.error ?? "unknown"}` });
+        return;
+      }
+
+      // Step 2: PUT directly to Supabase
+      const { signedUrl, publicUrl } = signData as { signedUrl: string; publicUrl: string };
+      const putRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        const errText = await putRes.text().catch(() => "unknown");
+        setTestResult({ url: "", ok: false, msg: `❌ Upload step failed (${putRes.status}): ${errText.slice(0, 200)}` });
+        return;
+      }
+
+      // Step 3: verify the public URL actually loads
+      const imgRes = await fetch(publicUrl, { method: "HEAD" }).catch(() => null);
+      const accessible = imgRes?.ok ?? false;
+
+      setTestResult({
+        url: publicUrl,
+        ok: true,
+        msg: accessible
+          ? "✅ Full flow passed! Signed URL ✓ · Upload ✓ · Public URL accessible ✓"
+          : "⚠️ Upload succeeded but public URL returned non-200. Check bucket is set to public.",
+      });
+    } catch (e: any) {
+      setTestResult({ url: "", ok: false, msg: `❌ Exception: ${e.message}` });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const dot = (ok: boolean | undefined) =>
+    ok ? <span className="text-lime font-bold">●</span> : <span className="text-magenta font-bold">●</span>;
+
+  return (
+    <div className="border-4 border-ink bg-cream">
+      {/* Header row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-ink text-cream">
+        <div>
+          <p className="font-display text-sm uppercase">🪣 Storage Diagnostics</p>
+          <p className="text-cream/50 text-xs">Test the full image upload pipeline before going live</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={onSetup}
+            className="bg-acid-yellow text-ink font-display px-4 py-2 border-2 border-cream text-xs hover:bg-cream transition-colors"
+          >
+            CREATE BUCKET
+          </button>
+          <button
+            onClick={() => { setOpen(v => !v); if (!open) runCheck(); }}
+            className="bg-cream text-ink font-display px-4 py-2 border-2 border-cream text-xs hover:bg-acid-yellow transition-colors"
+          >
+            {open ? "HIDE" : "▶ RUN TESTS"}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="p-5 space-y-5">
+          {/* Status checks */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-display text-sm text-ink uppercase">System Checks</p>
+              <button
+                onClick={runCheck}
+                disabled={checking}
+                className="font-display text-xs uppercase bg-cream text-ink border-2 border-ink px-3 py-1 hover:bg-acid-yellow transition-colors disabled:opacity-60"
+              >
+                {checking ? "CHECKING…" : "↻ RECHECK"}
+              </button>
+            </div>
+
+            {checking && (
+              <div className="space-y-2">
+                {["SUPABASE_SERVICE_KEY set", "Bucket exists", "Bucket is public", "Signed URL works"].map(l => (
+                  <div key={l} className="flex items-center gap-3 border-2 border-ink/20 px-4 py-2">
+                    <span className="text-ink/30 font-bold animate-pulse">●</span>
+                    <span className="text-ink/50 text-sm font-display uppercase">{l}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {status && !checking && (
+              <div className="space-y-2">
+                {[
+                  { label: "SUPABASE_SERVICE_KEY set",  ok: status.service_key_set },
+                  { label: "Bucket 'event-posters' exists", ok: status.bucket_exists },
+                  { label: "Bucket is public",           ok: status.bucket_public },
+                  { label: "Signed URL generation works", ok: status.signed_url_works },
+                ].map(({ label, ok }) => (
+                  <div key={label} className={`flex items-center gap-3 border-2 px-4 py-2 ${ok ? "border-lime/60 bg-lime/10" : "border-magenta/40 bg-magenta/5"}`}>
+                    {dot(ok)}
+                    <span className="text-ink text-sm font-display uppercase flex-1">{label}</span>
+                    <span className={`text-xs font-display ${ok ? "text-lime" : "text-magenta"}`}>{ok ? "PASS" : "FAIL"}</span>
+                  </div>
+                ))}
+                {status.error && (
+                  <div className="border-2 border-magenta bg-magenta/10 px-4 py-3 mt-2">
+                    <p className="font-display text-xs uppercase text-magenta mb-1">Error Detail</p>
+                    <p className="text-ink text-sm font-mono break-all">{status.error}</p>
+                  </div>
+                )}
+                {status.bucket_exists && !status.bucket_public && (
+                  <div className="border-2 border-acid-yellow bg-acid-yellow/20 px-4 py-2 text-sm">
+                    <strong className="font-display text-xs uppercase">Fix: </strong>
+                    Bucket is private. In Supabase dashboard → Storage → event-posters → Edit → toggle <strong>Public bucket</strong> ON.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Live upload test */}
+          <div className="border-4 border-ink p-4 space-y-3">
+            <p className="font-display text-sm text-ink uppercase">Live Upload Test</p>
+            <p className="text-ink/60 text-xs">
+              Pick any image — it runs the full real flow: sign → PUT to Supabase → verify public URL.
+              A small test file is uploaded to the <code className="bg-ink/10 px-1">event-posters</code> bucket.
+            </p>
+
+            <label className={`inline-flex items-center gap-2 font-display text-sm px-5 py-2 border-4 border-ink chunk-shadow transition-transform cursor-pointer
+              ${uploading ? "opacity-60 cursor-not-allowed" : "bg-acid-yellow text-ink hover:translate-x-1 hover:translate-y-1 hover:shadow-none"}`}>
+              {uploading ? "⏳ UPLOADING…" : "📎 PICK IMAGE & TEST"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) runUploadTest(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
+            {testResult && (
+              <div className={`border-4 p-4 space-y-3 ${testResult.ok ? "border-lime bg-lime/10" : "border-magenta bg-magenta/5"}`}>
+                <p className="font-display text-sm text-ink">{testResult.msg}</p>
+                {testResult.ok && testResult.url && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-ink/60 font-mono break-all">{testResult.url}</p>
+                    <img
+                      src={testResult.url}
+                      alt="upload test result"
+                      className="h-32 border-4 border-ink object-contain bg-ink/5"
+                      onLoad={() => {}}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                        setTestResult(r => r ? { ...r, msg: r.msg + " (⚠️ image loaded but not renderable in browser — check bucket CORS settings)." } : r);
+                      }}
+                    />
+                    <a
+                      href={testResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-2 border-ink hover:bg-magenta transition-colors"
+                    >
+                      OPEN IN NEW TAB ↗
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick help */}
+          <details className="border-2 border-ink/20">
+            <summary className="font-display text-xs uppercase text-ink/60 px-4 py-2 cursor-pointer hover:bg-acid-yellow/20 transition-colors">
+              ℹ️ What to do if tests fail
+            </summary>
+            <div className="px-4 py-3 space-y-2 text-sm text-ink/70">
+              <p><strong className="text-ink">SERVICE_KEY not set</strong> → Vercel dashboard → Settings → Environment Variables → add <code className="bg-ink/10 px-1">SUPABASE_SERVICE_KEY</code> (service_role key from Supabase → Settings → API) → redeploy.</p>
+              <p><strong className="text-ink">Bucket doesn't exist</strong> → Click <strong>CREATE BUCKET</strong> above. Or create it manually in Supabase → Storage → New bucket named <code className="bg-ink/10 px-1">event-posters</code>, Public = on.</p>
+              <p><strong className="text-ink">Bucket not public</strong> → Supabase → Storage → event-posters → Edit → Public bucket = ON → Save.</p>
+              <p><strong className="text-ink">Signed URL fails</strong> → Usually means the service key is wrong or expired. Regenerate it in Supabase → Settings → API → Regenerate service_role key → update Vercel env var.</p>
+              <p><strong className="text-ink">Upload works but image won't show</strong> → Supabase → Storage → event-posters → Policies → ensure there's a public read policy (SELECT for public role).</p>
+            </div>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── District JSON Import ────────────────────────────────────────────────────
 // ── Lineup Manager (per curated event) ─────────────────────────────────────
 interface LineupRow {
@@ -2590,19 +2830,8 @@ function CuratedEventsTab() {
         />
       )}
 
-      {/* Storage setup banner */}
-      <div className="bg-acid-yellow border-4 border-ink p-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-display text-sm text-ink uppercase">📦 Storage Bucket</p>
-          <p className="text-ink/70 text-xs">If image uploads are failing, click this to create the <strong>event-posters</strong> bucket in Supabase Storage. Safe to run multiple times.</p>
-        </div>
-        <button
-          onClick={setupStorage}
-          className="bg-ink text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-sm shrink-0"
-        >
-          🪣 CREATE BUCKET
-        </button>
-      </div>
+      {/* Storage health + test panel */}
+      <StorageTestPanel pwd={pwd} onSetup={setupStorage} />
 
       <div className="flex flex-wrap justify-between items-end gap-3">
         <div>
