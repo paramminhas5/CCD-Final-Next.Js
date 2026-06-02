@@ -390,13 +390,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(signRes.status).json({ error: `Could not get upload URL: ${errText}` });
         }
 
-        const { signedURL, token } = await signRes.json() as { signedURL?: string; token?: string };
-        if (!signedURL) {
+        // Supabase returns { url, token } — "url" is the relative signed path
+        const signJson = await signRes.json() as { url?: string; token?: string };
+        const rawUrl = signJson.url;
+        if (!rawUrl) {
           return res.status(500).json({ error: "Supabase did not return a signed URL" });
         }
 
-        // The signed URL is relative to the Supabase host — make it absolute
-        const signedUrl = signedURL.startsWith("http") ? signedURL : `${SB}${signedURL}`;
+        // Make it absolute — Supabase returns a relative path like /object/upload/sign/...
+        // The storage API base is /storage/v1 so we prepend that
+        const signedUrl = rawUrl.startsWith("http")
+          ? rawUrl
+          : `${SB}/storage/v1${rawUrl}`;
         const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
 
         return res.json({ signedUrl, path: storagePath, publicUrl, token, mimeType });
