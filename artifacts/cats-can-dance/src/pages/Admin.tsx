@@ -1622,8 +1622,8 @@ const EventEditor = ({
       if (!data) return;
       onChange({ ...event, poster_url: data.publicUrl });
       toast.success("Poster uploaded — hit SAVE to persist");
-    } catch (e) {
-      toast.error("Upload failed");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Upload failed");
     } finally {
       setUploading(false);
     }
