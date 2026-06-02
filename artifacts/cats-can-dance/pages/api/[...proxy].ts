@@ -650,6 +650,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
   }
 
+  // ── Curated event interactions — POST /api/events/:id/interact ──────────────
+  // Saves a user action (save, dismiss, click, rsvp, share) against a curated event.
+  // Silently no-ops if Supabase is unavailable so the UI never errors out.
+  if (segs[0] === "events" && segs[2] === "interact" && m === "POST") {
+    const eventId = segs[1];
+    const { action = "click", user_id } = body ?? {};
+    if (!eventId) return res.status(400).json({ error: "event id required" });
+    // Write to user_event_interactions if we have a user_id
+    if (user_id) {
+      await ins("user_event_interactions", {
+        user_id,
+        event_id: eventId,
+        action,
+        created_at: new Date().toISOString(),
+      }).catch(() => {/* non-fatal */});
+    }
+    // Also write a signal for anonymous trending (no PII)
+    const sessionId = (req.headers["x-session-id"] as string) || `anon-${Date.now()}`;
+    await ins("event_signals", {
+      session_id: sessionId,
+      event_id: eventId,
+      signal_type: action,
+      created_at: new Date().toISOString(),
+    }).catch(() => {/* non-fatal */});
+    return res.json({ ok: true });
+  }
+
   // ── Curated events (public) ─────────────────────────────────────────────────
   if (path === "curated-events" && m === "GET") {
     // Only return published events — pending promoter submissions are filtered out
