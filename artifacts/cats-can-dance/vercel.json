@@ -1,0 +1,60 @@
+{
+  "headers": [
+    {
+      "source": "/site.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" },
+        { "key": "x-vercel-protection-bypass", "value": "1" }
+      ]
+    },
+    {
+      "source": "/favicon.ico",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/favicon.svg",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/favicon-96x96.png",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/apple-touch-icon.png",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/scrape-events",
+      "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 1 * * 1"
+    },
+    {
+      "path": "/api/cron/expire-holds",
+      "schedule": "0 * * * *"
+    }
+  ],
+  "functions": {
+    "pages/api/cron/scrape-events.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/cron/weekly-digest.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/cron/expire-holds.ts": {
+      "maxDuration": 60
+    },
+    "pages/api/[...proxy].ts": {
+      "maxDuration": 60
+    }
+  }
+}

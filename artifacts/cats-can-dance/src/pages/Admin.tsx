@@ -1507,7 +1507,7 @@ const EventEditor = ({
     try {
       const data = await uploadFile(file);
       if (!data) return;
-      onChange({ ...event, poster_url: data.path });
+      onChange({ ...event, poster_url: data.publicUrl });
       toast.success("Poster uploaded — hit SAVE to persist");
     } catch (e) {
       toast.error("Upload failed");
