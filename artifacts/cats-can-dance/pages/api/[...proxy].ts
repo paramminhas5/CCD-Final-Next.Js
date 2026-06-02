@@ -87,7 +87,43 @@ function ytId(urlOrId: string): string | null {
   return null;
 }
 
-export const config = { api: { bodyParser: { sizeLimit: "4mb" } } };
+export const config = { api: { bodyParser: false } };
+
+// Helper: split a Buffer on a delimiter (for multipart parsing)
+function splitBuffer(buf: Buffer, delimiter: Buffer): Buffer[] {
+  const parts: Buffer[] = [];
+  let start = 0;
+  while (true) {
+    const idx = buf.indexOf(delimiter, start);
+    if (idx === -1) break;
+    parts.push(buf.slice(start, idx));
+    start = idx + delimiter.length;
+  }
+  if (start < buf.length) parts.push(buf.slice(start));
+  return parts.filter((p) => p.length > 2); // drop empty boundary markers
+}
+
+// Helper: read full request body as Buffer (needed when bodyParser is disabled)
+async function readBody(req: NextApiRequest): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+// Re-parse JSON body when bodyParser is disabled
+async function parseJsonBody(req: NextApiRequest): Promise<any> {
+  const ct = req.headers["content-type"] ?? "";
+  if (!ct.includes("application/json")) return {};
+  try {
+    const raw = await readBody(req);
+    return JSON.parse(raw.toString("utf8"));
+  } catch {
+    return {};
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -97,6 +133,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? req.query.proxy
     : [req.query.proxy as string];
   const path = segs.join("/");
+
+  // Re-parse body manually since bodyParser is disabled globally
+  // (disabled so the poster upload route can read raw multipart bytes)
+  const contentType = req.headers["content-type"] ?? "";
+  let body: any = {};
+  if (!contentType.includes("multipart/form-data")) {
+    body = await parseJsonBody(req);
+  }
 
   // ── Ticketing: forward to Express API server ──────────────────────────────
   if (segs[0] === "ticketing") {
@@ -131,7 +175,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { proxy: _p, ...rq } = req.query as Record<string, string>;
-  const body: any = req.body ?? {};
   const m = req.method ?? "GET";
 
   // ── Health ──────────────────────────────────────────────────────────────────
@@ -353,7 +396,83 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (fn === "admin-upload-poster") {
-      return res.status(501).json({ error: "File upload not configured — paste an image URL instead." });
+      // Parse multipart form data to extract the file
+      // bodyParser is disabled globally so we read raw bytes here
+      try {
+        const BUCKET = "event-posters";
+        const rawBody = await readBody(req);
+
+        // Parse the multipart boundary from Content-Type header
+        const uploadContentType = req.headers["content-type"] ?? "";
+        const boundaryMatch = uploadContentType.match(/boundary=(.+)$/);
+        if (!boundaryMatch) {
+          return res.status(400).json({ error: "Missing multipart boundary" });
+        }
+        const boundary = boundaryMatch[1].trim();
+
+        // Simple multipart parser — extract the first file part
+        const boundaryBuf = Buffer.from(`--${boundary}`);
+        const parts = splitBuffer(rawBody, boundaryBuf);
+
+        let fileBuffer: Buffer | null = null;
+        let fileName = "poster.jpg";
+        let mimeType = "image/jpeg";
+        let slug = `poster-${Date.now()}`;
+
+        for (const part of parts) {
+          const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+          if (headerEnd === -1) continue;
+          const headerStr = part.slice(0, headerEnd).toString("utf8");
+          const bodyPart = part.slice(headerEnd + 4);
+          const fileBody = bodyPart.slice(-2).equals(Buffer.from("\r\n"))
+            ? bodyPart.slice(0, -2)
+            : bodyPart;
+
+          if (headerStr.includes('name="slug"')) {
+            slug = fileBody.toString("utf8").trim() || slug;
+          } else if (headerStr.includes('name="file"')) {
+            const nameMatch = headerStr.match(/filename="([^"]+)"/);
+            if (nameMatch) fileName = nameMatch[1];
+            const ctMatch = headerStr.match(/Content-Type:\s*([^\r\n]+)/i);
+            if (ctMatch) mimeType = ctMatch[1].trim();
+            fileBuffer = fileBody;
+          }
+        }
+
+        if (!fileBuffer || fileBuffer.length === 0) {
+          return res.status(400).json({ error: "No file found in upload" });
+        }
+
+        const ext = fileName.split(".").pop() ?? "jpg";
+        const storagePath = `${slug}-${Date.now()}.${ext}`;
+
+        // Upload to Supabase Storage
+        const uploadRes = await fetch(
+          `${SB}/storage/v1/object/${BUCKET}/${storagePath}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${SK}`,
+              apikey: SK,
+              "Content-Type": mimeType,
+              "x-upsert": "true",
+            },
+            body: fileBuffer,
+          }
+        );
+
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          console.error("[admin-upload-poster] Supabase Storage error:", errText);
+          return res.status(uploadRes.status).json({ error: `Storage upload failed: ${errText}` });
+        }
+
+        const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+        return res.json({ path: storagePath, publicUrl });
+      } catch (uploadErr: any) {
+        console.error("[admin-upload-poster] Error:", uploadErr);
+        return res.status(500).json({ error: uploadErr?.message ?? "Upload failed" });
+      }
     }
     if (fn === "enrich-artists") return res.json({ ok: true, message: "Enrichment queued." });
 
@@ -1256,6 +1375,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await del("event_artist_lineups", pq(eqf("id", id)));
       return res.json({ ok: true });
     }
+  }
+
+  // ── Promoters: public list ──────────────────────────────────────────────────
+  // GET /api/promoters — returns all promoters (front-end promoters page)
+  if (path === "promoters" && m === "GET") {
+    const rows = (await get("promoters", pq(ord("name")))) as any[];
+    return res.json(rows ?? []);
   }
 
   // ── Promoter claiming — POST /api/promoters/:slug/claim ──────────────────
