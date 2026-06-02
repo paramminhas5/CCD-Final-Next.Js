@@ -390,9 +390,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(signRes.status).json({ error: `Could not get upload URL: ${errText}` });
         }
 
-        // Supabase returns { url, token } — "url" is the relative signed path
-        const signJson = await signRes.json() as { url?: string; token?: string };
-        const rawUrl = signJson.url;
+        // Supabase returns { signedURL, token } — capital URL, relative path like /object/upload/sign/...
+        const signJson = await signRes.json() as { signedURL?: string; url?: string; token?: string };
+        const rawUrl = signJson.signedURL ?? signJson.url;
         if (!rawUrl) {
           return res.status(500).json({ error: "Supabase did not return a signed URL" });
         }
@@ -403,8 +403,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? rawUrl
           : `${SB}/storage/v1${rawUrl}`;
         const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+        const uploadToken = signJson.token;
 
-        return res.json({ signedUrl, path: storagePath, publicUrl, token, mimeType });
+        return res.json({ signedUrl, path: storagePath, publicUrl, token: uploadToken, mimeType });
       } catch (uploadErr: any) {
         console.error("[admin-upload-poster] Error:", uploadErr);
         return res.status(500).json({ error: uploadErr?.message ?? "Upload failed" });
