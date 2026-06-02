@@ -2561,6 +2561,24 @@ function CuratedEventsTab() {
     }
   };
 
+  const setupStorage = async () => {
+    try {
+      const r = await fetch(`${projectUrl}/functions/v1/setup-storage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+        body: JSON.stringify({}),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        toast.success(data.message ?? `✓ Storage bucket '${data.bucket ?? "event-posters"}' is ready!`);
+      } else {
+        toast.error(data.error ?? "Setup failed");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Setup failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Lineup manager modal */}
@@ -2571,6 +2589,21 @@ function CuratedEventsTab() {
           onClose={() => setLineupEvent(null)}
         />
       )}
+
+      {/* Storage setup banner */}
+      <div className="bg-acid-yellow border-4 border-ink p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-display text-sm text-ink uppercase">📦 Storage Bucket</p>
+          <p className="text-ink/70 text-xs">If image uploads are failing, click this to create the <strong>event-posters</strong> bucket in Supabase Storage. Safe to run multiple times.</p>
+        </div>
+        <button
+          onClick={setupStorage}
+          className="bg-ink text-cream font-display px-5 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform text-sm shrink-0"
+        >
+          🪣 CREATE BUCKET
+        </button>
+      </div>
+
       <div className="flex flex-wrap justify-between items-end gap-3">
         <div>
           <h3 className="font-display text-2xl text-ink">CURATED EVENTS</h3>

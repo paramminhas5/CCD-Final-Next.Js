@@ -368,6 +368,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const BUCKET = "event-posters";
+
+        // ── Auto-create the bucket if it doesn't exist ──────────────────────
+        // This is idempotent — if the bucket already exists, Supabase returns
+        // a 409 which we silently ignore.  This means the first upload "just
+        // works" even if nobody has visited the Supabase dashboard yet.
+        try {
+          await fetch(`${SB}/storage/v1/bucket`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${SK}`,
+              apikey: SK,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: BUCKET,
+              name: BUCKET,
+              public: true,               // public so poster URLs work without auth
+              file_size_limit: 10485760,  // 10 MB max per file
+              allowed_mime_types: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+            }),
+          });
+          // 200 = created, 409 = already exists — both are fine
+        } catch {
+          // network error creating bucket — non-fatal, proceed to sign attempt
+        }
+
         // body contains { slug, ext, mimeType } sent as JSON by the client
         const slug     = (body.slug ?? `poster-${Date.now()}`).toString().replace(/[^a-z0-9-_]/gi, "-").slice(0, 60);
         const ext      = (body.ext      ?? "jpg").toString().replace(/[^a-z0-9]/gi, "").slice(0, 5);
@@ -406,7 +432,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const signJson = await signRes.json() as { signedURL?: string; url?: string; token?: string };
         const rawUrl = signJson.signedURL ?? signJson.url ?? "";
         if (!rawUrl) {
-          return res.status(500).json({ error: "Supabase did not return a signed URL. Check that the 'event-posters' bucket exists in Supabase Storage." });
+          return res.status(500).json({ error: "Supabase did not return a signed URL. Check that SUPABASE_SERVICE_KEY is correct in Vercel env vars." });
         }
 
         const signedUrl = rawUrl.startsWith("http")
@@ -421,6 +447,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (uploadErr: any) {
         console.error("[admin-upload-poster] Error:", uploadErr);
         return res.status(500).json({ error: uploadErr?.message ?? "Upload failed" });
+      }
+    }
+
+    // ── Setup storage bucket (admin one-click) ─────────────────────────────
+    if (fn === "setup-storage") {
+      if (!SK) {
+        return res.status(500).json({ error: "SUPABASE_SERVICE_KEY is not configured." });
+      }
+      const BUCKET = "event-posters";
+      try {
+        const r = await fetch(`${SB}/storage/v1/bucket`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${SK}`,
+            apikey: SK,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: BUCKET,
+            name: BUCKET,
+            public: true,
+            file_size_limit: 10485760,
+            allowed_mime_types: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+          }),
+        });
+        const txt = await r.text();
+        const data = txt ? tryJson(txt) : {};
+        if (r.ok) return res.json({ ok: true, created: true, bucket: BUCKET });
+        if (r.status === 409) return res.json({ ok: true, created: false, message: `Bucket '${BUCKET}' already exists — you're good to go!` });
+        return res.status(r.status).json({ error: data?.message ?? txt });
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
       }
     }
     if (fn === "enrich-artists") return res.json({ ok: true, message: "Enrichment queued." });
