@@ -506,6 +506,10 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
   const tabsRef = useRef<HTMLDivElement | null>(null);
   const bookSectionRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Social proof hook — must be called unconditionally (Rules of Hooks) ──
+  // Called here, before any early returns, using `slug` which is always available.
+  const followerCount = useArtistFollowerCount(slug);
+
   useEffect(() => {
     if (!slug) return;
     setIsLoading(true); setFetchError(null); setUsedFallback(false);
@@ -594,10 +598,6 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
   // their portal wins.
   const isBookable = artist.open_to_bookings !== false;
   const hasOpenSlot = upcomingDates.some(d => d.status === "available");
-
-  // Social proof — CCD follower count (best-effort, shown when ≥1)
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const followerCount = useArtistFollowerCount(artist.slug);
 
   return (
     <main className="bg-background text-foreground">
