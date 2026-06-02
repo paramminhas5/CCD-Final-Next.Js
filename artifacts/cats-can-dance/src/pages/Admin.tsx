@@ -1462,22 +1462,43 @@ const EventEditor = ({
   };
 
   const uploadFile = async (file: File): Promise<{ path: string; publicUrl: string } | null> => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("slug", event.slug || "poster");
     const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
-    const res = await fetch(`${projectUrl}/functions/v1/admin-upload-poster`, {
+    const ext = file.name.split(".").pop() ?? "jpg";
+
+    // Step 1 — ask the API for a signed upload URL (tiny JSON request, no file sent)
+    const signRes = await fetch(`${projectUrl}/functions/v1/admin-upload-poster`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "x-admin-password": pwd,
-        apikey: "",
-        Authorization: `Bearer ${""}`,
       },
-      body: fd,
+      body: JSON.stringify({
+        slug: event.slug || "poster",
+        ext,
+        mimeType: file.type || "image/jpeg",
+      }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error ?? "upload failed");
-    return data;
+    const signData = await signRes.json();
+    if (!signRes.ok) throw new Error(signData?.error ?? "Could not get upload URL");
+
+    const { signedUrl, path, publicUrl } = signData as {
+      signedUrl: string;
+      path: string;
+      publicUrl: string;
+    };
+
+    // Step 2 — PUT the file directly to Supabase Storage (bypasses Vercel size limit)
+    const uploadRes = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => "upload error");
+      throw new Error(errText);
+    }
+
+    return { path, publicUrl };
   };
 
   const onUpload = async (file: File) => {
@@ -1486,7 +1507,7 @@ const EventEditor = ({
     try {
       const data = await uploadFile(file);
       if (!data) return;
-      onChange({ ...event, poster_url: data.path });
+      onChange({ ...event, poster_url: data.publicUrl });
       toast.success("Poster uploaded — hit SAVE to persist");
     } catch (e) {
       toast.error("Upload failed");
