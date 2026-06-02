@@ -55,6 +55,7 @@ type Settings = {
     cta?: { title?: string; body?: string; label?: string; href?: string };
     section_visibility?: { show_scene_map?: boolean; show_pick_your_sound?: boolean; show_featured_artists?: boolean; [key: string]: boolean | undefined };
   };
+  nav_visibility?: { [key: string]: boolean };
 };
 type MediaItem = { type: "image" | "video"; url: string; caption?: string };
 type EventRow = {
@@ -629,6 +630,7 @@ const Admin = () => {
                 <TabsTrigger value="marquees" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MARQUEES</TabsTrigger>
                 <TabsTrigger value="theme" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">THEME</TabsTrigger>
                 <TabsTrigger value="homepage" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">HOMEPAGE</TabsTrigger>
+                <TabsTrigger value="navigation" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">NAVIGATION</TabsTrigger>
                 <TabsTrigger
                   value="rsvps"
                   onClick={() => { if (!rsvpsLoaded) loadRsvps(); }}
@@ -1342,6 +1344,117 @@ const Admin = () => {
                 </div>
               </TabsContent>
 
+              {/* NAVIGATION */}
+              <TabsContent value="navigation">
+                <p className="text-ink/70 font-medium mb-4">
+                  Toggle nav links on or off. Hidden links are removed from both the desktop bar and mobile menu.
+                  Changes take effect on next page load.
+                </p>
+                {(() => {
+                  const nav = settings?.nav_visibility ?? {};
+                  const isOn = (key: string) => key in nav ? !!nav[key] : true;
+
+                  const groups: { group: string; links: { key: string; label: string; desc: string }[] }[] = [
+                    {
+                      group: "Primary Bar",
+                      links: [
+                        { key: "about",      label: "About",    desc: "/about" },
+                        { key: "discover",   label: "Discover", desc: "/discover" },
+                        { key: "events",     label: "Events",   desc: "/events" },
+                        { key: "ccdxsocial", label: "Series",   desc: "/ccdxsocial" },
+                        { key: "artists",    label: "Artists",  desc: "/artists" },
+                        { key: "shop",       label: "Shop",     desc: "/shop" },
+                      ],
+                    },
+                    {
+                      group: "Work With Us Dropdown",
+                      links: [
+                        { key: "talent",        label: "Talent Directory", desc: "/talent" },
+                        { key: "for-venues",    label: "For Venues",       desc: "/for-venues" },
+                        { key: "for-artists",   label: "For Artists",      desc: "/for-artists" },
+                        { key: "for-investors", label: "For Investors",    desc: "/for-investors" },
+                        { key: "book",          label: "Book an Artist",   desc: "/book" },
+                        { key: "promoters",     label: "Promoters",        desc: "/promoters" },
+                      ],
+                    },
+                    {
+                      group: "More Dropdown",
+                      links: [
+                        { key: "care",      label: "Cats Can Care", desc: "/care" },
+                        { key: "videos",    label: "Videos",        desc: "/videos" },
+                        { key: "playlists", label: "Playlists",     desc: "/playlists" },
+                        { key: "pets",      label: "Pets",          desc: "/pets" },
+                        { key: "blog",      label: "Blog",          desc: "/blog" },
+                        { key: "learn",     label: "Learn",         desc: "learn.catscandance.com (external)" },
+                      ],
+                    },
+                  ];
+
+                  const toggle = (key: string, val: boolean) => {
+                    if (!settings) return;
+                    setSettings({
+                      ...settings,
+                      nav_visibility: { ...(settings.nav_visibility ?? {}), [key]: val },
+                    });
+                  };
+
+                  return (
+                    <div className="space-y-6">
+                      {groups.map(({ group, links }) => (
+                        <div key={group} className="bg-cream border-4 border-ink chunk-shadow p-4">
+                          <p className="font-display text-xl text-ink mb-1">{group.toUpperCase()}</p>
+                          <div className="space-y-2 mt-3">
+                            {links.map(({ key, label, desc }) => {
+                              const checked = isOn(key);
+                              return (
+                                <label
+                                  key={key}
+                                  className={`flex items-center gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${
+                                    checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => toggle(key, e.target.checked)}
+                                    className="w-5 h-5 accent-magenta shrink-0"
+                                  />
+                                  <div>
+                                    <p className="font-display text-ink text-base">{label}</p>
+                                    <p className="text-ink/60 text-xs font-medium">{desc}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={async () => {
+                          if (!settings) return;
+                          try {
+                            await callContent({
+                              method: "POST",
+                              body: JSON.stringify({
+                                type: "settings",
+                                action: "upsert",
+                                payload: { nav_visibility: settings.nav_visibility ?? {} },
+                              }),
+                            });
+                            toast.success("Navigation saved");
+                          } catch {
+                            toast.error("Save failed");
+                          }
+                        }}
+                        className="bg-ink text-cream font-display text-lg px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform"
+                      >
+                        💾 SAVE NAVIGATION
+                      </button>
+                    </div>
+                  );
+                })()}
+              </TabsContent>
 
               <TabsContent value="rsvps">
                 <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
