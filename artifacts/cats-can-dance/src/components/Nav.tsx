@@ -207,6 +207,20 @@ const Nav = () => {
   const cartCount = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
   const hasCart = cartCount > 0;
 
+  // Nav visibility — fetched from site_settings, defaults all ON
+  const [navVis, setNavVis] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((data) => { if (data?.nav_visibility) setNavVis(data.nav_visibility); })
+      .catch(() => {});
+  }, []);
+  const isVisible = (key: string) => key in navVis ? !!navVis[key] : true;
+
+  const visiblePrimary  = primaryLinks.filter((l) => isVisible(l.to.replace("/", "")));
+  const visiblePartners = partnersLinks.filter((l) => isVisible(l.to.replace("/", "")));
+  const visibleMore     = moreLinks.filter((l) => isVisible(l.to === "https://learn.catscandance.com" ? "learn" : l.to.replace("/", "")));
+
   const lightBgRoutes = ["/about", "/blog", "/media", "/press", "/playlists", "/videos", "/cat-studio"];
   const forceScrolledStyle = lightBgRoutes.some((r) => location.pathname === r || location.pathname.startsWith(r + "/"));
 
@@ -253,7 +267,7 @@ const Nav = () => {
         </Link>
 
         <ul className="hidden lg:flex items-baseline gap-4">
-          {primaryLinks.map((l) => (
+          {visiblePrimary.map((l) => (
             <li key={l.to}>
               <RouterNavLink
                 to={l.to}
@@ -267,8 +281,8 @@ const Nav = () => {
               </RouterNavLink>
             </li>
           ))}
-          <Dropdown label="Work With Us" links={partnersLinks} scrolled={effectiveScrolled} />
-          <Dropdown label="More" links={moreLinks} scrolled={effectiveScrolled} />
+          {visiblePartners.length > 0 && <Dropdown label="Work With Us" links={visiblePartners} scrolled={effectiveScrolled} />}
+          {visibleMore.length > 0 && <Dropdown label="More" links={visibleMore} scrolled={effectiveScrolled} />}
         </ul>
         <div className="hidden lg:flex items-center gap-3">
           {/* Global search trigger */}
@@ -322,7 +336,7 @@ const Nav = () => {
         <div className="lg:hidden bg-cream border-t-4 border-ink max-h-[85vh] overflow-y-auto">
           <div className="container py-4 space-y-1">
             {/* ── Primary navigation ── */}
-            {primaryLinks.map((l) => (
+            {visiblePrimary.map((l) => (
               <RouterNavLink
                 key={l.to}
                 to={l.to}
@@ -335,19 +349,22 @@ const Nav = () => {
             ))}
 
             {/* ── Work With Us group ── */}
+            {visiblePartners.length > 0 && (
             <div className="pt-2">
               <p className="font-display text-[10px] uppercase tracking-[0.25em] text-ink/40 mb-1">Work With Us</p>
-              {partnersLinks.map((l) => (
+              {visiblePartners.map((l) => (
                 <RouterNavLink key={l.to} to={l.to} className="block font-display text-lg text-ink py-1.5 border-b border-ink/5">
                   {l.label}
                 </RouterNavLink>
               ))}
             </div>
+            )}
 
             {/* ── More group ── */}
+            {visibleMore.length > 0 && (
             <div className="pt-2">
               <p className="font-display text-[10px] uppercase tracking-[0.25em] text-ink/40 mb-1">More</p>
-              {moreLinks.map((l) =>
+              {visibleMore.map((l) =>
                 l.external ? (
                   <a key={l.to} href={l.to} target="_blank" rel="noreferrer"
                     className="block font-display text-lg text-ink py-1.5 border-b border-ink/5">
@@ -360,6 +377,7 @@ const Nav = () => {
                 )
               )}
             </div>
+            )}
 
             {/* ── Account + utilities ── */}
             <div className="pt-3 border-t-2 border-ink/20 space-y-1">
