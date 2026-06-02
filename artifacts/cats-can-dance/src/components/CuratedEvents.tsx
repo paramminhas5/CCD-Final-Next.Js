@@ -95,17 +95,19 @@ export default function CuratedEvents() {
     try {
       const res  = await fetch(`/api/events/recommended?${params}`);
       const data = await res.json();
-      const nextOffset = cur + (data.events?.length ?? 0);
+      // Filter out any undefined/null entries that could cause .id crashes
+      const safeEvents = (data.events || []).filter(Boolean);
+      const nextOffset = cur + (safeEvents.length ?? 0);
       if (reset) {
-        setEvents(data.events   || []);
-        setSections(data.sections || []);
-        offsetRef.current = data.events?.length ?? 12;
+        setEvents(safeEvents);
+        setSections((data.sections || []).filter(Boolean));
+        offsetRef.current = safeEvents.length ?? 12;
       } else {
-        setEvents(prev => [...prev, ...(data.events || [])]);
+        setEvents(prev => [...prev, ...safeEvents]);
         offsetRef.current = nextOffset;
       }
       setTotal(data.total || 0);
-      setHasMore((data.events || []).length === 12);
+      setHasMore(safeEvents.length === 12);
     } catch (err) {
       console.error("fetch events:", err);
     } finally {
@@ -247,7 +249,7 @@ export default function CuratedEvents() {
                   <p className="text-sm text-ink/60 mt-1">{section.subtitle}</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {section.events.map(({ event, reasons, lineups }, idx) => (
+                  {section.events.filter(Boolean).map(({ event, reasons, lineups }, idx) => event?.id ? (
                     <EventCard
                       key={event.id}
                       event={event}
@@ -260,7 +262,7 @@ export default function CuratedEvents() {
                       getDaysUntil={getDaysUntil}
                       index={idx}
                     />
-                  ))}
+                  ) : null)}
                 </div>
               </motion.div>
             ))}
@@ -270,7 +272,7 @@ export default function CuratedEvents() {
         {/* Grid for other tabs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {events.map((event, idx) => (
+            {events.filter(Boolean).map((event, idx) => event?.id ? (
               <EventCard
                 key={event.id}
                 event={event}
@@ -283,7 +285,7 @@ export default function CuratedEvents() {
                 getDaysUntil={getDaysUntil}
                 index={idx}
               />
-            ))}
+            ) : null)}
           </AnimatePresence>
         </div>
 

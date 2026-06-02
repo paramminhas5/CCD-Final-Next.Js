@@ -110,19 +110,13 @@ function WhatsOnStrip() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/curated-events?limit=50")
+    fetch("/api/events/recommended?tab=this_weekend&limit=50")
       .then(r => r.json())
-      .then((events: any[]) => {
-        if (!Array.isArray(events)) return;
-        const now = new Date();
-        const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        const upcoming = events.filter(e => {
-          if (!e.event_date) return false;
-          const d = new Date(e.event_date);
-          return d >= now && d <= weekFromNow;
-        });
+      .then((data: any) => {
+        const events: any[] = Array.isArray(data?.events) ? data.events.filter(Boolean) : [];
+        if (!events.length) return;
         const counts: Record<string, number> = {};
-        for (const e of upcoming) {
+        for (const e of events) {
           if (e.city) counts[e.city] = (counts[e.city] || 0) + 1;
         }
         const sorted = Object.entries(counts)
