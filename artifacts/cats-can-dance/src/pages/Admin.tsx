@@ -1248,7 +1248,7 @@ const Admin = () => {
                         { key: "show_featured_artists",  label: "Featured Artists", desc: "Artist carousel — pulls from artists with featured=true" },
                       ].map(({ key, label, desc }) => {
                         const vis = (settings?.home_content as any)?.section_visibility ?? {};
-                        const checked = !!vis[key];
+                        const checked = key in vis ? !!vis[key] : true;
                         return (
                           <label key={key} className={`flex items-start gap-3 p-3 border-4 border-ink cursor-pointer transition-colors ${checked ? "bg-acid-yellow" : "bg-cream hover:bg-acid-yellow/30"}`}>
                             <input
