@@ -4,28 +4,11 @@
       "source": "/site.webmanifest",
       "headers": [
         { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "public, max-age=3600" },
-        { "key": "x-vercel-protection-bypass", "value": "1" }
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
     },
     {
-      "source": "/favicon.ico",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
-    },
-    {
-      "source": "/favicon.svg",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
-    },
-    {
-      "source": "/favicon-96x96.png",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
-    },
-    {
-      "source": "/apple-touch-icon.png",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
-    },
-    {
-      "source": "/robots.txt",
+      "source": "/(favicon\\.ico|favicon\\.svg|favicon-96x96\\.png|apple-touch-icon\\.png|icon-192\\.png|icon-512\\.png|robots\\.txt|web-app-manifest-192x192\\.png|web-app-manifest-512x512\\.png)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     }
   ],
