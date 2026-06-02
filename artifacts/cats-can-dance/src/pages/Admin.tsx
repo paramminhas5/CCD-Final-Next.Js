@@ -2005,11 +2005,14 @@ type CuratedRow = {
   blurb: string;
   genre: string[];
   is_featured: boolean;
+  image_url?: string | null;
+  city?: string;
 };
 
 const emptyCurated = (): CuratedRow => ({
   title: "", venue: "", event_date: "", event_time: "",
   url: "", source: "manual", blurb: "", genre: [], is_featured: false,
+  image_url: "",
 });
 
 // ── District JSON Import ────────────────────────────────────────────────────
@@ -2430,9 +2433,37 @@ function CuratedEventsTab() {
   const [filterCity, setFilterCity] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("date-asc");
   const [lineupEvent, setLineupEvent] = useState<CuratedRow | null>(null);
+  const [draftUploading, setDraftUploading] = useState(false);
+  // per-row uploading state: keyed by row id
+  const [rowUploading, setRowUploading] = useState<Record<string, boolean>>({});
 
   const projectUrl = "/api";
   const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
+
+  /** Shared signed-URL upload helper — works for both the draft form and existing rows */
+  const uploadCuratedImage = async (file: File, slug: string): Promise<string> => {
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const signRes = await fetch(`${projectUrl}/functions/v1/admin-upload-poster`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": pwd },
+      body: JSON.stringify({ slug: slug || `curated-${Date.now()}`, ext, mimeType: file.type || "image/jpeg" }),
+    });
+    const signData = await signRes.json();
+    if (!signRes.ok) throw new Error(signData?.error ?? "Could not get upload URL");
+
+    const { signedUrl, publicUrl } = signData as { signedUrl: string; publicUrl: string };
+
+    const uploadRes = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => "upload error");
+      throw new Error(errText);
+    }
+    return publicUrl;
+  };
 
   const headers = {
     "x-admin-password": pwd,
@@ -2653,6 +2684,49 @@ function CuratedEventsTab() {
             className="w-full bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
           />
         </div>
+        {/* Image URL + upload */}
+        <div>
+          <label className="block font-display text-sm text-ink mb-1">
+            Flyer / Image
+            <span className="text-ink/40 font-normal text-xs ml-2">paste URL or upload file</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="url"
+              placeholder="https://..."
+              value={draft.image_url ?? ""}
+              onChange={(e) => setDraft({ ...draft, image_url: e.target.value || null })}
+              className="flex-1 min-w-[200px] bg-cream text-ink border-4 border-ink px-4 py-2 font-medium focus:outline-none focus:bg-acid-yellow"
+            />
+            <label className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink chunk-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-transform cursor-pointer text-sm">
+              {draftUploading ? "UPLOADING…" : "📤 UPLOAD"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={draftUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  setDraftUploading(true);
+                  try {
+                    const url = await uploadCuratedImage(file, draft.title || `curated-${Date.now()}`);
+                    setDraft((d) => ({ ...d, image_url: url }));
+                    toast.success("Image uploaded — click ADD to save");
+                  } catch (err: any) {
+                    toast.error(err?.message ?? "Upload failed");
+                  } finally {
+                    setDraftUploading(false);
+                  }
+                }}
+              />
+            </label>
+            {draft.image_url && (
+              <img src={draft.image_url} alt="preview" className="h-12 w-10 object-cover border-2 border-ink shrink-0" />
+            )}
+          </div>
+        </div>
         <label className="flex items-center gap-2 font-medium text-ink">
           <input
             type="checkbox"
@@ -2707,7 +2781,11 @@ function CuratedEventsTab() {
             </div>
             {loading && <p className="text-ink/60">Loading…</p>}
             {visible.map((r) => (
-              <div key={r.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap items-center gap-3 justify-between">
+              <div key={r.id} className="bg-cream border-4 border-ink chunk-shadow p-4 flex flex-wrap gap-3">
+                {/* Thumbnail */}
+                {r.image_url && (
+                  <img src={r.image_url} alt="" className="h-16 w-12 object-cover border-2 border-ink shrink-0 self-start" />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-lg text-ink">{r.title}</p>
                   <p className="text-ink/70 text-sm">
@@ -2715,21 +2793,67 @@ function CuratedEventsTab() {
                     {r.is_featured && " · ⭐"}
                   </p>
                   <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-magenta text-xs underline break-all">{r.url}</a>
+                  {/* Inline image_url editor */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <input
+                      type="url"
+                      placeholder="Image URL…"
+                      value={r.image_url ?? ""}
+                      onChange={(e) => {
+                        const updated = { ...r, image_url: e.target.value || null };
+                        setRows((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                      }}
+                      className="flex-1 min-w-[160px] bg-cream text-ink border-2 border-ink px-2 py-1 text-xs font-medium focus:outline-none focus:bg-acid-yellow"
+                    />
+                    <label className="bg-cream text-ink font-display px-2 py-1 border-2 border-ink text-xs hover:bg-acid-yellow transition-colors cursor-pointer shrink-0">
+                      {rowUploading[r.id!] ? "…" : "📤 IMG"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={!!rowUploading[r.id!]}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !r.id) return;
+                          e.target.value = "";
+                          setRowUploading((prev) => ({ ...prev, [r.id!]: true }));
+                          try {
+                            const url = await uploadCuratedImage(file, r.title || r.id!);
+                            const updated = { ...r, image_url: url };
+                            setRows((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                            await upsert(updated);
+                          } catch (err: any) {
+                            toast.error(err?.message ?? "Upload failed");
+                          } finally {
+                            setRowUploading((prev) => ({ ...prev, [r.id!]: false }));
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => upsert(r)}
+                      className="bg-ink text-cream font-display px-2 py-1 text-xs hover:bg-magenta transition-colors shrink-0"
+                    >
+                      SAVE
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => upsert({ ...r, is_featured: !r.is_featured })}
-                  className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink"
-                >
-                  {r.is_featured ? "UNFEATURE" : "FEATURE"}
-                </button>
-                <button
-                  onClick={() => r.id && setLineupEvent(r)}
-                  className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink"
-                  title="Manage lineup"
-                >
-                  🎛 LINEUP
-                </button>
-                <button onClick={() => r.id && remove(r.id)} className="bg-destructive text-cream font-display px-4 py-2">DELETE</button>
+                <div className="flex flex-wrap gap-2 items-start">
+                  <button
+                    onClick={() => upsert({ ...r, is_featured: !r.is_featured })}
+                    className="bg-acid-yellow text-ink font-display px-4 py-2 border-4 border-ink"
+                  >
+                    {r.is_featured ? "UNFEATURE" : "FEATURE"}
+                  </button>
+                  <button
+                    onClick={() => r.id && setLineupEvent(r)}
+                    className="bg-electric-blue text-cream font-display px-4 py-2 border-4 border-ink"
+                    title="Manage lineup"
+                  >
+                    🎛 LINEUP
+                  </button>
+                  <button onClick={() => r.id && remove(r.id)} className="bg-destructive text-cream font-display px-4 py-2">DELETE</button>
+                </div>
               </div>
             ))}
           </div>

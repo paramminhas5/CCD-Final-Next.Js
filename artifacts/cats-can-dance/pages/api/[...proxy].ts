@@ -360,13 +360,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       //
       // Flow:
       //   POST /api/functions/v1/admin-upload-poster  { slug, ext, mimeType }
-      //   ← { signedUrl, path, publicUrl, token }
+      //   ← { signedUrl, path, publicUrl }
       //   Browser: PUT signedUrl  (binary file, Content-Type = mimeType)
       try {
+        if (!SK) {
+          return res.status(500).json({ error: "SUPABASE_SERVICE_KEY is not configured. Add it in Vercel → Settings → Environment Variables." });
+        }
+
         const BUCKET = "event-posters";
         // body contains { slug, ext, mimeType } sent as JSON by the client
-        const slug     = body.slug     ?? `poster-${Date.now()}`;
-        const ext      = body.ext      ?? "jpg";
+        const slug     = (body.slug ?? `poster-${Date.now()}`).toString().replace(/[^a-z0-9-_]/gi, "-").slice(0, 60);
+        const ext      = (body.ext      ?? "jpg").toString().replace(/[^a-z0-9]/gi, "").slice(0, 5);
         const mimeType = body.mimeType ?? "image/jpeg";
         const storagePath = `${slug}-${Date.now()}.${ext}`;
 
@@ -380,32 +384,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               apikey: SK,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ upsert: true }),
+            body: JSON.stringify({ upsert: "true" }),
           }
         );
 
         if (!signRes.ok) {
           const errText = await signRes.text();
-          console.error("[admin-upload-poster] sign error:", errText);
-          return res.status(signRes.status).json({ error: `Could not get upload URL: ${errText}` });
+          console.error("[admin-upload-poster] sign error:", signRes.status, errText);
+          return res.status(signRes.status).json({ error: `Could not get upload URL (${signRes.status}): ${errText.slice(0, 300)}` });
         }
 
-        // Supabase returns { signedURL, token } — capital URL, relative path like /object/upload/sign/...
+        // Supabase returns { signedURL, token } where signedURL may be:
+        //   - A full URL:  https://xxx.supabase.co/storage/v1/object/upload/sign/...?token=...
+        //   - A relative path: /storage/v1/object/upload/sign/...
+        //
+        // BUG FIX: the old code prepended `${SB}/storage/v1` to a path that already
+        // started with `/storage/v1`, producing a double-prefix like:
+        //   https://xxx.supabase.co/storage/v1/storage/v1/object/...  ← broken
+        //
+        // Correct logic: if relative, prepend only the Supabase origin (no /storage/v1).
         const signJson = await signRes.json() as { signedURL?: string; url?: string; token?: string };
-        const rawUrl = signJson.signedURL ?? signJson.url;
+        const rawUrl = signJson.signedURL ?? signJson.url ?? "";
         if (!rawUrl) {
-          return res.status(500).json({ error: "Supabase did not return a signed URL" });
+          return res.status(500).json({ error: "Supabase did not return a signed URL. Check that the 'event-posters' bucket exists in Supabase Storage." });
         }
 
-        // Make it absolute — Supabase returns a relative path like /object/upload/sign/...
-        // The storage API base is /storage/v1 so we prepend that
         const signedUrl = rawUrl.startsWith("http")
-          ? rawUrl
-          : `${SB}/storage/v1${rawUrl}`;
-        const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
-        const uploadToken = signJson.token;
+          ? rawUrl                     // already absolute — use as-is
+          : `${SB}${rawUrl}`;          // relative path — prepend origin only (rawUrl starts with /storage/v1/...)
 
-        return res.json({ signedUrl, path: storagePath, publicUrl, token: uploadToken, mimeType });
+        const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
+
+        // Add CORS header explicitly on this response so the browser can read it
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        return res.json({ signedUrl, path: storagePath, publicUrl, mimeType });
       } catch (uploadErr: any) {
         console.error("[admin-upload-poster] Error:", uploadErr);
         return res.status(500).json({ error: uploadErr?.message ?? "Upload failed" });
