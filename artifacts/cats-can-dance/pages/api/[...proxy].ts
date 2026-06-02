@@ -87,43 +87,7 @@ function ytId(urlOrId: string): string | null {
   return null;
 }
 
-export const config = { api: { bodyParser: false } };
-
-// Helper: split a Buffer on a delimiter (for multipart parsing)
-function splitBuffer(buf: Buffer, delimiter: Buffer): Buffer[] {
-  const parts: Buffer[] = [];
-  let start = 0;
-  while (true) {
-    const idx = buf.indexOf(delimiter, start);
-    if (idx === -1) break;
-    parts.push(buf.slice(start, idx));
-    start = idx + delimiter.length;
-  }
-  if (start < buf.length) parts.push(buf.slice(start));
-  return parts.filter((p) => p.length > 2); // drop empty boundary markers
-}
-
-// Helper: read full request body as Buffer (needed when bodyParser is disabled)
-async function readBody(req: NextApiRequest): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
-
-// Re-parse JSON body when bodyParser is disabled
-async function parseJsonBody(req: NextApiRequest): Promise<any> {
-  const ct = req.headers["content-type"] ?? "";
-  if (!ct.includes("application/json")) return {};
-  try {
-    const raw = await readBody(req);
-    return JSON.parse(raw.toString("utf8"));
-  } catch {
-    return {};
-  }
-}
+export const config = { api: { bodyParser: { sizeLimit: "1mb" } } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -134,13 +98,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     : [req.query.proxy as string];
   const path = segs.join("/");
 
-  // Re-parse body manually since bodyParser is disabled globally
-  // (disabled so the poster upload route can read raw multipart bytes)
-  const contentType = req.headers["content-type"] ?? "";
-  let body: any = {};
-  if (!contentType.includes("multipart/form-data")) {
-    body = await parseJsonBody(req);
-  }
+  const { proxy: _p, ...rq } = req.query as Record<string, string>;
+  const body: any = req.body ?? {};
+  const m = req.method ?? "GET";
 
   // ── Ticketing: forward to Express API server ──────────────────────────────
   if (segs[0] === "ticketing") {
@@ -173,9 +133,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(502).json({ error: `Ticketing API unreachable: ${proxyErr.message}` });
     }
   }
-
-  const { proxy: _p, ...rq } = req.query as Record<string, string>;
-  const m = req.method ?? "GET";
 
   // ── Health ──────────────────────────────────────────────────────────────────
   if (path === "health") return res.json({ ok: true, ts: Date.now() });
@@ -396,79 +353,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (fn === "admin-upload-poster") {
-      // Parse multipart form data to extract the file
-      // bodyParser is disabled globally so we read raw bytes here
+      // Instead of receiving the file through Next.js (which hits Vercel's 4.5 MB
+      // serverless body limit), we issue a Supabase Storage signed-upload URL and
+      // return it to the browser.  The browser then PUTs the file directly to
+      // Supabase Storage — no size limit, no proxy overhead.
+      //
+      // Flow:
+      //   POST /api/functions/v1/admin-upload-poster  { slug, ext, mimeType }
+      //   ← { signedUrl, path, publicUrl, token }
+      //   Browser: PUT signedUrl  (binary file, Content-Type = mimeType)
       try {
         const BUCKET = "event-posters";
-        const rawBody = await readBody(req);
-
-        // Parse the multipart boundary from Content-Type header
-        const uploadContentType = req.headers["content-type"] ?? "";
-        const boundaryMatch = uploadContentType.match(/boundary=(.+)$/);
-        if (!boundaryMatch) {
-          return res.status(400).json({ error: "Missing multipart boundary" });
-        }
-        const boundary = boundaryMatch[1].trim();
-
-        // Simple multipart parser — extract the first file part
-        const boundaryBuf = Buffer.from(`--${boundary}`);
-        const parts = splitBuffer(rawBody, boundaryBuf);
-
-        let fileBuffer: Buffer | null = null;
-        let fileName = "poster.jpg";
-        let mimeType = "image/jpeg";
-        let slug = `poster-${Date.now()}`;
-
-        for (const part of parts) {
-          const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
-          if (headerEnd === -1) continue;
-          const headerStr = part.slice(0, headerEnd).toString("utf8");
-          const bodyPart = part.slice(headerEnd + 4);
-          const fileBody = bodyPart.slice(-2).equals(Buffer.from("\r\n"))
-            ? bodyPart.slice(0, -2)
-            : bodyPart;
-
-          if (headerStr.includes('name="slug"')) {
-            slug = fileBody.toString("utf8").trim() || slug;
-          } else if (headerStr.includes('name="file"')) {
-            const nameMatch = headerStr.match(/filename="([^"]+)"/);
-            if (nameMatch) fileName = nameMatch[1];
-            const ctMatch = headerStr.match(/Content-Type:\s*([^\r\n]+)/i);
-            if (ctMatch) mimeType = ctMatch[1].trim();
-            fileBuffer = fileBody;
-          }
-        }
-
-        if (!fileBuffer || fileBuffer.length === 0) {
-          return res.status(400).json({ error: "No file found in upload" });
-        }
-
-        const ext = fileName.split(".").pop() ?? "jpg";
+        // body contains { slug, ext, mimeType } sent as JSON by the client
+        const slug     = body.slug     ?? `poster-${Date.now()}`;
+        const ext      = body.ext      ?? "jpg";
+        const mimeType = body.mimeType ?? "image/jpeg";
         const storagePath = `${slug}-${Date.now()}.${ext}`;
 
-        // Upload to Supabase Storage
-        const uploadRes = await fetch(
-          `${SB}/storage/v1/object/${BUCKET}/${storagePath}`,
+        // Ask Supabase for a signed upload URL (valid for 60 s)
+        const signRes = await fetch(
+          `${SB}/storage/v1/object/upload/sign/${BUCKET}/${storagePath}`,
           {
             method: "POST",
             headers: {
               Authorization: `Bearer ${SK}`,
               apikey: SK,
-              "Content-Type": mimeType,
-              "x-upsert": "true",
+              "Content-Type": "application/json",
             },
-            body: fileBuffer,
+            body: JSON.stringify({ upsert: true }),
           }
         );
 
-        if (!uploadRes.ok) {
-          const errText = await uploadRes.text();
-          console.error("[admin-upload-poster] Supabase Storage error:", errText);
-          return res.status(uploadRes.status).json({ error: `Storage upload failed: ${errText}` });
+        if (!signRes.ok) {
+          const errText = await signRes.text();
+          console.error("[admin-upload-poster] sign error:", errText);
+          return res.status(signRes.status).json({ error: `Could not get upload URL: ${errText}` });
         }
 
+        const { signedURL, token } = await signRes.json() as { signedURL?: string; token?: string };
+        if (!signedURL) {
+          return res.status(500).json({ error: "Supabase did not return a signed URL" });
+        }
+
+        // The signed URL is relative to the Supabase host — make it absolute
+        const signedUrl = signedURL.startsWith("http") ? signedURL : `${SB}${signedURL}`;
         const publicUrl = `${SB}/storage/v1/object/public/${BUCKET}/${storagePath}`;
-        return res.json({ path: storagePath, publicUrl });
+
+        return res.json({ signedUrl, path: storagePath, publicUrl, token, mimeType });
       } catch (uploadErr: any) {
         console.error("[admin-upload-poster] Error:", uploadErr);
         return res.status(500).json({ error: uploadErr?.message ?? "Upload failed" });
