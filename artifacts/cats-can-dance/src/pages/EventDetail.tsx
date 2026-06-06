@@ -481,12 +481,17 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
                             img.src = imgUrl(episode1Poster);
                             return;
                           }
+                          // Hide the broken image and show the placeholder instead
                           img.style.display = "none";
+                          const placeholder = img.parentElement?.querySelector("[data-poster-placeholder]") as HTMLElement | null;
+                          if (placeholder) placeholder.style.display = "";
                         }}
                       />
                     );
                   })()
-                ) : (
+                ) : null}
+                {/* Placeholder shown when poster is absent or fails to load */}
+                <div data-poster-placeholder style={{ display: event.poster_url ? "none" : undefined }}>
                   <EventPosterPlaceholder
                     title={event.title}
                     date={event.date}
@@ -494,7 +499,7 @@ const EventDetail = ({ initialEvent, slug: slugProp }: EventDetailProps = {}) =>
                     eyebrow={seriesEyebrow ?? undefined}
                     lineup={(event.lineup ?? []).join(" · ")}
                   />
-                )}
+                </div>
               </div>
             </div>
           </div>
