@@ -98,10 +98,16 @@ export const PRODUCT_BY_HANDLE_QUERY = `
   }
 `;
 
+// Fire the "shop offline" notice once per session, not on every API call.
+let _shopOfflineWarned = false;
+
 export async function storefrontApiRequest(query: string, variables: any = {}) {
   // No token → shop is offline, return null so callers show "SHOP OFFLINE"
   if (!SHOPIFY_STOREFRONT_TOKEN) {
-    console.warn("[Shopify] NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN is not set. Shop is offline.");
+    if (!_shopOfflineWarned) {
+      _shopOfflineWarned = true;
+      console.info("[Shopify] NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN is not set. Shop is offline.");
+    }
     return null;
   }
   let response: Response;

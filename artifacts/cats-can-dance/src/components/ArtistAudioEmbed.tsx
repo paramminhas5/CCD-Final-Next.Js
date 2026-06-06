@@ -50,7 +50,7 @@ export default function ArtistAudioEmbed({ soundcloud, spotify, bandcamp, artist
             width="100%"
             height="120"
             scrolling="no"
-            allow="autoplay"
+            allow="autoplay; fullscreen"
             src={getSoundCloudEmbedUrl(soundcloud)}
             title={`${artistName} on SoundCloud`}
             className="border-none"
@@ -88,7 +88,7 @@ export default function ArtistAudioEmbed({ soundcloud, spotify, bandcamp, artist
               width="100%"
               height="120"
               seamless
-              allow="autoplay"
+              allow="autoplay; fullscreen"
               title={`${artistName} on Bandcamp`}
               className="border-none"
             />

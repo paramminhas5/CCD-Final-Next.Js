@@ -563,6 +563,30 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
     }, 60);
   };
 
+  // ── Derive page-level data only when the full artist is available ──
+  // All hooks are called above this point — early returns below do NOT violate Rules of Hooks.
+  const artist = data?.artist ?? null;
+  const connections   = data?.connections   ?? [];
+  const appearances   = data?.appearances   ?? [];
+  const milestones    = data?.milestones    ?? [];
+  const socialStats   = data?.socialStats   ?? null;
+  const stats         = data?.stats         ?? emptyStats;
+  const facts         = data?.facts         ?? [];
+  const upcomingDates = data?.upcomingDates ?? [];
+  const discography   = data?.discography   ?? [];
+  const press         = data?.press         ?? [];
+  const socialHistory = data?.socialHistory ?? [];
+  const years = [...new Set(appearances.map((a) => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
+  const filteredAppearances = selectedYear === "all" ? appearances : appearances.filter((a) => a.year === parseInt(selectedYear));
+
+  // Auto-availability flag: if the artist hasn't explicitly set
+  // open_to_bookings = false and they have at least one upcoming
+  // "available" date → considered actively booking. Either way the toggle in
+  // their portal wins.
+  const isBookable = artist ? artist.open_to_bookings !== false : false;
+  const hasOpenSlot = upcomingDates.some(d => d.status === "available");
+
+  // ── Loading / error gates — all hooks already called above, no Rules of Hooks violation ──
   if (isLoading) return (
     <main className="bg-cream min-h-screen">
       <Nav />
@@ -573,7 +597,7 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
     </main>
   );
 
-  if (fetchError || !data?.artist) return (
+  if (fetchError || !artist) return (
     <main className="bg-cream min-h-screen">
       <Nav />
       <div className="container py-24">
@@ -587,17 +611,6 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
       <Footer />
     </main>
   );
-
-  const { artist, connections, appearances, milestones, socialStats, stats, facts, upcomingDates, discography, press, socialHistory } = data;
-  const years = [...new Set(appearances.map((a) => a.year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
-  const filteredAppearances = selectedYear === "all" ? appearances : appearances.filter((a) => a.year === parseInt(selectedYear));
-
-  // Auto-availability flag: if the artist hasn't explicitly set
-  // open_to_bookings = false and they have at least one upcoming
-  // "available" date → considered actively booking. Either way the toggle in
-  // their portal wins.
-  const isBookable = artist.open_to_bookings !== false;
-  const hasOpenSlot = upcomingDates.some(d => d.status === "available");
 
   return (
     <main className="bg-background text-foreground">
