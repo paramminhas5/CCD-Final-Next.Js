@@ -15,7 +15,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getStaticEventRow } from "@/content/events";
 
-const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SB = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
 
 async function fetchFromSupabase(slug: string): Promise<any | null> {

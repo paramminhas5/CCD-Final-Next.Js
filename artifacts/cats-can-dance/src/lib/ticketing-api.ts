@@ -131,7 +131,7 @@ export const doorCheckin = (body: { qr_token: string; gate?: string }) =>
 
 function adminHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const pw = sessionStorage.getItem("ccd_admin_pass") ?? (process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "84838281");
+  const pw = sessionStorage.getItem("ccd_admin_pass") ?? (process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "");
   return { "x-admin-password": pw };
 }
 

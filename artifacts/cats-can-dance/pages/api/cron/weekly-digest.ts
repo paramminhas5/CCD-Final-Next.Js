@@ -17,10 +17,10 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const SB         = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SB         = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SK         = process.env.SUPABASE_SERVICE_KEY ?? "";
 const RESEND_KEY = process.env.RESEND_API_KEY ?? "";
-const ADMIN_PW   = process.env.ADMIN_PASSWORD ?? "84838281";
+const ADMIN_PW   = process.env.ADMIN_PASSWORD ?? "";
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 const FROM_EMAIL = process.env.EMAIL_FROM ?? "hello@catscandance.com";
 const BASE_URL   = process.env.NEXT_PUBLIC_SITE_URL ?? "https://catscandance.com";

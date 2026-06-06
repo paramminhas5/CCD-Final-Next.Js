@@ -13,10 +13,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const SB  = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SB  = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SK  = process.env.SUPABASE_SERVICE_KEY ?? "";
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? "";
-const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "84838281";
+const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "";
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
 // Only keep events scoring >= this threshold

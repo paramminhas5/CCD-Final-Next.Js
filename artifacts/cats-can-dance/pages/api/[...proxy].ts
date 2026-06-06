@@ -8,7 +8,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const SB = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SB = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 // SUPABASE_SERVICE_KEY must be set in Vercel env vars.
 // Without it the proxy returns empty arrays — admin panel and scraper will not function.
 const SK = process.env.SUPABASE_SERVICE_KEY ?? "";
