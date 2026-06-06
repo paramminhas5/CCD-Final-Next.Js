@@ -15,9 +15,7 @@
  *  2. Social sharing cards show the artist photo + bio
  */
 import type { GetStaticPaths, GetStaticProps } from "next";
-import dynamic from "next/dynamic";
-
-const ArtistDetailPage = dynamic(() => import("@/pages/ArtistDetail"), { ssr: false });
+import ArtistDetailPage from "@/pages/ArtistDetail";
 
 interface ArtistSSR {
   id: string;
