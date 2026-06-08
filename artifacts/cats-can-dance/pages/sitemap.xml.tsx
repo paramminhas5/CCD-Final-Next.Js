@@ -76,15 +76,15 @@ export default function SitemapXml() {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
-  // Fetch all artist slugs
+  // Fetch all approved artist slugs directly from Supabase — no self-HTTP
   let artistSlugs: string[] = [];
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
-    const r = await fetch(`${apiBase}/artists`);
-    if (r.ok) {
-      const data = await r.json();
-      artistSlugs = Array.isArray(data) ? data.map((a: { slug: string }) => a.slug).filter(Boolean) : [];
-    }
+    const { sbGet, pq, eqf, ord } = await import("@/lib/db");
+    const artists = await sbGet<{ slug: string }>(
+      "artists",
+      pq({ ...eqf("status", "approved"), ...ord("name"), "select": "slug" }),
+    );
+    artistSlugs = artists.map((a) => a.slug).filter(Boolean);
   } catch {
     // silently skip — sitemap still works without artist slugs
   }

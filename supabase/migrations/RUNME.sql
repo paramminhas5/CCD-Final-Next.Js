@@ -672,12 +672,30 @@ ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS shared_venues   text[] N
 ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS notes           text;
 ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS updated_at      timestamptz NOT NULL DEFAULT now();
 
--- Backfill slugs from artists table where old UUID columns exist
-UPDATE artist_connections ac SET artist_a_slug = a.slug
-FROM artists a WHERE ac.artist_a_slug = '' AND ac.artist_id IS NOT NULL AND a.id = ac.artist_id;
+-- Backfill slugs — uses DO blocks to safely handle whichever column names your table has
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='artist_connections' AND column_name='artist_a_id') THEN
+    UPDATE artist_connections ac SET artist_a_slug = a.slug FROM artists a
+    WHERE ac.artist_a_slug = '' AND ac.artist_a_id IS NOT NULL AND a.id = ac.artist_a_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='artist_connections' AND column_name='artist_id') THEN
+    UPDATE artist_connections ac SET artist_a_slug = a.slug FROM artists a
+    WHERE ac.artist_a_slug = '' AND ac.artist_id IS NOT NULL AND a.id = ac.artist_id;
+  END IF;
+END $$;
 
-UPDATE artist_connections ac SET artist_b_slug = a.slug
-FROM artists a WHERE ac.artist_b_slug = '' AND ac.connected_artist_id IS NOT NULL AND a.id = ac.connected_artist_id;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='artist_connections' AND column_name='artist_b_id') THEN
+    UPDATE artist_connections ac SET artist_b_slug = a.slug FROM artists a
+    WHERE ac.artist_b_slug = '' AND ac.artist_b_id IS NOT NULL AND a.id = ac.artist_b_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='artist_connections' AND column_name='connected_artist_id') THEN
+    UPDATE artist_connections ac SET artist_b_slug = a.slug FROM artists a
+    WHERE ac.artist_b_slug = '' AND ac.connected_artist_id IS NOT NULL AND a.id = ac.connected_artist_id;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS artist_connections_a_slug_idx  ON artist_connections(artist_a_slug);
 CREATE INDEX IF NOT EXISTS artist_connections_b_slug_idx  ON artist_connections(artist_b_slug);
