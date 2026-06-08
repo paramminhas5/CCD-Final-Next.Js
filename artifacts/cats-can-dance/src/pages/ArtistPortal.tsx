@@ -25,6 +25,7 @@ type Artist = {
   labels: string | null; photo_url: string | null;
   fee_min_inr: number | null; fee_max_inr: number | null;
   open_to_bookings: boolean; available_cities: string[];
+  claimed_by: string | null;
 };
 
 type ArtistDate = {
