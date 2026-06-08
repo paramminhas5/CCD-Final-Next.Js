@@ -325,9 +325,20 @@ interface ArtistDetailProps {
   } | null;
   /** Slug from getStaticProps — available before router.query hydrates. */
   slug?: string;
+  /**
+   * Full pre-fetched profile from App Router server component.
+   * When provided, skips ALL client-side fetches — data is already complete.
+   * Passed by app/artists/[slug]/ArtistDetailClient.tsx.
+   */
+  initialProfile?: {
+    artist: Artist; connections: Connection[]; appearances: Appearance[];
+    milestones: Milestone[]; socialStats: SocialStats | null;
+    stats: ArtistStats; facts: CoolFact[]; upcomingDates: ArtistDate[];
+    discography: Discography[]; press: PressItem[]; socialHistory: any[];
+  } | null;
 }
 
-export default function ArtistDetailPage({ initialArtist, slug: slugProp }: ArtistDetailProps = {}) {
+export default function ArtistDetailPage({ initialArtist, slug: slugProp, initialProfile }: ArtistDetailProps = {}) {
   const router = useRouter();
   const slug = slugProp || (router.query?.slug as string) || "";
   const { toast } = useToast();
@@ -343,21 +354,24 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
     discography: Discography[]; press: PressItem[];
     socialHistory: any[];
   } | null>(
-    // If SSR provided a minimal artist, seed data with it so the hero renders immediately
-    initialArtist
-      ? {
-          artist: initialArtist as unknown as Artist,
-          connections: [], appearances: [], milestones: [],
-          socialStats: null, stats: emptyStats, facts: [],
-          upcomingDates: [], discography: [], press: [], socialHistory: [],
-        }
-      : null
+    // App Router: full profile pre-fetched server-side — use it directly, skip all fetches
+    initialProfile
+      ? initialProfile
+      // Pages Router: minimal artist from getStaticProps — seed hero, fetch full profile client-side
+      : initialArtist
+        ? {
+            artist: initialArtist as unknown as Artist,
+            connections: [], appearances: [], milestones: [],
+            socialStats: null, stats: emptyStats, facts: [],
+            upcomingDates: [], discography: [], press: [], socialHistory: [],
+          }
+        : null
   );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  // If SSR provided data we can skip showing the loading spinner immediately
-  const [isLoading, setIsLoading] = useState(!initialArtist);
+  // Skip loading when full profile provided (App Router) or minimal artist (Pages Router ISR)
+  const [isLoading, setIsLoading] = useState(!initialProfile && !initialArtist);
   const [expandedBio, setExpandedBio] = useState(false);
   const [selectedYear, setSelectedYear] = useState("all");
   const [copied, setCopied] = useState(false);
@@ -371,6 +385,9 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
 
   useEffect(() => {
     if (!slug) return;
+    // App Router: full profile was pre-fetched server-side — nothing to do here
+    if (initialProfile) return;
+
     setIsLoading(true); setFetchError(null); setUsedFallback(false);
 
     fetch(`/api/artists/${slug}/full`)
@@ -400,7 +417,7 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
       })
       .catch((e) => { setFetchError(e.message || "Failed to load artist"); })
       .finally(() => setIsLoading(false));
-  }, [slug]);
+  }, [slug, initialProfile]);
 
   const handleShare = async () => {
     if (!data?.artist) return;
