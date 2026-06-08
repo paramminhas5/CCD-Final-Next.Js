@@ -393,51 +393,68 @@ CREATE INDEX IF NOT EXISTS shortlist_promoter_idx
 
 
 -- ── 12. user_roles ────────────────────────────────────────────────────────────
+-- user_roles already exists in Supabase using user_id (not clerk_user_id).
+-- Only add missing columns — never alter the existing primary key pattern.
 
 CREATE TABLE IF NOT EXISTS user_roles (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id   text NOT NULL,
-  role            text NOT NULL,
-  -- artist | promoter | admin
-
-  created_at      timestamptz NOT NULL DEFAULT now(),
-
-  UNIQUE (clerk_user_id, role),
-  CONSTRAINT user_roles_role_check CHECK (role IN ('artist', 'promoter', 'admin'))
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    text NOT NULL,
+  role       text NOT NULL DEFAULT 'fan',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS user_roles_clerk_idx ON user_roles(clerk_user_id);
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS user_id     text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS role        text NOT NULL DEFAULT 'fan';
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_id   uuid;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_slug text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_name text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS email       text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS granted_by  text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS granted_at  timestamptz;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS updated_at  timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS user_roles_user_id_idx ON user_roles(user_id);
 
 
 -- ── 13. user_taste_profiles ───────────────────────────────────────────────────
+-- user_taste_profiles already exists using user_id + liked_artist_slugs (array).
 
 CREATE TABLE IF NOT EXISTS user_taste_profiles (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id   text NOT NULL,
-  artist_slug     text NOT NULL,
-  followed_at     timestamptz NOT NULL DEFAULT now(),
-
-  UNIQUE (clerk_user_id, artist_slug)
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id            text NOT NULL,
+  liked_artist_slugs text[] NOT NULL DEFAULT '{}',
+  cities             text[] NOT NULL DEFAULT '{}',
+  genres             text[] NOT NULL DEFAULT '{}',
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS user_taste_clerk_idx ON user_taste_profiles(clerk_user_id);
-CREATE INDEX IF NOT EXISTS user_taste_artist_idx ON user_taste_profiles(artist_slug);
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS user_id            text;
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS liked_artist_slugs text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS cities             text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS genres             text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS updated_at         timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS user_taste_user_id_idx ON user_taste_profiles(user_id);
 
 
 -- ── 14. fan_profiles ─────────────────────────────────────────────────────────
+-- fan_profiles already exists using user_id, xp, ccd_points, total_interactions.
 
 CREATE TABLE IF NOT EXISTS fan_profiles (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id   text UNIQUE NOT NULL,
-  xp              integer NOT NULL DEFAULT 0,
-  tier            text NOT NULL DEFAULT 'newcomer',
-  -- newcomer | regular | devotee | insider
-  followed_artists text[] NOT NULL DEFAULT '{}',
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now()
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id            text UNIQUE NOT NULL,
+  xp                 integer NOT NULL DEFAULT 0,
+  ccd_points         integer NOT NULL DEFAULT 0,
+  tier               text NOT NULL DEFAULT 'newcomer',
+  total_interactions integer NOT NULL DEFAULT 0,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS fan_profiles_clerk_idx ON fan_profiles(clerk_user_id);
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS user_id            text;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS xp                 integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS ccd_points         integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS tier               text NOT NULL DEFAULT 'newcomer';
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS total_interactions integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS updated_at         timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS fan_profiles_user_id_idx ON fan_profiles(user_id);
 
 
 -- ── 15. event_artist_lineups (links curated events → artist slugs) ────────────
