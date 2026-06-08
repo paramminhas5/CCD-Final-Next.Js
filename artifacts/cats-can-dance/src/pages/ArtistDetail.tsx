@@ -316,18 +316,29 @@ function AvailabilityStrip({
 // ───────────────────────── Main page ─────────────────────────
 
 interface ArtistDetailProps {
-  /** Minimal artist shape pre-fetched by getStaticProps (SSR/ISR). */
+  /** Minimal artist shape — kept for backward compat (old ISR path). */
   initialArtist?: {
     id: string; slug: string; name: string;
     bio?: string; based_city?: string; genres: string[];
     photo_url?: string; instagram?: string; soundcloud?: string;
     spotify?: string; open_to_bookings?: boolean; claimed_by?: string; featured?: boolean;
   } | null;
-  /** Slug from getStaticProps — available before router.query hydrates. */
+  /** Slug — available before router.query hydrates on SSR. */
   slug?: string;
+  /**
+   * Complete pre-fetched profile from getServerSideProps.
+   * When provided, ALL client-side fetches are skipped — data is already complete.
+   * Passed by pages/artists/[slug]/index.tsx via getServerSideProps.
+   */
+  initialProfile?: {
+    artist: Artist; connections: Connection[]; appearances: Appearance[];
+    milestones: Milestone[]; socialStats: SocialStats | null;
+    stats: ArtistStats; facts: CoolFact[]; upcomingDates: ArtistDate[];
+    discography: Discography[]; press: PressItem[]; socialHistory: any[];
+  } | null;
 }
 
-export default function ArtistDetailPage({ initialArtist, slug: slugProp }: ArtistDetailProps = {}) {
+export default function ArtistDetailPage({ initialArtist, slug: slugProp, initialProfile }: ArtistDetailProps = {}) {
   const router = useRouter();
   const slug = slugProp || (router.query?.slug as string) || "";
   const { toast } = useToast();
@@ -343,21 +354,24 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
     discography: Discography[]; press: PressItem[];
     socialHistory: any[];
   } | null>(
-    // If SSR provided a minimal artist, seed data with it so the hero renders immediately
-    initialArtist
-      ? {
-          artist: initialArtist as unknown as Artist,
-          connections: [], appearances: [], milestones: [],
-          socialStats: null, stats: emptyStats, facts: [],
-          upcomingDates: [], discography: [], press: [], socialHistory: [],
-        }
-      : null
+    // Full profile pre-fetched server-side (getServerSideProps) → use directly, skip all fetches
+    initialProfile
+      ? initialProfile
+      // Minimal artist from legacy ISR path → seed hero, still fetch full profile client-side
+      : initialArtist
+        ? {
+            artist: initialArtist as unknown as Artist,
+            connections: [], appearances: [], milestones: [],
+            socialStats: null, stats: emptyStats, facts: [],
+            upcomingDates: [], discography: [], press: [], socialHistory: [],
+          }
+        : null
   );
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  // If SSR provided data we can skip showing the loading spinner immediately
-  const [isLoading, setIsLoading] = useState(!initialArtist);
+  // Skip loading state when full profile is pre-loaded server-side
+  const [isLoading, setIsLoading] = useState(!initialProfile && !initialArtist);
   const [expandedBio, setExpandedBio] = useState(false);
   const [selectedYear, setSelectedYear] = useState("all");
   const [copied, setCopied] = useState(false);
@@ -371,6 +385,9 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
 
   useEffect(() => {
     if (!slug) return;
+    // Full profile already pre-fetched server-side — nothing to do
+    if (initialProfile) return;
+
     setIsLoading(true); setFetchError(null); setUsedFallback(false);
 
     fetch(`/api/artists/${slug}/full`)
@@ -400,7 +417,7 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp }: Arti
       })
       .catch((e) => { setFetchError(e.message || "Failed to load artist"); })
       .finally(() => setIsLoading(false));
-  }, [slug]);
+  }, [slug, initialProfile]);
 
   const handleShare = async () => {
     if (!data?.artist) return;
