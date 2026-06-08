@@ -8,11 +8,23 @@ import SEO from "@/components/SEO";
 import { supabase } from "@/lib/supabase-shim";
 import { api } from "@/lib/api-client";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
 import {
   CheckCircle2, AlertCircle, ExternalLink, Music, Calendar,
   Inbox, FileText, BookOpen, Star, Disc3, Newspaper,
-  Upload, Plus, Trash2, Pencil, X,
+  Upload, Plus, Trash2, Pencil, X, Settings2,
 } from "lucide-react";
+
+// ── Lazy-load heavy portal tabs ───────────────────────────────────────────────
+const BookingKanban  = dynamic(() => import("@/components/portal/BookingKanban"),  { loading: () => <div className="h-32 border-4 border-ink animate-pulse bg-ink/5" /> });
+const CalendarManager = dynamic(() => import("@/components/portal/CalendarManager"), { loading: () => <div className="h-32 border-4 border-ink animate-pulse bg-ink/5" /> });
+const PackagesManager = dynamic(() => import("@/components/portal/PackagesManager"), { loading: () => <div className="h-32 border-4 border-ink animate-pulse bg-ink/5" /> });
+
+// ── Image upload — dynamic to avoid SSR canvas issues ─────────────────────────
+const ImageUploadRaw = dynamic(() => import("@/components/portal/ImageUpload"), { ssr: false });
+function ImageUploadWidget({ currentUrl, onUpload }: { currentUrl?: string | null; onUpload: (url: string) => void }) {
+  return <ImageUploadRaw currentUrl={currentUrl} onUpload={onUpload} label="Upload Photo" hint="JPG, PNG or WebP · Max 5 MB · Drag & drop or click" aspectClass="aspect-square max-w-[200px]" />;
+}
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 type Artist = {
@@ -180,9 +192,19 @@ function ProfileEditor({ artist, onSaved }: { artist: Artist; onSaved: (a: Artis
       <ProfileCompletion artist={{ ...artist, ...{ bio: form.bio, photo_url: form.photo_url, instagram: form.instagram, soundcloud: form.soundcloud, spotify: form.spotify, genres: form.genres.split(",").map(s=>s.trim()).filter(Boolean), booking_email: form.booking_email, available_cities: form.available_cities.split(",").map(s=>s.trim()).filter(Boolean), fee_min_inr: form.fee_min_inr ? parseInt(form.fee_min_inr) : null, fee_max_inr: form.fee_max_inr ? parseInt(form.fee_max_inr) : null, why: form.why }}} />
       <div className="border-4 border-ink bg-cream p-5 chunk-shadow space-y-5">
         <h3 className="font-display text-sm uppercase text-ink/60">Core info</h3>
-        <F label="Photo URL (paste image URL — upload photos to GitHub then link)">
+        <F label="Photo URL (paste image URL — or use the Upload button below)">
           <input value={form.photo_url} onChange={e => setForm(f=>({...f,photo_url:e.target.value}))} placeholder="https://..." className={inp} />
         </F>
+        {/* ── Image Upload Component ── */}
+        {typeof window !== "undefined" && (
+          <div className="pt-2">
+            {/* Lazy import to avoid SSR issues */}
+            <ImageUploadWidget
+              currentUrl={form.photo_url}
+              onUpload={(url) => setForm(f => ({ ...f, photo_url: url }))}
+            />
+          </div>
+        )}
         <F label="Bio">
           <textarea value={form.bio} onChange={e => setForm(f=>({...f,bio:e.target.value}))} rows={5} className={inp + " resize-y"} placeholder="Tell your story…" />
         </F>
@@ -819,16 +841,18 @@ function MarketplaceInbox({ artistSlug, artistName }: { artistSlug: string; arti
 
 
 /* ─── Main Dashboard ─────────────────────────────────────────────────────── */
-type Tab = "profile" | "dates" | "milestones" | "press" | "discography" | "bookings" | "inquiries";
+type Tab = "profile" | "dates" | "milestones" | "press" | "discography" | "bookings" | "inquiries" | "calendar" | "packages";
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "profile",      label: "Profile",      icon: <Music className="w-4 h-4" /> },
+  { key: "bookings",     label: "Bookings",     icon: <Inbox className="w-4 h-4" /> },
+  { key: "packages",     label: "Packages",     icon: <FileText className="w-4 h-4" /> },
+  { key: "calendar",     label: "Calendar",     icon: <Calendar className="w-4 h-4" /> },
   { key: "dates",        label: "Dates",        icon: <Calendar className="w-4 h-4" /> },
   { key: "milestones",   label: "Journey",      icon: <Star className="w-4 h-4" /> },
   { key: "press",        label: "Press",        icon: <Newspaper className="w-4 h-4" /> },
   { key: "discography",  label: "Releases",     icon: <Disc3 className="w-4 h-4" /> },
-  { key: "bookings",     label: "Bookings",     icon: <Inbox className="w-4 h-4" /> },
-  { key: "inquiries",    label: "Inquiries",    icon: <FileText className="w-4 h-4" /> },
+  { key: "inquiries",    label: "Inquiries",    icon: <Settings2 className="w-4 h-4" /> },
 ];
 
 const ArtistPortal = () => {
@@ -948,7 +972,9 @@ const ArtistPortal = () => {
         {tab === "milestones"  && <MilestoneManager artistId={artist.id} artistSlug={artist.slug} />}
         {tab === "press"       && <PressManager artistId={artist.id} artistSlug={artist.slug} />}
         {tab === "discography" && <DiscographyManager artistId={artist.id} artistSlug={artist.slug} />}
-        {tab === "bookings"    && <BookingInbox artistId={artist.id} />}
+        {tab === "bookings"    && <BookingKanban artistId={artist.id} />}
+        {tab === "packages"    && <PackagesManager artistId={artist.id} />}
+        {tab === "calendar"    && <CalendarManager artistId={artist.id} />}
         {tab === "inquiries"   && <MarketplaceInbox artistSlug={artist.slug} artistName={artist.name} />}
       </div>
       <Footer />

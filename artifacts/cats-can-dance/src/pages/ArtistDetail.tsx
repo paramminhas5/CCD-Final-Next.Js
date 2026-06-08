@@ -39,6 +39,10 @@ import SimilarArtists from "@/components/SimilarArtists";
 import FollowButton from "@/components/FollowButton";
 import BookingForm from "@/components/booking/BookingForm";
 import { useArtistFollowerCount } from "@/hooks/useSocialProof";
+import dynamic from "next/dynamic";
+
+const MiniAudioPlayer = dynamic(() => import("@/components/MiniAudioPlayer"), { ssr: false });
+const ArtistGallery   = dynamic(() => import("@/components/ArtistGallery"),   { ssr: false });
 
 // ───────────────────────── Types ─────────────────────────
 interface Artist {
@@ -844,6 +848,11 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp, initia
                 </div>
               </section>
 
+              {/* ── Gallery ── */}
+              {(artist as any).gallery?.length > 0 && (
+                <ArtistGallery gallery={(artist as any).gallery} artistName={artist.name} />
+              )}
+
               {/* Upcoming dates ribbon */}
               {upcomingDates.length > 0 && (
                 <section>
@@ -1304,6 +1313,14 @@ export default function ArtistDetailPage({ initialArtist, slug: slugProp, initia
       />
       <Marquee bg="bg-ink" />
       <Footer />
+
+      {/* ─── STICKY MINI AUDIO PLAYER ─── */}
+      <MiniAudioPlayer
+        artistName={artist.name}
+        soundcloud={artist.soundcloud}
+        spotify={artist.spotify}
+        activeTab={activeTab}
+      />
 
       {/* ─── STICKY MOBILE CTA ─── */}
       {isBookable && activeTab !== "book" && (
