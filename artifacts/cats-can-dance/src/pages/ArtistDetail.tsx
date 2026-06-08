@@ -326,9 +326,9 @@ interface ArtistDetailProps {
   /** Slug from getStaticProps — available before router.query hydrates. */
   slug?: string;
   /**
-   * Full pre-fetched profile from App Router server component.
-   * When provided, skips ALL client-side fetches — data is already complete.
-   * Passed by app/artists/[slug]/ArtistDetailClient.tsx.
+   * Complete pre-fetched profile from getServerSideProps.
+   * When provided, ALL client-side fetches are skipped — data is already complete.
+   * Passed by pages/artists/[slug]/index.tsx via getServerSideProps.
    */
   initialProfile?: {
     artist: Artist; connections: Connection[]; appearances: Appearance[];

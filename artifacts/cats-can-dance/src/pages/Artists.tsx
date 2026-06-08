@@ -58,9 +58,10 @@ const CARD_ACCENTS = [
   "bg-lime text-ink",
 ];
 
-export default function ArtistsPage() {
-  const [artists, setArtists] = useState<DBArtist[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function ArtistsPage({ initialArtists }: { initialArtists?: DBArtist[] }) {
+  // Use server-fetched artists immediately — no loading state, no spinner
+  const [artists, setArtists] = useState<DBArtist[]>(initialArtists ?? []);
+  const [loading, setLoading] = useState(!initialArtists);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [city, setCity] = useState("All");
@@ -69,6 +70,9 @@ export default function ArtistsPage() {
   const [bookingsOnly, setBookingsOnly] = useState(false);
 
   useEffect(() => {
+    // Skip fetch entirely when server already provided the artist list
+    if (initialArtists && initialArtists.length >= 0) return;
+
     (async () => {
       setLoading(true);
       setError(null);

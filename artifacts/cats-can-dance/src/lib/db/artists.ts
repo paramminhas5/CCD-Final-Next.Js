@@ -11,6 +11,7 @@
 import {
   sbGet, sbGetOne, sbInsert, sbPatch, sbDelete, sbUpsert,
   pq, eqf, neqf, ord, inf, ilikef, gtef, ltef, csf,
+  type SbResult,
 } from "./supabase";
 
 import type {
@@ -18,7 +19,6 @@ import type {
   ArtistMilestone, ArtistRelease, ArtistPress, ArtistDate,
   ArtistAvailabilityBlock, ArtistPackage, ArtistStats,
   ArtistFact, ArtistFullProfile, ArtistCalendar, DayStatus,
-  SbResult,
 } from "./types";
 
 // Re-export SbResult so callers don't need to import from supabase.ts directly

@@ -115,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           "Content-Type": fileMime,
           "x-upsert": "true",
         },
-        body: fileBuffer,
+        body: fileBuffer as unknown as BodyInit,
       });
 
       if (!sbRes.ok) {
