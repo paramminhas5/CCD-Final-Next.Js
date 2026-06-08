@@ -325,45 +325,70 @@ CREATE TABLE IF NOT EXISTS booking_shortlist (
 CREATE INDEX IF NOT EXISTS shortlist_promoter_idx ON booking_shortlist(promoter_clerk_id, created_at DESC);
 
 -- ── user_roles ───────────────────────────────────────────────
+-- NOTE: user_roles already exists in Supabase with columns:
+--   user_id, role, entity_id, entity_slug, entity_name, email, etc.
+-- The proxy reads/writes using user_id (not clerk_user_id).
+-- We only add missing columns — we never change existing ones.
 CREATE TABLE IF NOT EXISTS user_roles (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id text NOT NULL,
-  role          text NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (clerk_user_id, role)
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    text NOT NULL,
+  role       text NOT NULL DEFAULT 'fan',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_roles_role_check') THEN
-    ALTER TABLE user_roles ADD CONSTRAINT user_roles_role_check CHECK (role IN ('artist','promoter','admin'));
-  END IF;
-END $$;
-CREATE INDEX IF NOT EXISTS user_roles_clerk_idx ON user_roles(clerk_user_id);
+-- Add columns used by the proxy if they don't exist
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS user_id     text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS role        text NOT NULL DEFAULT 'fan';
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_id   uuid;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_slug text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS entity_name text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS email       text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS granted_by  text;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS granted_at  timestamptz;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS updated_at  timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS user_roles_user_id_idx ON user_roles(user_id);
 
 -- ── user_taste_profiles ──────────────────────────────────────
+-- NOTE: user_taste_profiles already exists with columns:
+--   user_id, liked_artist_slugs (text array), cities, genres, etc.
+-- The proxy reads/writes using user_id + liked_artist_slugs.
 CREATE TABLE IF NOT EXISTS user_taste_profiles (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id text NOT NULL,
-  artist_slug   text NOT NULL DEFAULT '',
-  followed_at   timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (clerk_user_id, artist_slug)
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             text NOT NULL,
+  liked_artist_slugs  text[] NOT NULL DEFAULT '{}',
+  cities              text[] NOT NULL DEFAULT '{}',
+  genres              text[] NOT NULL DEFAULT '{}',
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS artist_slug text NOT NULL DEFAULT '';
-CREATE INDEX IF NOT EXISTS user_taste_clerk_idx  ON user_taste_profiles(clerk_user_id);
-CREATE INDEX IF NOT EXISTS user_taste_artist_idx ON user_taste_profiles(artist_slug);
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS user_id            text;
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS liked_artist_slugs text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS cities             text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS genres             text[] NOT NULL DEFAULT '{}';
+ALTER TABLE user_taste_profiles ADD COLUMN IF NOT EXISTS updated_at         timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS user_taste_user_id_idx ON user_taste_profiles(user_id);
 
 -- ── fan_profiles ─────────────────────────────────────────────
+-- NOTE: fan_profiles already exists with columns:
+--   user_id, xp, ccd_points, tier, total_interactions, etc.
+-- The proxy reads/writes using user_id (not clerk_user_id).
 CREATE TABLE IF NOT EXISTS fan_profiles (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  clerk_user_id    text UNIQUE NOT NULL,
-  xp               integer NOT NULL DEFAULT 0,
-  tier             text NOT NULL DEFAULT 'newcomer',
-  followed_artists text[] NOT NULL DEFAULT '{}',
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now()
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id            text UNIQUE NOT NULL,
+  xp                 integer NOT NULL DEFAULT 0,
+  ccd_points         integer NOT NULL DEFAULT 0,
+  tier               text NOT NULL DEFAULT 'newcomer',
+  total_interactions integer NOT NULL DEFAULT 0,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS xp               integer NOT NULL DEFAULT 0;
-ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS followed_artists text[] NOT NULL DEFAULT '{}';
-CREATE INDEX IF NOT EXISTS fan_profiles_clerk_idx ON fan_profiles(clerk_user_id);
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS user_id            text;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS xp                 integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS ccd_points         integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS tier               text NOT NULL DEFAULT 'newcomer';
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS total_interactions integer NOT NULL DEFAULT 0;
+ALTER TABLE fan_profiles ADD COLUMN IF NOT EXISTS updated_at         timestamptz NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS fan_profiles_user_id_idx ON fan_profiles(user_id);
 
 -- ── event_artist_lineups ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS event_artist_lineups (
