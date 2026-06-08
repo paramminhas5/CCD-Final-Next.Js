@@ -46,20 +46,13 @@ export const getStaticProps: GetStaticProps<Props> = async ({ params }) => {
 
   let event: EventRow | null = null;
 
-  // 1. Try the API proxy (uses SUPABASE_SERVICE_KEY server-side)
+  // 1. Try Supabase directly (no self-HTTP — avoids localhost:3001 dependency)
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
-      `http://localhost:${process.env.PORT ?? 3000}`;
-    const res = await fetch(`${baseUrl}/api/events/${encodeURIComponent(slug)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data === "object" && data.slug) {
-        event = data as EventRow;
-      }
-    }
+    const { sbGet, pq, eqf } = await import("@/lib/db");
+    const rows = await sbGet<EventRow>("events", pq(eqf("slug", slug)));
+    if (rows.length > 0) event = rows[0];
   } catch {
-    // Network error at build time — fall through to static fallback
+    // Supabase unavailable at build time — fall through to static fallback
   }
 
   // 2. Static fallback — ensures static-catalogue events always render
