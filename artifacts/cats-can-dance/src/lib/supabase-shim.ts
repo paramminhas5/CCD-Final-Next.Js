@@ -1,10 +1,20 @@
 /**
- * Supabase compatibility shim.
+ * supabase-shim.ts — compatibility layer for legacy component code.
+ *
  * Provides a supabase-shaped object that routes calls to our /api server.
- * This lets the existing source files work without modification during migration.
+ * This lets existing client components use familiar supabase.from('table')
+ * syntax without needing a real Supabase SDK installed.
+ *
+ * ⚠️  New code should NOT use this shim. Use direct fetch() calls to /api/*
+ *     or import typed hooks from @/hooks/* instead.
  *
  * Auth: migrated to Clerk. The authShim below is a no-op stub kept only for
  * backwards compatibility — active code should use @clerk/react hooks directly.
+ *
+ * Architecture:
+ *   supabase.from('artists')       → GET /api/artists
+ *   supabase.from('site_settings') → GET /api/site-settings
+ *   (etc. — see TABLE_ROUTE map below)
  */
 import { api } from "./api-client";
 

@@ -51,3 +51,12 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Legacy migration backup — historical reference only, not active code
+.migration-backup/
+
+# Dead library packages (removed — using direct Supabase REST fetch pattern)
+lib/db/
+lib/api-spec/
+lib/api-zod/
+lib/api-client-react/
