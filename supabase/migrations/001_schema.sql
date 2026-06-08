@@ -67,144 +67,124 @@ CREATE INDEX IF NOT EXISTS artists_kind_idx        ON artists(kind);
 -- ── 2. artist_social_stats ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS artist_social_stats (
-  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  artist_id                uuid REFERENCES artists(id) ON DELETE CASCADE,
-  artist_slug              text NOT NULL,
-
-  -- Platform follower counts
-  instagram_followers      integer,
-  soundcloud_followers     integer,
-  spotify_followers        integer,
+  id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  artist_id                 uuid REFERENCES artists(id) ON DELETE CASCADE,
+  artist_slug               text NOT NULL DEFAULT '',
+  instagram_followers       integer,
+  soundcloud_followers      integer,
+  spotify_followers         integer,
   spotify_monthly_listeners integer,
-  youtube_subscribers      integer,
-  bandcamp_followers       integer,
-
-  -- Provenance
-  source                   text NOT NULL DEFAULT 'manual',
-  -- manual | spotify | youtube | soundcloud | ra | bandcamp
-
-  captured_at              timestamptz NOT NULL DEFAULT now(),
-  created_at               timestamptz NOT NULL DEFAULT now()
+  youtube_subscribers       integer,
+  bandcamp_followers        integer,
+  source                    text NOT NULL DEFAULT 'manual',
+  captured_at               timestamptz NOT NULL DEFAULT now(),
+  created_at                timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill artist_slug if table already existed without it
+ALTER TABLE artist_social_stats ADD COLUMN IF NOT EXISTS artist_slug text NOT NULL DEFAULT '';
+ALTER TABLE artist_social_stats ADD COLUMN IF NOT EXISTS source      text NOT NULL DEFAULT 'manual';
+ALTER TABLE artist_social_stats ADD COLUMN IF NOT EXISTS captured_at timestamptz NOT NULL DEFAULT now();
 
-CREATE INDEX IF NOT EXISTS artist_social_stats_slug_idx
-  ON artist_social_stats(artist_slug, captured_at DESC);
-
-CREATE INDEX IF NOT EXISTS artist_social_stats_artist_id_idx
-  ON artist_social_stats(artist_id, captured_at DESC);
+CREATE INDEX IF NOT EXISTS artist_social_stats_slug_idx      ON artist_social_stats(artist_slug, captured_at DESC);
+CREATE INDEX IF NOT EXISTS artist_social_stats_artist_id_idx ON artist_social_stats(artist_id, captured_at DESC);
 
 
 -- ── 3. artist_milestones ─────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS artist_milestones (
-  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  artist_id             uuid REFERENCES artists(id) ON DELETE CASCADE,
-  artist_slug           text NOT NULL,
-
-  type                  text NOT NULL DEFAULT 'first_gig',
-  -- first_gig | festival_debut | label_signing | release |
-  -- milestone_followers | tour | b2b | residency | award | radio_show
-
-  title                 text NOT NULL,
-  description           text,
-  date                  date NOT NULL,
-  year                  integer,
-  city                  text,
-  venue                 text,
-  is_featured           boolean NOT NULL DEFAULT false,
-  importance            integer NOT NULL DEFAULT 5, -- 1–10
-
-  -- Enrichment provenance
-  source                text NOT NULL DEFAULT 'manual',
-  enriched_at           timestamptz,
-
-  related_artist_slug   text,
-  related_artist_name   text,
-
-  created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now()
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  artist_id            uuid REFERENCES artists(id) ON DELETE CASCADE,
+  artist_slug          text NOT NULL DEFAULT '',
+  type                 text NOT NULL DEFAULT 'first_gig',
+  title                text NOT NULL DEFAULT '',
+  description          text,
+  date                 date NOT NULL DEFAULT CURRENT_DATE,
+  year                 integer,
+  city                 text,
+  venue                text,
+  is_featured          boolean NOT NULL DEFAULT false,
+  importance           integer NOT NULL DEFAULT 5,
+  source               text NOT NULL DEFAULT 'manual',
+  enriched_at          timestamptz,
+  related_artist_slug  text,
+  related_artist_name  text,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill columns if table already existed without them
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS artist_slug  text NOT NULL DEFAULT '';
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS source       text NOT NULL DEFAULT 'manual';
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS enriched_at  timestamptz;
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS importance   integer NOT NULL DEFAULT 5;
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS related_artist_slug text;
+ALTER TABLE artist_milestones ADD COLUMN IF NOT EXISTS related_artist_name text;
 
-CREATE INDEX IF NOT EXISTS artist_milestones_slug_idx
-  ON artist_milestones(artist_slug, date ASC);
-
-CREATE INDEX IF NOT EXISTS artist_milestones_artist_id_idx
-  ON artist_milestones(artist_id, date ASC);
+CREATE INDEX IF NOT EXISTS artist_milestones_slug_idx      ON artist_milestones(artist_slug, date ASC);
+CREATE INDEX IF NOT EXISTS artist_milestones_artist_id_idx ON artist_milestones(artist_id, date ASC);
 
 
 -- ── 4. artist_discography ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS artist_discography (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  artist_id       uuid REFERENCES artists(id) ON DELETE CASCADE,
-  artist_slug     text NOT NULL,
-
-  title           text NOT NULL,
-  release_type    text NOT NULL DEFAULT 'single',
-  -- single | ep | album | remix | feature | compilation | mix
-
-  release_date    date,
-  year            integer,
-  label           text,
-  artwork_url     text,
-
-  -- Streaming links
-  spotify_url     text,
-  soundcloud_url  text,
-  bandcamp_url    text,
-  youtube_url     text,
-
-  description     text,
-
-  -- Enrichment provenance
-  source          text NOT NULL DEFAULT 'manual',
-  enriched_at     timestamptz,
-  external_id     text, -- spotify track/album id, etc.
-
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now()
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  artist_id      uuid REFERENCES artists(id) ON DELETE CASCADE,
+  artist_slug    text NOT NULL DEFAULT '',
+  title          text NOT NULL DEFAULT '',
+  release_type   text NOT NULL DEFAULT 'single',
+  release_date   date,
+  year           integer,
+  label          text,
+  artwork_url    text,
+  spotify_url    text,
+  soundcloud_url text,
+  bandcamp_url   text,
+  youtube_url    text,
+  description    text,
+  source         text NOT NULL DEFAULT 'manual',
+  enriched_at    timestamptz,
+  external_id    text,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill columns if table already existed without them
+ALTER TABLE artist_discography ADD COLUMN IF NOT EXISTS artist_slug  text NOT NULL DEFAULT '';
+ALTER TABLE artist_discography ADD COLUMN IF NOT EXISTS source       text NOT NULL DEFAULT 'manual';
+ALTER TABLE artist_discography ADD COLUMN IF NOT EXISTS enriched_at  timestamptz;
+ALTER TABLE artist_discography ADD COLUMN IF NOT EXISTS external_id  text;
+ALTER TABLE artist_discography ADD COLUMN IF NOT EXISTS youtube_url  text;
 
-CREATE INDEX IF NOT EXISTS artist_discography_slug_idx
-  ON artist_discography(artist_slug, release_date DESC);
-
-CREATE INDEX IF NOT EXISTS artist_discography_artist_id_idx
-  ON artist_discography(artist_id, release_date DESC);
+CREATE INDEX IF NOT EXISTS artist_discography_slug_idx      ON artist_discography(artist_slug, release_date DESC);
+CREATE INDEX IF NOT EXISTS artist_discography_artist_id_idx ON artist_discography(artist_id, release_date DESC);
 
 
 -- ── 5. artist_press ──────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS artist_press (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  artist_id       uuid REFERENCES artists(id) ON DELETE CASCADE,
-  artist_slug     text NOT NULL,
-
-  title           text NOT NULL,
-  publication     text NOT NULL,
-  author          text,
-  excerpt         text,
-  url             text,
-
-  type            text NOT NULL DEFAULT 'review',
-  -- review | interview | feature | premiere | mention | podcast
-
-  date_published  date,
-  is_featured     boolean NOT NULL DEFAULT false,
-  quote_for_epk   text, -- best pull quote shown in EPK
-
-  -- Enrichment provenance
-  source          text NOT NULL DEFAULT 'manual',
-  enriched_at     timestamptz,
-
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now()
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  artist_id      uuid REFERENCES artists(id) ON DELETE CASCADE,
+  artist_slug    text NOT NULL DEFAULT '',
+  title          text NOT NULL DEFAULT '',
+  publication    text NOT NULL DEFAULT '',
+  author         text,
+  excerpt        text,
+  url            text,
+  type           text NOT NULL DEFAULT 'review',
+  date_published date,
+  is_featured    boolean NOT NULL DEFAULT false,
+  quote_for_epk  text,
+  source         text NOT NULL DEFAULT 'manual',
+  enriched_at    timestamptz,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill columns if table already existed without them
+ALTER TABLE artist_press ADD COLUMN IF NOT EXISTS artist_slug  text NOT NULL DEFAULT '';
+ALTER TABLE artist_press ADD COLUMN IF NOT EXISTS source       text NOT NULL DEFAULT 'manual';
+ALTER TABLE artist_press ADD COLUMN IF NOT EXISTS enriched_at  timestamptz;
+ALTER TABLE artist_press ADD COLUMN IF NOT EXISTS quote_for_epk text;
 
-CREATE INDEX IF NOT EXISTS artist_press_slug_idx
-  ON artist_press(artist_slug, date_published DESC);
-
-CREATE INDEX IF NOT EXISTS artist_press_artist_id_idx
-  ON artist_press(artist_id, date_published DESC);
+CREATE INDEX IF NOT EXISTS artist_press_slug_idx      ON artist_press(artist_slug, date_published DESC);
+CREATE INDEX IF NOT EXISTS artist_press_artist_id_idx ON artist_press(artist_id, date_published DESC);
 
 
 -- ── 6. artist_packages ───────────────────────────────────────────────────────
@@ -212,34 +192,33 @@ CREATE INDEX IF NOT EXISTS artist_press_artist_id_idx
 CREATE TABLE IF NOT EXISTS artist_packages (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   artist_id        uuid NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
-  artist_slug      text NOT NULL,
-
-  name             text NOT NULL,
+  artist_slug      text NOT NULL DEFAULT '',
+  name             text NOT NULL DEFAULT '',
   description      text,
   suitable_for     text[] NOT NULL DEFAULT '{}',
-
   price_inr        integer NOT NULL DEFAULT 0,
   price_is_minimum boolean NOT NULL DEFAULT true,
   travel_included  boolean NOT NULL DEFAULT false,
   travel_note      text,
-
   set_duration_min integer,
   set_type         text NOT NULL DEFAULT 'solo',
-  -- solo | b2b | live | live_pa
-
   tech_rider       text,
   is_active        boolean NOT NULL DEFAULT true,
   sort_order       integer NOT NULL DEFAULT 0,
-
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
+-- Backfill columns if table already existed without them
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS artist_slug      text NOT NULL DEFAULT '';
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS suitable_for     text[] NOT NULL DEFAULT '{}';
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS price_is_minimum boolean NOT NULL DEFAULT true;
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS travel_included  boolean NOT NULL DEFAULT false;
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS travel_note      text;
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS set_duration_min integer;
+ALTER TABLE artist_packages ADD COLUMN IF NOT EXISTS tech_rider       text;
 
-CREATE INDEX IF NOT EXISTS artist_packages_artist_id_idx
-  ON artist_packages(artist_id, sort_order);
-
-CREATE INDEX IF NOT EXISTS artist_packages_slug_idx
-  ON artist_packages(artist_slug) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS artist_packages_artist_id_idx ON artist_packages(artist_id, sort_order);
+CREATE INDEX IF NOT EXISTS artist_packages_slug_idx      ON artist_packages(artist_slug) WHERE is_active = true;
 
 
 -- ── 7. artist_availability_blocks ────────────────────────────────────────────
