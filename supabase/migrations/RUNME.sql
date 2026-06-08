@@ -655,3 +655,36 @@ UNION ALL SELECT 'curated_events',      COUNT(*) FROM curated_events
 UNION ALL SELECT 'events',              COUNT(*) FROM events
 UNION ALL SELECT 'promoters',           COUNT(*) FROM promoters
 ORDER BY 1;
+
+
+
+-- ─────────────────────────────────────────────────────────────
+-- STEP 6/6 · Normalise artist_connections to slug-based schema
+-- (Run this AFTER existing data is present)
+-- ─────────────────────────────────────────────────────────────
+
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS artist_a_slug   text NOT NULL DEFAULT '';
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS artist_b_slug   text NOT NULL DEFAULT '';
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS connection_type text NOT NULL DEFAULT 'b2b';
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS strength        integer NOT NULL DEFAULT 5;
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS shared_events   text[] NOT NULL DEFAULT '{}';
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS shared_venues   text[] NOT NULL DEFAULT '{}';
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS notes           text;
+ALTER TABLE artist_connections ADD COLUMN IF NOT EXISTS updated_at      timestamptz NOT NULL DEFAULT now();
+
+-- Backfill slugs from artists table where old UUID columns exist
+UPDATE artist_connections ac SET artist_a_slug = a.slug
+FROM artists a WHERE ac.artist_a_slug = '' AND ac.artist_id IS NOT NULL AND a.id = ac.artist_id;
+
+UPDATE artist_connections ac SET artist_b_slug = a.slug
+FROM artists a WHERE ac.artist_b_slug = '' AND ac.connected_artist_id IS NOT NULL AND a.id = ac.connected_artist_id;
+
+CREATE INDEX IF NOT EXISTS artist_connections_a_slug_idx  ON artist_connections(artist_a_slug);
+CREATE INDEX IF NOT EXISTS artist_connections_b_slug_idx  ON artist_connections(artist_b_slug);
+CREATE INDEX IF NOT EXISTS artist_connections_strength_idx ON artist_connections(strength DESC);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_connections_slug_pair_key') THEN
+    ALTER TABLE artist_connections ADD CONSTRAINT artist_connections_slug_pair_key UNIQUE (artist_a_slug, artist_b_slug);
+  END IF;
+END $$;

@@ -1,9 +1,69 @@
 /**
  * CCD API proxy — Next.js serverless function
- * Routes all /api/* calls to Supabase REST with service-role key.
- * Admin routes require x-admin-password header matching ADMIN_PASSWORD env var.
- * NO hardcoded password fallback — set ADMIN_PASSWORD in Vercel env vars.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * This proxy handles routes that haven't yet been extracted into dedicated
+ * files. When adding new routes, prefer creating a dedicated file in pages/api/
+ * and importing from @/lib/db instead of adding here.
  *
+ * ROUTES ALREADY EXTRACTED (do NOT add here — they live in their own files):
+ *   /api/artists/*              → pages/api/artists/index.ts + [slug].ts
+ *   /api/artist-calendar        → pages/api/artist-calendar.ts
+ *   /api/bookings/*             → pages/api/bookings/
+ *   /api/admin/artists          → pages/api/admin/artists.ts
+ *   /api/events/[slug]          → pages/api/events/[slug].ts
+ *   /api/user/artist-gigs       → pages/api/user/artist-gigs.ts
+ *   /api/promoters/submit-event → pages/api/promoters/submit-event.ts
+ *   /api/generate-poster        → pages/api/generate-poster.ts
+ *
+ * STILL IN THIS PROXY (migrate these next):
+ *   /api/functions/v1/*         — admin CMS (signups, content, curated-events, videos, rsvps, promoters, blog, poster)
+ *   /api/events                 — events list
+ *   /api/curated-events         — curated events list + interact + by-promoter
+ *   /api/videos                 — site videos
+ *   /api/instagram-feed         — behold proxy
+ *   /api/social-proof/*         — platform + event + follower counts
+ *   /api/catbot-chat            — SSE catbot proxy
+ *   /api/user-role              — user role lookup + grant
+ *   /api/site-settings          — site settings
+ *   /api/contact                — contact form
+ *   /api/booking-inquiry        — v1 booking inquiry
+ *   /api/booking-inquiry-v2     — v2 structured booking inquiry
+ *   /api/booking-requests/*     — admin booking list (mine/thread/status now extracted)
+ *   /api/booking-messages/*     — in-thread messaging
+ *   /api/early-access           — email signups
+ *   /api/event-rsvp             — event RSVPs
+ *   /api/artist-submissions     — public artist submissions
+ *   /api/promoter-applications  — promoter application form
+ *   /api/artist-dates           — artist date calendar entries
+ *   /api/artist-milestones      — milestones CRUD
+ *   /api/artist-press           — press CRUD
+ *   /api/artist-discography     — discography CRUD
+ *   /api/artist-packages        — packages CRUD
+ *   /api/availability-blocks    — availability blocks CRUD
+ *   /api/artist-connections     — connections CRUD + graph
+ *   /api/event-appearances      — gigography CRUD
+ *   /api/artist-graph           — graph traversal
+ *   /api/venue-profiles         — venue CRUD
+ *   /api/event-signals          — recommendation signals
+ *   /api/fan-profiles           — XP + tier system
+ *   /api/xp-events              — XP event log
+ *   /api/user/follow            — follow/unfollow artist
+ *   /api/user/profile           — taste profile
+ *   /api/shortlist              — promoter shortlist + fan-out
+ *   /api/promoter/*             — promoter profile + bookings
+ *   /api/marketplace/*          — marketplace search v1 + v2
+ *   /api/booking-inquiries      — artist portal inquiry list
+ *   /api/artist-availability    — public availability summary
+ *   /api/role-applications      — role application flow
+ *   /api/admin-roles            — admin roles list
+ *   /api/event-artist-lineups   — lineup CRUD
+ *   /api/promoters              — public promoter list + claim + by-user
+ *   /api/cron/trigger           — manual cron trigger
+ *   /api/health                 — health check
+ *   /api/ticketing/*            — forwarded to Express API server
+ *   /api/youtube-videos         — site videos from DB
+ *
+ * Admin routes require x-admin-password header matching ADMIN_PASSWORD env var.
  * /api/ticketing/* routes are forwarded to the Express API server.
  */
 import type { NextApiRequest, NextApiResponse } from "next";
@@ -322,6 +382,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ── artists (admin) ───────────────────────────────────────────────────────
+    // EXTRACTED → pages/api/admin/artists.ts
+    // This block is kept as a legacy alias so existing admin panel calls to
+    // /api/functions/v1/admin-artists still work during transition.
     if (fn === "admin-artists") {
       if (m === "GET") return res.json({ artists: await get("artists", pq(ord("name"))) });
       if (m === "POST") {
@@ -490,27 +553,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PUBLIC ROUTES
   // ════════════════════════════════════════════════════════════════════════════
 
-  // ── Artists: list ───────────────────────────────────────────────────────────
-  if (path === "artists" && m === "GET") {
-    const f: Record<string,string> = { ...eqf("status","approved"), ...ord("name") };
-    if (rq.featured === "true") f["featured"] = "eq.true";
-    const limitVal = rq.limit ? parseInt(rq.limit) : null;
-    let rows = (await get("artists", pq(f))) as any[];
-    if (limitVal && limitVal > 0) rows = rows.slice(0, limitVal);
-    return res.json(rows ?? []);
-  }
-
-  // ── Artists: single by slug ─────────────────────────────────────────────────
-  // Handles both /api/artists/kohra (path style) and /api/artists?slug=kohra (query style)
-  if (segs[0] === "artists" && segs[1] && segs.length === 2 && m === "GET") {
-    const rows = await get("artists", pq({ ...eqf("slug", segs[1]), ...eqf("status","approved") })) as any[];
-    return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
-  }
-
-  // Also handle query-param slug: /api/artists?slug=kohra
-  if (path === "artists" && rq.slug && m === "GET") {
-    const rows = await get("artists", pq({ ...eqf("slug", rq.slug), ...eqf("status","approved") })) as any[];
-    return rows?.length ? res.json(rows[0]) : res.status(404).json({ error: "Not found" });
+  // ── Artists ──────────────────────────────────────────────────────────────────
+  // EXTRACTED → pages/api/artists/index.ts  (list + submit)
+  //             pages/api/artists/[slug].ts (single + basic + full + claim + self-update + admin patch/delete)
+  // These paths should NOT reach this proxy — Next.js routes to the dedicated files first.
+  // The blocks below are kept as a safety fallback only during transition.
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (segs[0] === "artists") {
+    // Safety fallback — should be handled by pages/api/artists/*.ts
+    // If we get here, something is wrong with the file-based routing.
+    console.warn("[proxy] artist route fell through to proxy — check pages/api/artists/");
+    return res.status(404).json({ error: "Artist route not found. This is a routing bug — report it." });
   }
 
   // ── Artists: basic profile + appearances (/api/artists/:slug/basic) ─────────
@@ -1543,29 +1596,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ════════════════════════════════════════════════════════════════════════════
 
   // ── Artist connections: GET /api/artist-connections?artist_id=xxx ───────────
+  // NORMALISED: always use slug-based lookup (canonical schema).
+  // Legacy artist_id-based lookup is supported as a fallback for old data.
   if (path === "artist-connections" && m === "GET") {
-    const artistId = rq.artist_id ?? rq.id;
-    const artistSlug = rq.slug;
-    if (!artistId && !artistSlug) return res.status(400).json({ error: "artist_id or slug required" });
+    const artistSlug = rq.slug ?? rq.artist_slug;
+    const artistId   = rq.artist_id ?? rq.id;
 
-    let filter: Record<string,string> = {};
-    if (artistId) {
-      // Get both directions (a→b and b→a)
-      const [asA, asB] = await Promise.all([
-        get("artist_connections", `?artist_a_id=eq.${artistId}&order=strength.desc`),
-        get("artist_connections", `?artist_b_id=eq.${artistId}&order=strength.desc`),
-      ]);
-      const all = [...(asA as any[]), ...(asB as any[])];
-      return res.json(all);
-    }
+    if (!artistSlug && !artistId) return res.status(400).json({ error: "slug or artist_id required" });
+
     if (artistSlug) {
+      // Canonical: slug-based — both directions
       const [asA, asB] = await Promise.all([
-        get("artist_connections", `?artist_a_slug=eq.${artistSlug}&order=strength.desc`),
-        get("artist_connections", `?artist_b_slug=eq.${artistSlug}&order=strength.desc`),
+        get("artist_connections", `?artist_a_slug=eq.${encodeURIComponent(artistSlug)}&order=strength.desc`),
+        get("artist_connections", `?artist_b_slug=eq.${encodeURIComponent(artistSlug)}&order=strength.desc`),
       ]);
-      const all = [...(asA as any[]), ...(asB as any[])];
-      return res.json(all);
+      return res.json([...(asA as any[]), ...(asB as any[])]);
     }
+
+    // Fallback: legacy UUID-based lookup for old data that hasn't been migrated
+    const [asA, asB] = await Promise.all([
+      get("artist_connections", `?artist_a_id=eq.${artistId}&order=strength.desc`),
+      get("artist_connections", `?artist_b_id=eq.${artistId}&order=strength.desc`),
+    ]);
+    return res.json([...(asA as any[]), ...(asB as any[])]);
   }
 
   // ── Artist connections: POST (admin) ────────────────────────────────────────
@@ -2107,91 +2160,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ══════════════════════════════════════════════════════════════════════
   // ARTIST CALENDAR (merged view for public profile)
-  // GET /api/artist-calendar?slug=<slug>&from=YYYY-MM-DD&to=YYYY-MM-DD
-  //
-  // Returns a merged, day-indexed calendar object combining:
-  //   - availability_blocks (tour legs, unavailable, open slots)
-  //   - individual artist_dates (confirmed gigs)
-  // Used by the public AvailabilityStrip and the new booking date picker.
-  // Response shape:
-  //   { days: { "YYYY-MM-DD": DayStatus }[], blocks: Block[], gigs: Gig[] }
-  // DayStatus: "busy" | "tentative" | "available" | "open"
+  // EXTRACTED → pages/api/artist-calendar.ts
+  // This proxy block is now unreachable — Next.js routes /api/artist-calendar
+  // directly to the dedicated file. Kept as documentation only.
   // ══════════════════════════════════════════════════════════════════════
   if (segs[0] === "artist-calendar" && m === "GET") {
-    const { slug } = rq;
-    if (!slug) return res.status(400).json({ error: "slug required" });
-
-    const artistRows = await get("artists", pq(eqf("slug", slug))) as any[];
-    if (!artistRows?.length) return res.status(404).json({ error: "Artist not found" });
-    const artist = artistRows[0];
-
-    const fromDate = rq.from ?? new Date().toISOString().split("T")[0];
-    const toDate   = rq.to   ?? new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0];
-
-    // Fetch blocks and individual dates in parallel
-    const [blocksRaw, gigsRaw] = await Promise.all([
-      get(
-        "artist_availability_blocks",
-        `?artist_id=eq.${artist.id}&is_public=eq.true&start_date=lte.${toDate}&end_date=gte.${fromDate}&order=start_date.asc`,
-      ) as Promise<any[]>,
-      get(
-        "artist_dates",
-        `?artist_id=eq.${artist.id}&is_public=eq.true&event_date=gte.${fromDate}&event_date=lte.${toDate}&order=event_date.asc`,
-      ) as Promise<any[]>,
-    ]);
-
-    // Build day map — blocks first, then individual dates win if status is stricter
-    const days: Record<string, "busy" | "tentative" | "available" | "open"> = {};
-
-    const rank = { busy: 3, tentative: 2, available: 1, open: 0 };
-
-    function setDay(iso: string, status: "busy" | "tentative" | "available" | "open") {
-      const cur = days[iso];
-      if (!cur || rank[status] > rank[cur]) days[iso] = status;
-    }
-
-    // Expand blocks into individual days
-    for (const b of blocksRaw ?? []) {
-      const start = new Date(b.start_date);
-      const end   = new Date(b.end_date);
-      const status: "busy" | "tentative" | "available" =
-        b.kind === "unavailable" ? "busy"
-        : b.kind === "available"  ? "available"
-        : "tentative"; // tour_leg = tentative until individual gig confirmed
-
-      const weeklyDays: number[] | null = b.weekly_days
-        ? (Array.isArray(b.weekly_days) ? b.weekly_days : JSON.parse(b.weekly_days))
-        : null;
-
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        if (weeklyDays && !weeklyDays.includes(d.getDay())) continue;
-        const iso = d.toISOString().split("T")[0];
-        setDay(iso, status);
-      }
-    }
-
-    // Individual gig dates override block status
-    for (const g of gigsRaw ?? []) {
-      const iso = g.event_date?.slice(0, 10);
-      if (!iso) continue;
-      const status: "busy" | "tentative" | "available" =
-        g.status === "confirmed" ? "busy"
-        : g.status === "tentative" ? "tentative"
-        : "available";
-      setDay(iso, status);
-    }
-
-    return res.json({
-      artist_id: artist.id,
-      artist_slug: artist.slug,
-      from: fromDate,
-      to: toDate,
-      days,
-      blocks: blocksRaw ?? [],
-      gigs: gigsRaw ?? [],
-      available_cities: artist.available_cities ?? [],
-      open_to_bookings: artist.open_to_bookings ?? false,
-    });
+    // Should never reach here — handled by pages/api/artist-calendar.ts
+    return res.status(404).json({ error: "Route extracted — this should not be reached" });
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -2368,6 +2343,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // GET /api/booking-requests?artist_id_resolved=:id&status=new  — portal inbox by artist_id_resolved
+  // EXTRACTED → pages/api/bookings/index.ts
   // Used by BookingInbox to fetch bookings regardless of how they were created.
   if (segs[0] === "booking-requests" && !segs[1] && m === "GET") {
     const filters: Record<string, string> = { ...ord("created_at", false) };
