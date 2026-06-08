@@ -710,8 +710,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rows = await get("artists", pq(eqf("id", artistId))) as any[];
     if (!rows?.length) return res.status(404).json({ error: "Artist not found" });
     if (rows[0].claimed_by !== user_id) return res.status(403).json({ error: "You don't own this profile" });
-    // Only allow safe editable fields — never let self-update change status/claimed_by/slug
-    const ALLOWED = ["bio","why","instagram","soundcloud","spotify","bandcamp","website","booking_email","manager_email","labels","photo_url"];
+    // Only allow safe editable fields — never let self-update change status/claimed_by/slug/id
+    const ALLOWED = [
+      "bio","why","photo_url",
+      "instagram","soundcloud","spotify","bandcamp","website",
+      "booking_email","manager_email","labels",
+      "open_to_bookings","available_cities",
+      "fee_min_inr","fee_max_inr","fee_currency",
+      "genres","festivals","members","from_city","based_city",
+    ];
     const safe: Record<string, unknown> = {};
     for (const k of ALLOWED) { if (k in fields) safe[k] = (fields as any)[k]; }
     if (!Object.keys(safe).length) return res.status(400).json({ error: "No editable fields provided" });
@@ -757,6 +764,87 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const id = rq.id ?? body.id;
       if (!id) return res.status(400).json({ error: "id required" });
       await del("artist_dates", pq(eqf("id", id)));
+      return res.json({ ok: true });
+    }
+  }
+
+  // ── Artist milestones ────────────────────────────────────────────────────────
+  // GET  /api/artist-milestones?artist_slug=xxx  — public read for profile page
+  // POST /api/artist-milestones                  — create (artist portal)
+  // PATCH /api/artist-milestones/:id             — update (artist portal)
+  // DELETE /api/artist-milestones/:id            — delete (artist portal)
+  if (segs[0] === "artist-milestones") {
+    if (m === "GET") {
+      const f: Record<string, string> = { ...ord("date") };
+      if (rq.artist_slug) f["artist_slug"] = `eq.${rq.artist_slug}`;
+      if (rq.artist_id)   f["artist_id"]   = `eq.${rq.artist_id}`;
+      return res.json(await get("artist_milestones", pq(f)));
+    }
+    if (m === "POST") {
+      const now = new Date().toISOString();
+      const { ok, data } = await ins("artist_milestones", { ...body, created_at: now, updated_at: now });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to create milestone" });
+    }
+    if (m === "PATCH" && segs[1]) {
+      const { ok, data } = await patch("artist_milestones", pq(eqf("id", segs[1])), { ...body, updated_at: new Date().toISOString() });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to update milestone" });
+    }
+    if (m === "DELETE" && segs[1]) {
+      await del("artist_milestones", pq(eqf("id", segs[1])));
+      return res.json({ ok: true });
+    }
+  }
+
+  // ── Artist press ─────────────────────────────────────────────────────────────
+  // GET  /api/artist-press?artist_slug=xxx  — public read for profile page
+  // POST /api/artist-press                  — create (artist portal)
+  // PATCH /api/artist-press/:id             — update (artist portal)
+  // DELETE /api/artist-press/:id            — delete (artist portal)
+  if (segs[0] === "artist-press") {
+    if (m === "GET") {
+      const f: Record<string, string> = { ...ord("date_published", false) };
+      if (rq.artist_slug) f["artist_slug"] = `eq.${rq.artist_slug}`;
+      if (rq.artist_id)   f["artist_id"]   = `eq.${rq.artist_id}`;
+      return res.json(await get("artist_press", pq(f)));
+    }
+    if (m === "POST") {
+      const now = new Date().toISOString();
+      const { ok, data } = await ins("artist_press", { ...body, created_at: now, updated_at: now });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to create press item" });
+    }
+    if (m === "PATCH" && segs[1]) {
+      const { ok, data } = await patch("artist_press", pq(eqf("id", segs[1])), { ...body, updated_at: new Date().toISOString() });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to update press item" });
+    }
+    if (m === "DELETE" && segs[1]) {
+      await del("artist_press", pq(eqf("id", segs[1])));
+      return res.json({ ok: true });
+    }
+  }
+
+  // ── Artist discography ───────────────────────────────────────────────────────
+  // GET  /api/artist-discography?artist_slug=xxx  — public read for profile page
+  // POST /api/artist-discography                  — create (artist portal)
+  // PATCH /api/artist-discography/:id             — update (artist portal)
+  // DELETE /api/artist-discography/:id            — delete (artist portal)
+  if (segs[0] === "artist-discography") {
+    if (m === "GET") {
+      const f: Record<string, string> = { ...ord("release_date", false) };
+      if (rq.artist_slug) f["artist_slug"] = `eq.${rq.artist_slug}`;
+      if (rq.artist_id)   f["artist_id"]   = `eq.${rq.artist_id}`;
+      return res.json(await get("artist_discography", pq(f)));
+    }
+    if (m === "POST") {
+      const now = new Date().toISOString();
+      const { ok, data } = await ins("artist_discography", { ...body, created_at: now, updated_at: now });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to create release" });
+    }
+    if (m === "PATCH" && segs[1]) {
+      const { ok, data } = await patch("artist_discography", pq(eqf("id", segs[1])), { ...body, updated_at: new Date().toISOString() });
+      return ok ? res.json(Array.isArray(data) ? data[0] : data) : res.status(400).json({ error: "Failed to update release" });
+    }
+    if (m === "DELETE" && segs[1]) {
+      await del("artist_discography", pq(eqf("id", segs[1])));
       return res.json({ ok: true });
     }
   }
@@ -1599,30 +1687,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // ── Artist Marketplace: Booking Requests ────────────────────────────────────
-  // POST /api/booking-inquiry  { artist_slug, artist_name, requester_name, requester_email, requester_phone?, purpose, event_date?, venue?, budget?, notes? }
-  // Creates a booking inquiry — no OTP needed for marketplace (lower friction)
-  if (path === "booking-inquiry" && m === "POST") {
-    const { artist_slug, artist_name, requester_name, requester_email, requester_phone, purpose, event_date, venue, budget, notes } = body;
-    if (!artist_slug || !artist_name || !requester_email || !requester_name) {
-      return res.status(400).json({ error: "artist_slug, artist_name, requester_name, requester_email are required" });
-    }
-    const now = new Date().toISOString();
-    const { ok, data } = await ins("booking_requests", {
-      artist_id: null, // will be resolved if artist is approved
-      artist_name,
-      requester_email: requester_email.toLowerCase().trim(),
-      requester_phone: requester_phone ?? null,
-      purpose: [purpose, event_date ? `Date: ${event_date}` : null, venue ? `Venue: ${venue}` : null, budget ? `Budget: ${budget}` : null, notes].filter(Boolean).join(" | ") || null,
-      forward_requested: true,
-      ip_hash: null,
-      user_agent: req.headers["user-agent"] ?? null,
-      created_at: now,
-    });
-    if (!ok) return res.status(500).json({ error: "Failed to save booking request" });
-    return res.json({ ok: true, message: "Booking inquiry submitted. The artist will be notified." });
-  }
-
   // GET /api/booking-inquiries?artist_slug=xxx  — for artist portal
   if (path === "booking-inquiries" && m === "GET") {
     const slug = rq.artist_slug;
@@ -2301,6 +2365,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.json({ ok: true, status: newStatus });
+  }
+
+  // GET /api/booking-requests?artist_id_resolved=:id&status=new  — portal inbox by artist_id_resolved
+  // Used by BookingInbox to fetch bookings regardless of how they were created.
+  if (segs[0] === "booking-requests" && !segs[1] && m === "GET") {
+    const filters: Record<string, string> = { ...ord("created_at", false) };
+    if (rq.artist_id_resolved) filters["artist_id_resolved"] = `eq.${rq.artist_id_resolved}`;
+    if (rq.artist_id)          filters["artist_id"]          = `eq.${rq.artist_id}`;
+    if (rq.status)             filters["status"]             = `eq.${rq.status}`;
+    const bookings = await get("booking_requests", pq(filters));
+    return res.json(bookings ?? []);
   }
 
   // GET /api/booking-requests/mine?status=new  — artist-authed inbox
