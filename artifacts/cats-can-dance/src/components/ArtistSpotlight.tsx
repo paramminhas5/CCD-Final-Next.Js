@@ -114,6 +114,7 @@ function DotButton({ active, onClick }: { active: boolean; onClick: () => void }
 export default function ArtistSpotlight() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [userInteracted, setUserInteracted] = useState(false);
   const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -163,17 +164,27 @@ export default function ArtistSpotlight() {
     emblaApi?.scrollTo(i);
   };
 
-  // Fetch featured artists
-  useEffect(() => {
-    fetch("/api/artists?featured=true&limit=5")
-      .then(r => r.json())
+  const fetchArtists = useCallback(() => {
+    setLoading(true);
+    setError(false);
+    fetch("/api/artists?featured=true&limit=5&status=approved")
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
         const list = Array.isArray(data) ? data : [];
         setArtists(list.slice(0, 5));
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
   }, []);
+
+  // Fetch featured artists on mount
+  useEffect(() => { fetchArtists(); }, [fetchArtists]);
 
   if (loading) {
     return (
@@ -185,7 +196,41 @@ export default function ArtistSpotlight() {
     );
   }
 
-  if (artists.length === 0) return null;
+  if (error) {
+    return (
+      <section className="bg-magenta border-b-4 border-ink py-14 md:py-20">
+        <div className="container">
+          <div className="border-4 border-cream/40 p-10 text-center space-y-4">
+            <p className="font-display text-cream/70 text-sm uppercase tracking-widest">Could not load featured artists</p>
+            <button
+              onClick={fetchArtists}
+              className="font-display text-xs uppercase px-4 py-2 border-2 border-cream text-cream hover:bg-cream hover:text-magenta transition-colors"
+            >
+              Retry →
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (artists.length === 0) {
+    return (
+      <section className="bg-magenta border-b-4 border-ink py-14 md:py-20">
+        <div className="container">
+          <div className="border-4 border-cream/20 p-10 text-center">
+            <p className="font-display text-cream/50 text-sm uppercase tracking-widest mb-4">No featured artists yet</p>
+            <Link
+              href="/artists"
+              className="font-display text-xs uppercase px-5 py-2.5 border-2 border-cream text-cream hover:bg-cream hover:text-magenta transition-colors"
+            >
+              Browse all artists →
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="bg-magenta border-b-4 border-ink py-14 md:py-20 overflow-hidden">

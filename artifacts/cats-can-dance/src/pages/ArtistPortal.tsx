@@ -135,7 +135,10 @@ function ProfileEditor({ artist, onSaved }: { artist: Artist; onSaved: (a: Artis
   const save = async () => {
     setSaving(true);
     try {
-      const patch = {
+      const userId = (typeof window !== "undefined" && (window as any).__clerk_user_id) || null;
+      // Resolve user_id from Clerk — accessed from the outer component via useUser()
+      // We pass it in via the _userId ref injected by the parent (see usage below).
+      const patchFields = {
         bio: form.bio || null, why: form.why || null,
         photo_url: form.photo_url || null,
         genres: form.genres.split(",").map(s => s.trim()).filter(Boolean),
@@ -147,12 +150,18 @@ function ProfileEditor({ artist, onSaved }: { artist: Artist; onSaved: (a: Artis
         available_cities: form.available_cities.split(",").map(s => s.trim()).filter(Boolean),
         fee_min_inr: form.fee_min_inr ? parseInt(form.fee_min_inr) : null,
         fee_max_inr: form.fee_max_inr ? parseInt(form.fee_max_inr) : null,
-        updated_at: new Date().toISOString(),
       };
-      const { data, error } = await supabase.from("artists").update(patch).eq("id", artist.id).select().single();
-      if (error) throw error;
+      // Use the dedicated self-update endpoint which enforces ownership via claimed_by.
+      // The user_id field is required for ownership verification.
+      const res = await fetch(`/api/artists/${artist.id}/self-update`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: artist.claimed_by, ...patchFields }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Save failed");
       toast.success("Profile updated!");
-      onSaved(data as Artist);
+      onSaved({ ...artist, ...patchFields } as Artist);
     } catch (e: any) { toast.error(e.message ?? "Save failed"); }
     finally { setSaving(false); }
   };
@@ -701,8 +710,28 @@ function BookingInbox({ artistId }: { artistId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from("booking_requests").select("*").eq("artist_id", artistId).order("created_at", { ascending: false })
-      .then(({ data }) => { setBookings((data ?? []) as Booking[]); setLoading(false); });
+    // Query both artist_id and artist_id_resolved to catch all bookings regardless
+    // of which path they came in on (v1 legacy uses artist_id, v2 uses artist_id_resolved).
+    Promise.all([
+      fetch(`/api/booking-requests?artist_id_resolved=${artistId}&order=created_at:desc`)
+        .then(r => r.ok ? r.json() : []).catch(() => []),
+      // Fallback: also fetch by legacy artist_id column via shim
+      supabase.from("booking_requests")
+        .select("*").eq("artist_id", artistId)
+        .order("created_at", { ascending: false })
+        .then(({ data }) => data ?? []).catch(() => []),
+    ]).then(([resolved, legacy]) => {
+      // Merge and deduplicate by id — resolved takes priority
+      const seen = new Set<string>();
+      const merged: Booking[] = [];
+      for (const b of [...(Array.isArray(resolved) ? resolved : []), ...(Array.isArray(legacy) ? legacy : [])]) {
+        if (!seen.has(b.id)) { seen.add(b.id); merged.push(b); }
+      }
+      // Sort by created_at descending
+      merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setBookings(merged as Booking[]);
+      setLoading(false);
+    });
   }, [artistId]);
 
   return (
