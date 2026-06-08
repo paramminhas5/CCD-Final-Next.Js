@@ -1,9 +1,11 @@
-import dynamic from "next/dynamic";
+/**
+ * /admin-cms — redirects to /admin (unified admin panel)
+ */
+import { useEffect } from "react";
+import { useRouter } from "next/router";
 
-// Full content management panel (signups, playlists, videos, events,
-// messages, blog, curated events, promoters, artists, SEO, marquees,
-// theme, homepage copy, RSVPs).
-//
-// Password-gated only — does not require Clerk. Uses ADMIN_PASSWORD env var.
-const Admin = dynamic(() => import("@/pages/Admin"), { ssr: false });
-export default Admin;
+export default function AdminCmsRedirect() {
+  const router = useRouter();
+  useEffect(() => { router.replace("/admin"); }, []);
+  return null;
+}

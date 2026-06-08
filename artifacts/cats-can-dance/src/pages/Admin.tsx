@@ -7,6 +7,8 @@ import BlogCover from "@/components/BlogCover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { THEME_PRESETS, resolvePalette, applyTheme } from "@/lib/theme";
 import { useTheme } from "@/components/ThemeProvider";
+import { useSafeUser } from "@/lib/clerk-safe";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type Category = "GUIDES" | "CULTURE" | "ARTISTS" | "JOURNAL" | "DROPS" | "PETS";
 type DraftPost = {
@@ -142,10 +144,16 @@ const mergeMarquees = (raw?: MarqueeConfig[] | null): MarqueeConfig[] => {
 };
 
 const Admin = () => {
-  const [password, setPassword] = useState(() => sessionStorage.getItem(PASS_KEY) ?? "");
+  const { user, isLoaded } = useSafeUser();
+  const roleInfo = useUserRole();
+  const [password, setPassword] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem(PASS_KEY) ?? "";
+  });
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const themeCtx = useTheme();
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [signups, setSignups] = useState<Signup[]>([]);
   const [signupSearch, setSignupSearch] = useState("");
@@ -395,6 +403,11 @@ const Admin = () => {
       );
       setEvents(e.events);
       setMessages(m.messages);
+      // Load pending role applications count for badge
+      fetch("/api/role-applications?status=eq.pending", { headers: { "x-admin-password": pwd } })
+        .then(r => r.ok ? r.json() : [])
+        .then(d => setPendingCount(Array.isArray(d) ? d.length : 0))
+        .catch(() => {});
     } catch {
       sessionStorage.removeItem(PASS_KEY);
       setAuthed(false);
@@ -616,28 +629,37 @@ const Admin = () => {
             </div>
 
             <Tabs defaultValue="signups" className="w-full">
-              <TabsList className="bg-cream border-4 border-ink p-1 mb-6 flex-wrap h-auto">
+              <TabsList className="bg-cream border-4 border-ink p-1 mb-6 flex-wrap h-auto gap-y-1">
+                {/* ── DATA GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-1">/ DATA</span>
                 <TabsTrigger value="signups" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SIGNUPS</TabsTrigger>
-                <TabsTrigger value="playlists" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PLAYLISTS</TabsTrigger>
-                <TabsTrigger value="videos" onClick={() => { if (!videosLoaded) loadVideos(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">VIDEOS</TabsTrigger>
-                <TabsTrigger value="events" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">EVENTS</TabsTrigger>
                 <TabsTrigger value="messages" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MESSAGES</TabsTrigger>
-                <TabsTrigger value="blog" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">BLOG</TabsTrigger>
+                <TabsTrigger value="rsvps" onClick={() => { if (!rsvpsLoaded) loadRsvps(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">RSVPS</TabsTrigger>
+                {/* ── CONTENT GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ CONTENT</span>
+                <TabsTrigger value="events" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">EVENTS</TabsTrigger>
                 <TabsTrigger value="curated" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">CURATED</TabsTrigger>
-                <TabsTrigger value="promoters" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PROMOTERS</TabsTrigger>
+                <TabsTrigger value="blog" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">BLOG</TabsTrigger>
+                <TabsTrigger value="videos" onClick={() => { if (!videosLoaded) loadVideos(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">VIDEOS</TabsTrigger>
+                <TabsTrigger value="playlists" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PLAYLISTS</TabsTrigger>
                 <TabsTrigger value="artists" onClick={() => { if (!artistsLoaded) loadArtists(); }} className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">ARTISTS</TabsTrigger>
-                <TabsTrigger value="seo" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SEO</TabsTrigger>
-                <TabsTrigger value="marquees" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MARQUEES</TabsTrigger>
-                <TabsTrigger value="theme" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">THEME</TabsTrigger>
+                <TabsTrigger value="promoters" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">PROMOTERS</TabsTrigger>
+                {/* ── SITE GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ SITE</span>
                 <TabsTrigger value="homepage" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">HOMEPAGE</TabsTrigger>
                 <TabsTrigger value="navigation" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">NAVIGATION</TabsTrigger>
-                <TabsTrigger
-                  value="rsvps"
-                  onClick={() => { if (!rsvpsLoaded) loadRsvps(); }}
-                  className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream"
-                >
-                  RSVPS
+                <TabsTrigger value="marquees" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">MARQUEES</TabsTrigger>
+                <TabsTrigger value="theme" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">THEME</TabsTrigger>
+                <TabsTrigger value="seo" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SEO</TabsTrigger>
+                {/* ── OPERATIONS GROUP ── */}
+                <span className="font-display text-[9px] uppercase text-ink/30 px-2 py-1 w-full block mt-2">/ OPERATIONS</span>
+                <TabsTrigger value="applications" className="font-display data-[state=active]:bg-magenta data-[state=active]:text-cream relative">
+                  APPLICATIONS{pendingCount > 0 && <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] bg-magenta text-cream rounded-full">{pendingCount}</span>}
                 </TabsTrigger>
+                <TabsTrigger value="roles" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">ROLES</TabsTrigger>
+                <TabsTrigger value="ticketing" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">🎟 TICKETING</TabsTrigger>
+                <TabsTrigger value="xp" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">XP / FANS</TabsTrigger>
+                <TabsTrigger value="system" className="font-display data-[state=active]:bg-ink data-[state=active]:text-cream">SYSTEM</TabsTrigger>
               </TabsList>
 
               {/* SIGNUPS */}
@@ -1519,6 +1541,34 @@ const Admin = () => {
                   </table>
                 </div>
               </TabsContent>
+
+              {/* ── OPERATIONS TABS ─────────────────────────────────────────── */}
+
+              {/* APPLICATIONS */}
+              <TabsContent value="applications">
+                <ApplicationsTab userId={user?.id ?? "admin-pw"} onCountChange={setPendingCount} />
+              </TabsContent>
+
+              {/* ROLES */}
+              <TabsContent value="roles">
+                <RolesTab userId={user?.id ?? "admin-pw"} />
+              </TabsContent>
+
+              {/* TICKETING */}
+              <TabsContent value="ticketing">
+                <TicketingTab />
+              </TabsContent>
+
+              {/* XP / FANS */}
+              <TabsContent value="xp">
+                <XPTab />
+              </TabsContent>
+
+              {/* SYSTEM */}
+              <TabsContent value="system">
+                <SystemTab />
+              </TabsContent>
+
             </Tabs>
           </div>
         )}
@@ -4046,3 +4096,654 @@ function ArtistsTab({ artists: initialArtists, reload, enrichAll, enrichOne, bus
   );
 }
 
+
+
+
+// ============================================================================
+// OPERATIONS TABS  (merged from AdminPanel.tsx)
+// ============================================================================
+
+/* ── Types ── */
+type Application = {
+  id: string; user_id: string; email: string; display_name: string;
+  requested_role: string; entity_slug: string | null; message: string | null;
+  links: { instagram?: string; soundcloud?: string };
+  status: string; created_at: string;
+};
+type UserRoleRow = {
+  id: string; user_id: string; email: string; display_name: string;
+  role: string; entity_slug: string | null; entity_name: string | null;
+  created_at: string;
+};
+type FanProfile = {
+  id: string; user_id: string; display_name: string; xp: number;
+  ccd_points: number; tier: string; total_interactions: number; created_at: string;
+};
+
+const ADMIN_PW_OPS_DEFAULT = "";
+const getStoredPw = () => {
+  if (typeof window === "undefined") return "";
+  return sessionStorage.getItem(PASS_KEY) ?? "";
+};
+
+// ── Applications Tab ─────────────────────────────────────────────────────────
+function ApplicationsTab({ userId, onCountChange }: { userId: string; onCountChange?: (n: number) => void }) {
+  const [apps, setApps] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"pending" | "all">("pending");
+
+  const load = () => {
+    setLoading(true);
+    const q = filter === "pending" ? "?status=eq.pending" : "";
+    fetch(`/api/role-applications${q}`, { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        const arr = Array.isArray(d) ? d : [];
+        setApps(arr);
+        setLoading(false);
+        if (filter === "pending" && onCountChange) onCountChange(arr.length);
+      });
+  };
+  useEffect(load, [filter]);
+
+  const review = async (id: string, status: "approved" | "rejected") => {
+    const res = await fetch(`/api/role-applications/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
+      body: JSON.stringify({ status, reviewer_id: userId }),
+    });
+    if (res.ok) { toast.success(`Application ${status}`); load(); }
+    else toast.error("Failed");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="font-display text-xl uppercase text-ink">Role Applications</h2>
+        <div className="flex border-2 border-ink">
+          {(["pending", "all"] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`font-display text-xs uppercase px-3 py-1.5 transition-colors ${filter === f ? "bg-ink text-cream" : "text-ink hover:bg-acid-yellow"}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+        <span className="font-display text-xs text-ink/40">{apps.length} total</span>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-ink/5 border-4 border-ink/10" />)}
+        </div>
+      ) : apps.length === 0 ? (
+        <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+          <p className="font-display text-2xl text-ink/30">NO {filter === "pending" ? "PENDING " : ""}APPLICATIONS</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {apps.map(app => (
+            <div key={app.id} className={`border-4 p-5 ${app.status === "pending" ? "border-acid-yellow" : app.status === "approved" ? "border-ink/20" : "border-magenta/20"}`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-display text-lg text-ink uppercase">{app.display_name}</p>
+                    <span className={`font-display text-[10px] uppercase px-2 py-0.5 border-2 ${
+                      app.requested_role === "artist" ? "bg-magenta text-cream border-magenta" :
+                      app.requested_role === "promoter" ? "bg-electric-blue text-cream border-electric-blue" :
+                      "bg-ink text-cream border-ink"}`}>
+                      → {app.requested_role}
+                    </span>
+                    <span className={`font-display text-[10px] uppercase px-2 py-0.5 ${
+                      app.status === "pending" ? "bg-acid-yellow text-ink" :
+                      app.status === "approved" ? "bg-ink/10 text-ink/50" : "bg-magenta/20 text-magenta"}`}>
+                      {app.status}
+                    </span>
+                  </div>
+                  <p className="text-sm text-ink/60">{app.email}</p>
+                  {app.entity_slug && <p className="font-display text-xs text-ink/40">Claiming: /artists/{app.entity_slug}</p>}
+                  {app.links?.instagram && <p className="text-xs text-ink/50">IG: {app.links.instagram}</p>}
+                  {app.links?.soundcloud && <p className="text-xs text-ink/50">SC: {app.links.soundcloud}</p>}
+                  {app.message && (
+                    <p className="text-sm text-ink/70 bg-ink/5 border border-ink/10 p-3 mt-2 max-w-xl">
+                      &ldquo;{app.message}&rdquo;
+                    </p>
+                  )}
+                  <p className="text-[10px] text-ink/30 mt-1">{new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                </div>
+                {app.status === "pending" && (
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => review(app.id, "approved")}
+                      className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-4 border-ink hover:bg-acid-yellow hover:text-ink transition-colors">
+                      ✓ Approve
+                    </button>
+                    <button onClick={() => review(app.id, "rejected")}
+                      className="font-display text-xs uppercase bg-cream text-ink px-4 py-2 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+                      ✗ Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Roles Tab ─────────────────────────────────────────────────────────────────
+function RolesTab({ userId }: { userId: string }) {
+  const [roles, setRoles] = useState<UserRoleRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAssign, setShowAssign] = useState(false);
+  const [form, setForm] = useState({ user_id: "", email: "", display_name: "", role: "artist", entity_slug: "" });
+
+  useEffect(() => {
+    fetch("/api/admin-roles", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setRoles(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
+  const assign = async () => {
+    if (!form.user_id || !form.email) { toast.error("user_id and email required"); return; }
+    const res = await fetch("/api/user-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": getStoredPw() },
+      body: JSON.stringify({ ...form, granted_by: userId, granted_at: new Date().toISOString() }),
+    });
+    if (res.ok) {
+      toast.success(`Role '${form.role}' assigned`);
+      setShowAssign(false);
+      setRoles(prev => [...prev.filter(r => r.user_id !== form.user_id), { ...form, id: "new", entity_name: null, created_at: new Date().toISOString() } as UserRoleRow]);
+    } else toast.error("Failed");
+  };
+
+  const ROLE_COLORS: Record<string, string> = {
+    admin: "bg-magenta text-cream", artist: "bg-acid-yellow text-ink",
+    promoter: "bg-electric-blue text-cream", venue: "bg-orange-400 text-cream", user: "bg-ink/10 text-ink",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl uppercase text-ink">User Roles</h2>
+        <button onClick={() => setShowAssign(v => !v)}
+          className="font-display text-xs uppercase bg-ink text-cream px-4 py-2 border-4 border-ink hover:bg-magenta transition-colors">
+          + Assign Role
+        </button>
+      </div>
+
+      {showAssign && (
+        <div className="border-4 border-acid-yellow p-5 space-y-3">
+          <p className="font-display text-sm uppercase text-ink">Assign Role Directly</p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { k: "user_id", l: "Clerk User ID", ph: "user_2abc..." },
+              { k: "email", l: "Email", ph: "artist@email.com" },
+              { k: "display_name", l: "Display Name", ph: "Kohra" },
+              { k: "entity_slug", l: "Entity Slug (if artist)", ph: "kohra" },
+            ].map(f => (
+              <label key={f.k} className="block">
+                <span className="font-display text-[10px] uppercase text-ink/40 block mb-1">{f.l}</span>
+                <input value={(form as any)[f.k]} onChange={e => setForm(p => ({ ...p, [f.k]: e.target.value }))}
+                  placeholder={f.ph} className="w-full border-4 border-ink px-3 py-2 bg-cream font-sans text-sm focus:outline-none" />
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {(["user", "artist", "promoter", "venue", "admin"] as const).map(r => (
+              <button key={r} onClick={() => setForm(p => ({ ...p, role: r }))}
+                className={`font-display text-xs uppercase px-3 py-1.5 border-2 border-ink transition-colors ${form.role === r ? "bg-ink text-cream" : "hover:bg-acid-yellow"}`}>
+                {r}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={assign} className="font-display text-sm uppercase bg-ink text-cream px-5 py-2.5 border-4 border-ink hover:bg-acid-yellow hover:text-ink transition-colors">
+              Assign
+            </button>
+            <button onClick={() => setShowAssign(false)} className="font-display text-sm uppercase bg-cream text-ink px-5 py-2.5 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="animate-pulse space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : (
+        <div className="border-4 border-ink overflow-hidden">
+          <div className="bg-ink text-cream grid grid-cols-4 px-5 py-2 font-display text-[10px] uppercase">
+            <span>User / Email</span><span>Role</span><span>Entity</span><span>Since</span>
+          </div>
+          {roles.map(r => (
+            <div key={r.id} className="grid grid-cols-4 items-center px-5 py-3 border-t border-ink/10 hover:bg-ink/5 transition-colors">
+              <div>
+                <p className="font-display text-xs text-ink">{r.display_name || "—"}</p>
+                <p className="text-[10px] text-ink/40 truncate">{r.email}</p>
+              </div>
+              <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit border border-ink/20 ${ROLE_COLORS[r.role] ?? "bg-cream text-ink"}`}>{r.role}</span>
+              <p className="text-xs text-ink/50 truncate">{r.entity_slug || "—"}</p>
+              <p className="text-[10px] text-ink/30">{new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+            </div>
+          ))}
+          {roles.length === 0 && (
+            <div className="px-5 py-8 text-center text-ink/30 font-display text-sm">NO ROLES ASSIGNED YET</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── XP / Fans Tab ─────────────────────────────────────────────────────────────
+function XPTab() {
+  const [fans, setFans] = useState<FanProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/fan-profiles?order=xp.desc&limit=50", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setFans(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
+  const TIER_COLORS: Record<string, string> = {
+    lurker: "bg-ink/10 text-ink/40", regular: "bg-electric-blue/20 text-electric-blue",
+    maker: "bg-acid-yellow text-ink", legend: "bg-magenta text-cream",
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl uppercase text-ink">XP Leaderboard</h2>
+      {loading ? (
+        <div className="animate-pulse space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-12 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : fans.length === 0 ? (
+        <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+          <p className="font-display text-2xl text-ink/30">NO FANS YET</p>
+          <p className="text-ink/30 text-sm mt-2">XP data will populate as users interact with the site.</p>
+        </div>
+      ) : (
+        <div className="border-4 border-ink overflow-hidden">
+          <div className="bg-ink text-cream grid grid-cols-5 px-5 py-2 font-display text-[10px] uppercase">
+            <span>#</span><span className="col-span-2">Fan</span><span>XP / Points</span><span>Tier</span>
+          </div>
+          {fans.map((f, i) => (
+            <div key={f.id} className="grid grid-cols-5 items-center px-5 py-3 border-t border-ink/10">
+              <span className={`font-display text-sm ${i < 3 ? "text-magenta" : "text-ink/40"}`}>{i + 1}</span>
+              <div className="col-span-2">
+                <p className="font-display text-xs text-ink">{f.display_name || "Anonymous"}</p>
+                <p className="text-[10px] text-ink/30">{f.total_interactions} interactions</p>
+              </div>
+              <div>
+                <p className="font-display text-sm text-ink">{f.xp.toLocaleString()} XP</p>
+                <p className="text-[10px] text-ink/40">{f.ccd_points} pts</p>
+              </div>
+              <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit ${TIER_COLORS[f.tier] ?? "bg-ink/10 text-ink"}`}>{f.tier}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Ticketing Tab ─────────────────────────────────────────────────────────────
+function TicketingTab() {
+  const [subTab, setSubTab] = useState<"applications" | "orders" | "revenue">("applications");
+  const [applications, setApplications] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [revenue, setRevenue] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [clerkInput, setClerkInput] = useState<Record<string, string>>({});
+  const [generatedTokens, setGeneratedTokens] = useState<Record<string, string>>({});
+  const [regenId, setRegenId] = useState<string | null>(null);
+
+  const pw = getStoredPw() || ADMIN_PW_OPS_DEFAULT;
+  const tFetch = (path: string, method = "GET", body?: object) =>
+    fetch(path, {
+      method, credentials: "include",
+      headers: { "Content-Type": "application/json", "x-admin-password": pw },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }).then(r => r.json());
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      if (subTab === "applications") {
+        const d = await tFetch("/api/ticketing/admin/applications");
+        setApplications(d.applications ?? []);
+      } else if (subTab === "orders") {
+        const d = await tFetch("/api/ticketing/admin/orders");
+        setOrders(d.orders ?? []);
+      } else {
+        const d = await tFetch("/api/ticketing/admin/revenue");
+        setRevenue(d);
+      }
+    } catch { /* non-blocking */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [subTab]);
+
+  const approveApp = async (id: string) => {
+    setApprovingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/applications/${id}/approve`, "POST", {
+        clerk_user_id: clerkInput[id] || undefined,
+      });
+      if (res.ok) {
+        if (res.access_token) setGeneratedTokens(prev => ({ ...prev, [id]: res.access_token }));
+        toast.success("Application approved — share the token below with the promoter");
+        load();
+      } else toast.error(res.error ?? "Failed");
+    } finally { setApprovingId(null); }
+  };
+
+  const rejectApp = async (id: string) => {
+    const notes = prompt("Reason for rejection (optional):");
+    try {
+      await tFetch(`/api/ticketing/admin/applications/${id}/reject`, "POST", { notes: notes ?? undefined });
+      toast.success("Application rejected"); load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const refundOrder = async (id: string) => {
+    if (!confirm("Issue a full refund for this order?")) return;
+    setRefundingId(id);
+    try {
+      const res = await tFetch(`/api/ticketing/admin/orders/${id}/refund`, "POST");
+      if (res.ok) { toast.success(`Refund issued — Razorpay ID: ${res.refund_id}`); load(); }
+      else toast.error(res.error ?? "Refund failed");
+    } finally { setRefundingId(null); }
+  };
+
+  const STATUS_CHIP: Record<string, string> = {
+    pending: "bg-acid-yellow text-ink", approved: "bg-lime-400 text-ink", rejected: "bg-magenta/20 text-ink/50",
+  };
+  const ORDER_STATUS_CHIP: Record<string, string> = {
+    paid: "bg-lime-400 text-ink", pending: "bg-acid-yellow text-ink",
+    refunded: "bg-magenta text-cream", failed: "bg-ink/20 text-ink/50", complimentary: "bg-electric-blue text-cream",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-xl uppercase text-ink">Ticketing</h2>
+        <div className="flex border-2 border-ink">
+          {(["applications", "orders", "revenue"] as const).map(t => (
+            <button key={t} onClick={() => setSubTab(t)}
+              className={`font-display text-xs uppercase px-3 py-1.5 transition-colors ${subTab === t ? "bg-ink text-cream" : "text-ink hover:bg-acid-yellow"}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-ink/5 border-4 border-ink/10" />)}</div>
+      ) : (
+        <>
+          {/* ── Promoter Applications ── */}
+          {subTab === "applications" && (
+            <div className="space-y-3">
+              <p className="font-display text-xs uppercase text-ink/40">{applications.length} total applications</p>
+              {applications.length === 0 && (
+                <div className="border-4 border-dashed border-ink/20 p-12 text-center">
+                  <p className="font-display text-2xl text-ink/30">NO APPLICATIONS</p>
+                </div>
+              )}
+              {applications.map((app: any) => (
+                <div key={app.id} className={`border-4 p-5 ${app.status === "pending" ? "border-acid-yellow" : "border-ink/20"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-display text-lg text-ink uppercase">{app.name}</p>
+                        <span className={`font-display text-[10px] uppercase px-2 py-0.5 border-2 border-ink ${STATUS_CHIP[app.status] ?? "bg-ink/10 text-ink"}`}>{app.status}</span>
+                      </div>
+                      <p className="text-sm text-ink/60">{app.email}</p>
+                      {app.city && <p className="text-xs text-ink/40">{app.city} · {(app.genres ?? []).join(", ")}</p>}
+                      {app.instagram && <p className="text-xs text-ink/40">@{app.instagram.replace("@", "")}</p>}
+                      {app.bio && <p className="text-sm text-ink/70 bg-ink/5 p-3 mt-2 max-w-xl border border-ink/10">&ldquo;{app.bio}&rdquo;</p>}
+                      {app.sample_event && (
+                        <a href={app.sample_event} target="_blank" rel="noreferrer" className="text-xs text-magenta underline">Sample event ↗</a>
+                      )}
+                      <p className="text-[10px] text-ink/30">{new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    </div>
+                    {app.status === "pending" && (
+                      <div className="flex flex-col gap-2 shrink-0 min-w-[200px]">
+                        <div>
+                          <label className="block font-display text-[9px] uppercase text-ink/40 mb-1">Clerk User ID (optional)</label>
+                          <input value={clerkInput[app.id] ?? ""} onChange={e => setClerkInput(p => ({ ...p, [app.id]: e.target.value }))}
+                            placeholder="user_2abc…" className="w-full border-2 border-ink px-2 py-1 bg-cream font-mono text-xs focus:outline-none focus:bg-acid-yellow" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => approveApp(app.id)} disabled={approvingId === app.id}
+                            className="font-display text-xs uppercase bg-ink text-cream px-3 py-2 border-4 border-ink hover:bg-lime-400 hover:text-ink transition-colors disabled:opacity-50">
+                            {approvingId === app.id ? "…" : "✓ APPROVE"}
+                          </button>
+                          <button onClick={() => rejectApp(app.id)}
+                            className="font-display text-xs uppercase bg-cream text-ink px-3 py-2 border-4 border-ink hover:bg-magenta hover:text-cream transition-colors">
+                            ✗ REJECT
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {app.status === "approved" && app.linked_promoter_id && (
+                      <div className="min-w-[220px]">
+                        {generatedTokens[app.id] ? (
+                          <div className="bg-lime-400 border-4 border-ink p-3 mb-2">
+                            <p className="font-display text-[9px] uppercase text-ink mb-1">🔑 PROMOTER TOKEN — copy &amp; share with {app.name}</p>
+                            <div className="flex items-center gap-2">
+                              <code className="font-mono text-[10px] text-ink bg-white px-2 py-1 border border-ink/20 flex-1 truncate">{generatedTokens[app.id]}</code>
+                              <button onClick={() => { navigator.clipboard.writeText(generatedTokens[app.id]); toast.success("Token copied!"); }}
+                                className="font-display text-[9px] uppercase bg-ink text-cream px-2 py-1 hover:bg-magenta transition-colors shrink-0">COPY</button>
+                            </div>
+                            <p className="text-[9px] text-ink/50 mt-1">Promoter pastes this at <strong>catscandance.com/promoter</strong></p>
+                          </div>
+                        ) : (
+                          <button disabled={regenId === app.id}
+                            onClick={async () => {
+                              setRegenId(app.id);
+                              try {
+                                const res = await tFetch("/api/ticketing/admin/promoter-token/regenerate", "POST", { email: app.email });
+                                if (res.ok && res.access_token) { setGeneratedTokens(p => ({ ...p, [app.id]: res.access_token })); toast.success("New token generated"); }
+                                else toast.error(res.error ?? "Failed");
+                              } finally { setRegenId(null); }
+                            }}
+                            className="font-display text-[9px] uppercase bg-cream text-ink px-3 py-1.5 border-2 border-ink hover:bg-acid-yellow transition-colors disabled:opacity-50">
+                            {regenId === app.id ? "…" : "🔑 GET LOGIN TOKEN"}
+                          </button>
+                        )}
+                        <p className="text-[9px] text-ink/30 mt-1 font-mono">{app.linked_promoter_id.slice(0, 8)}…</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── All Orders ── */}
+          {subTab === "orders" && (
+            <div className="space-y-4">
+              <p className="font-display text-xs uppercase text-ink/40">{orders.length} orders</p>
+              {orders.length === 0 && <p className="text-ink/40 text-sm">No orders yet.</p>}
+              {orders.length > 0 && (
+                <div className="border-4 border-ink overflow-hidden">
+                  <div className="bg-ink text-cream grid grid-cols-5 px-5 py-2 font-display text-[10px] uppercase">
+                    <span className="col-span-2">Buyer</span><span>Event</span><span>Amount</span><span>Status</span>
+                  </div>
+                  {orders.map((o: any) => (
+                    <div key={o.id} className="grid grid-cols-5 items-center px-5 py-3 border-t border-ink/10 hover:bg-ink/5 transition-colors">
+                      <div className="col-span-2 min-w-0">
+                        <p className="font-display text-xs text-ink truncate">{o.buyer_name}</p>
+                        <p className="text-[10px] text-ink/40 truncate">{o.buyer_email}</p>
+                        <p className="text-[9px] text-ink/20 font-mono truncate">{o.id.slice(0, 8)}…</p>
+                      </div>
+                      <p className="text-xs text-ink/60 truncate">{o.event_slug}</p>
+                      <div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                        {o.status === "paid" && o.razorpay_payment_id && (
+                          <button onClick={() => refundOrder(o.id)} disabled={refundingId === o.id}
+                            className="font-display text-[9px] uppercase text-magenta hover:underline mt-0.5 disabled:opacity-40">
+                            {refundingId === o.id ? "…" : "REFUND"}
+                          </button>
+                        )}
+                      </div>
+                      <span className={`font-display text-[10px] uppercase px-2 py-0.5 w-fit border border-ink/20 ${ORDER_STATUS_CHIP[o.status] ?? "bg-ink/10 text-ink"}`}>{o.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Revenue Summary ── */}
+          {subTab === "revenue" && revenue && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-ink border-4 border-ink">
+                {[
+                  { label: "Total Orders", value: revenue.total_orders },
+                  { label: "Gross Revenue", value: `₹${Number(revenue.gross_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "CCD Revenue", value: `₹${Number(revenue.ccd_revenue_inr ?? 0).toLocaleString("en-IN")}` },
+                  { label: "Buyer Fees", value: `₹${Number(revenue.buyer_fees_inr ?? 0).toLocaleString("en-IN")}` },
+                ].map(s => (
+                  <div key={s.label} className="bg-cream p-5">
+                    <p className="font-display text-3xl text-ink">{s.value}</p>
+                    <p className="font-display text-[10px] uppercase tracking-widest text-ink/40 mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              {revenue.by_event && Object.keys(revenue.by_event).length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ BY EVENT</p>
+                  <div className="border-4 border-ink overflow-hidden">
+                    <div className="bg-ink text-cream grid grid-cols-3 px-5 py-2 font-display text-[10px] uppercase">
+                      <span className="col-span-1">Event</span><span>Orders</span><span>CCD Revenue</span>
+                    </div>
+                    {Object.entries(revenue.by_event).sort((a: any, b: any) => b[1].ccd_paise - a[1].ccd_paise).map(([slug, data]: [string, any]) => (
+                      <div key={slug} className="grid grid-cols-3 items-center px-5 py-3 border-t border-ink/10">
+                        <p className="text-xs text-ink truncate">{slug}</p>
+                        <p className="font-display text-sm text-ink">{data.count}</p>
+                        <p className="font-display text-sm text-ink">₹{(data.ccd_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {revenue.recent_orders?.length > 0 && (
+                <div>
+                  <p className="font-display text-sm uppercase text-ink mb-3">/ RECENT PAID ORDERS</p>
+                  <div className="space-y-2">
+                    {revenue.recent_orders.slice(0, 10).map((o: any) => (
+                      <div key={o.id} className="flex items-center justify-between border-2 border-ink/10 px-4 py-2 hover:bg-ink/5">
+                        <div>
+                          <p className="font-display text-xs text-ink">{o.buyer_name}</p>
+                          <p className="text-[10px] text-ink/40">{o.event_slug} · {o.buyer_email}</p>
+                        </div>
+                        <p className="font-display text-sm text-ink">₹{(o.total_paise / 100).toLocaleString("en-IN")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {subTab === "revenue" && !revenue && !loading && (
+            <p className="text-ink/40 text-sm">No revenue data yet.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── System Tab ────────────────────────────────────────────────────────────────
+function SystemTab() {
+  const [scraperStatus, setScraperStatus] = useState<any>(null);
+  const [running, setRunning] = useState(false);
+  const [fans, setFans] = useState<FanProfile[]>([]);
+  const [fansLoaded, setFansLoaded] = useState(false);
+
+  const triggerScraper = async () => {
+    setRunning(true);
+    const res = await fetch("/api/cron/scrape-events", {
+      method: "POST",
+      headers: { "x-admin-password": getStoredPw() },
+    });
+    const data = res.ok ? await res.json() : { error: "Failed" };
+    setScraperStatus(data);
+    setRunning(false);
+    if (data.ok) toast.success(`Scraped ${data.scraped} events, published ${data.upserted}`);
+    else toast.error("Scraper failed");
+  };
+
+  useEffect(() => {
+    if (fansLoaded) return;
+    fetch("/api/fan-profiles?order=xp.desc&limit=10", { headers: { "x-admin-password": getStoredPw() } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setFans(Array.isArray(d) ? d : []); setFansLoaded(true); });
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl uppercase text-ink">System</h2>
+
+      {/* Scraper */}
+      <div className="border-4 border-ink p-5 space-y-4">
+        <p className="font-display text-sm uppercase text-ink">Event Curation Scraper</p>
+        <p className="text-sm text-ink/60">Runs nightly at 2am IST via Vercel cron. Sources: District.in, Insider.in, HighApe, Skillbox. Scored by Claude Haiku (threshold ≥6/10).</p>
+        <button onClick={triggerScraper} disabled={running}
+          className="font-display text-sm uppercase bg-ink text-cream px-5 py-3 border-4 border-ink hover:bg-magenta disabled:opacity-50 transition-colors">
+          {running ? "Running…" : "▶ Run Scraper Now"}
+        </button>
+        {scraperStatus && (
+          <div className="bg-ink/5 border-2 border-ink/10 p-4 font-mono text-xs">
+            <pre className="whitespace-pre-wrap text-ink/70">{JSON.stringify(scraperStatus, null, 2)}</pre>
+          </div>
+        )}
+      </div>
+
+      {/* Top fans quick view */}
+      <div className="border-4 border-ink p-5">
+        <p className="font-display text-sm uppercase text-ink mb-3">Top 10 Fans by XP</p>
+        {fans.length === 0 ? (
+          <p className="text-ink/40 text-sm">No fans yet.</p>
+        ) : (
+          <div className="space-y-1">
+            {fans.map((f, i) => (
+              <div key={f.id} className="flex items-center justify-between border border-ink/10 px-3 py-2">
+                <span className={`font-display text-sm w-6 ${i < 3 ? "text-magenta" : "text-ink/40"}`}>{i + 1}</span>
+                <span className="flex-1 text-xs text-ink truncate">{f.display_name || "Anonymous"}</span>
+                <span className="font-display text-sm text-ink">{f.xp.toLocaleString()} XP</span>
+                <span className={`ml-3 font-display text-[9px] uppercase px-2 py-0.5 ${
+                  f.tier === "legend" ? "bg-magenta text-cream" :
+                  f.tier === "maker" ? "bg-acid-yellow text-ink" :
+                  f.tier === "regular" ? "bg-electric-blue/20 text-electric-blue" : "bg-ink/10 text-ink/40"
+                }`}>{f.tier}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SQL reference */}
+      <div className="border-4 border-ink p-5">
+        <p className="font-display text-sm uppercase text-ink mb-3">Quick SQL Reference</p>
+        <div className="space-y-2">
+          {[
+            "Run migration: paste 001_knowledge_graph.sql in Supabase SQL Editor",
+            "Run seed data: paste 002_seed_data.sql after migration",
+            "Check event appearances: SELECT * FROM event_appearances ORDER BY event_date DESC LIMIT 20;",
+            "Check artist connections: SELECT * FROM artist_connections ORDER BY strength DESC;",
+            "Fan leaderboard: SELECT * FROM fan_profiles ORDER BY xp DESC LIMIT 10;",
+          ].map((s, i) => (
+            <p key={i} className="text-xs text-ink/60 font-mono bg-ink/5 px-3 py-2 border border-ink/10">{s}</p>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

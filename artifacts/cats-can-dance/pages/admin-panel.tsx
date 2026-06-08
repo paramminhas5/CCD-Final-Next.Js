@@ -1,7 +1,11 @@
 /**
- * /admin-panel — Clerk-based role management panel.
- * Requires Clerk login + admin role.
+ * /admin-panel — redirects to /admin (unified admin panel)
  */
-import dynamic from "next/dynamic";
-const AdminPanel = dynamic(() => import("@/pages/AdminPanel"), { ssr: false });
-export default AdminPanel;
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+
+export default function AdminPanelRedirect() {
+  const router = useRouter();
+  useEffect(() => { router.replace("/admin"); }, []);
+  return null;
+}
