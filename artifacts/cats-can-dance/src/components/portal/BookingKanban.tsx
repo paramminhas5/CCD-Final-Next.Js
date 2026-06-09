@@ -20,7 +20,7 @@ import {
   RefreshCw, TrendingUp, Clock, CheckCircle2, XCircle, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 import BookingThreadView, { type BookingRequest } from "./BookingThreadView";
 
 // ── Column config ─────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ function BookingCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function BookingKanban({ artistId }: { artistId: string }) {
-  const { getToken } = useAuth();
+  const { getToken } = useSafeAuth();
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeThread, setActiveThread] = useState<BookingRequest | null>(null);

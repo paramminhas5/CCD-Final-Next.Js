@@ -17,7 +17,7 @@ import {
   Music, ChevronDown, IndianRupee, CalendarDays,
   ExternalLink, RefreshCw, Info,
 } from "lucide-react";
-import { useUser, useClerk, useAuth } from "@clerk/react";
+import { useSafeUser, useSafeClerk, useSafeAuth } from "@/lib/clerk-safe";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -831,9 +831,9 @@ function RegistrationGate({
 type Tab = "shortlist" | "bookings" | "messages" | "fanout" | "profile";
 
 export default function PromoterDashboard() {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
-  const { getToken } = useAuth();
+  const { user, isLoaded } = useSafeUser();
+  const { signOut } = useSafeClerk();
+  const { getToken } = useSafeAuth();
 
   const [promoter, setPromoter]   = useState<PromoterProfile | null>(null);
   const [shortlist, setShortlist] = useState<ShortlistEntry[]>([]);

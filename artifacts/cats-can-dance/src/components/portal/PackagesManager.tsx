@@ -21,7 +21,7 @@ import {
   Eye, EyeOff, ChevronDown, ChevronUp, Clock, IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ArtistPackage {
@@ -395,7 +395,7 @@ function PackageCard({
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function PackagesManager({ artistId }: { artistId: string }) {
-  const { getToken } = useAuth();
+  const { getToken } = useSafeAuth();
   const [packages, setPackages] = useState<ArtistPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

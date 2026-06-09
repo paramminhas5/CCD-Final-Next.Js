@@ -47,6 +47,12 @@ export type SafeClerkHook = {
   loaded: boolean;
 };
 
+export type SafeAuthHook = {
+  getToken: () => Promise<string | null>;
+  isSignedIn: boolean;
+  isLoaded: boolean;
+};
+
 // ── Server-safe defaults (returned during SSG/SSR) ────────────────────────────
 
 const SSR_USER: SafeUserHook = {
@@ -59,6 +65,12 @@ const SSR_CLERK: SafeClerkHook = {
   openSignIn: () => {},
   signOut: () => Promise.resolve(),
   loaded: false,
+};
+
+const SSR_AUTH: SafeAuthHook = {
+  getToken: () => Promise.resolve(null),
+  isSignedIn: false,
+  isLoaded: false,
 };
 
 // ── isServer: true during Next.js SSG/SSR, false in the browser ───────────────
@@ -86,6 +98,21 @@ function getClerkHooks() {
 
 // Cache the require result — modules are singletons so this is safe.
 const _clerkModule = isServer ? null : getClerkHooks();
+
+// ── Augmented require for useAuth ─────────────────────────────────────────────
+function getClerkAuthHook() {
+  if (isServer) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("@clerk/react") as {
+      useAuth: () => { getToken: () => Promise<string | null>; isSignedIn: boolean; isLoaded: boolean };
+    };
+  } catch {
+    return null;
+  }
+}
+
+const _clerkAuthModule = isServer ? null : getClerkAuthHook();
 
 // ── Public hooks ──────────────────────────────────────────────────────────────
 
@@ -142,4 +169,23 @@ export function isClerkEnabled(): boolean {
     typeof process !== "undefined" &&
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   );
+}
+
+
+/**
+ * Returns `{ getToken, isSignedIn, isLoaded }`.
+ * Safe to call during SSG — returns safe defaults on the server.
+ * On the client, delegates to the real `useAuth()`.
+ */
+export function useSafeAuth(): SafeAuthHook {
+  if (isServer || !_clerkAuthModule) return SSR_AUTH;
+
+  // On client: ClerkProvider from _app.tsx is always present here.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const auth = _clerkAuthModule.useAuth();
+  return {
+    getToken:   () => auth.getToken(),
+    isSignedIn: auth.isSignedIn ?? false,
+    isLoaded:   auth.isLoaded   ?? true,
+  };
 }

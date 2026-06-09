@@ -11,7 +11,7 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import BookingForm from "@/components/booking/BookingForm";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 
 interface Artist {
   id: string; slug: string; name: string;
@@ -56,7 +56,7 @@ function BookingDialog({ artist, onClose }: { artist: Artist; onClose: () => voi
 
 // ─── Shortlist Button ─────────────────────────────────────────────────────────
 function ShortlistButton({ artistSlug, artistName }: { artistSlug: string; artistName: string }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn } = useSafeAuth();
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 

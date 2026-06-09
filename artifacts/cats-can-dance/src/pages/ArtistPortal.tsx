@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { useUser, useClerk } from "@clerk/react";
+import { useSafeUser, useSafeClerk } from "@/lib/clerk-safe";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -858,8 +858,8 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 const ArtistPortal = () => {
   const router = useRouter();
   const claimId = router.query.claim as string | undefined;
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const { user, isLoaded } = useSafeUser();
+  const { signOut } = useSafeClerk();
 
   const [artist, setArtist] = useState<Artist | null>(null);
   const [tab, setTab] = useState<Tab>("profile");

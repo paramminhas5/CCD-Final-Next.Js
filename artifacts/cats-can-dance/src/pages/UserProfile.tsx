@@ -6,7 +6,7 @@
  * Auth: Clerk required — redirects to /sign-in if not logged in.
  */
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -312,7 +312,7 @@ function PreferencesPanel({
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function UserProfilePage() {
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { user, isLoaded, isSignedIn } = useSafeUser();
   const router = useRouter();
   const [profile, setProfile] = useState<TasteProfile | null>(null);
   const [fanProfile, setFanProfile] = useState<FanProfile | null>(null);

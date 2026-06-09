@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import { useRouter } from "next/router";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -30,7 +30,7 @@ const GENRES = [
 type Step = "form" | "submitting" | "success" | "not_promoter";
 
 export default function PromoterEventSubmit() {
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { user, isLoaded, isSignedIn } = useSafeUser();
   const router = useRouter();
 
   const [step,   setStep]   = useState<Step>("form");
