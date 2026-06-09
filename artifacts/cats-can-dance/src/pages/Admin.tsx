@@ -178,7 +178,7 @@ const Admin = () => {
   const loadArtists = async () => {
     try {
       const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
-      const res = await fetch("/api/functions/v1/admin-artists", {
+      const res = await fetch("/api/admin/artists", {
         headers: { "x-admin-password": pwd }
       });
       const j = await res.json();
@@ -193,7 +193,7 @@ const Admin = () => {
   const callEnrich = async (body: Record<string, unknown>) => {
     const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
     const projectUrl = "/api";
-    const res = await fetch(`${projectUrl}/functions/v1/enrich-artists`, {
+    const res = await fetch(`${projectUrl}/admin/enrich-artists`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -241,7 +241,7 @@ const Admin = () => {
   const callAdminVideos = async (init: { method: string; body?: any }) => {
     const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
     const projectUrl = "/api";
-    const res = await fetch(`${projectUrl}/functions/v1/admin-videos`, {
+    const res = await fetch(`${projectUrl}/admin/videos`, {
       method: init.method,
       headers: {
         "Content-Type": "application/json",
@@ -315,7 +315,7 @@ const Admin = () => {
   const callContent = async (init: RequestInit & { search?: string } = {}) => {
     const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
     const projectUrl = "/api";
-    const res = await fetch(`${projectUrl}/functions/v1/admin-content${init.search ?? ""}`, {
+    const res = await fetch(`${projectUrl}/admin/content${init.search ?? ""}`, {
       ...init,
       headers: {
         "x-admin-password": pwd,
@@ -334,7 +334,7 @@ const Admin = () => {
     const projectUrl = "/api";
     const qs = eventSlug ? `?event_slug=${encodeURIComponent(eventSlug)}` : "";
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-rsvps${qs}`, {
+      const res = await fetch(`${projectUrl}/admin/rsvps${qs}`, {
         headers: {
           "x-admin-password": pwd,
           apikey: "",
@@ -355,7 +355,7 @@ const Admin = () => {
     const projectUrl = "/api";
     const params = new URLSearchParams({ format: "csv" });
     if (rsvpEventFilter) params.set("event_slug", rsvpEventFilter);
-    const url = `${projectUrl}/functions/v1/admin-rsvps?${params.toString()}`;
+    const url = `${projectUrl}/admin/rsvps?${params.toString()}`;
     fetch(url, {
       headers: {
         "x-admin-password": pwd,
@@ -439,7 +439,7 @@ const Admin = () => {
     if (kind === "signups") {
       const pwd = sessionStorage.getItem(PASS_KEY) ?? "";
       const projectUrl = "/api";
-      const res = await fetch(`${projectUrl}/functions/v1/admin-signups?format=csv`, {
+      const res = await fetch(`${projectUrl}/admin/signups?format=csv`, {
         headers: {
           "x-admin-password": pwd,
           apikey: "",
@@ -1640,7 +1640,7 @@ const EventEditor = ({
     const ext = file.name.split(".").pop() ?? "jpg";
 
     // Step 1 — ask the API for a signed upload URL (tiny JSON request, no file sent)
-    const signRes = await fetch(`${projectUrl}/functions/v1/admin-upload-poster`, {
+    const signRes = await fetch(`${projectUrl}/admin/upload-poster`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2133,7 +2133,7 @@ function StorageTestPanel({ pwd, onSetup }: { pwd: string; onSetup: () => void }
     setTestResult(null);
     try {
       // Step 1: get signed URL
-      const signRes = await fetch("/api/functions/v1/admin-upload-poster", {
+      const signRes = await fetch("/api/admin/upload-poster", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pwd },
         body: JSON.stringify({
@@ -2763,7 +2763,7 @@ function CuratedEventsTab() {
   /** Shared signed-URL upload helper — works for both the draft form and existing rows */
   const uploadCuratedImage = async (file: File, slug: string): Promise<string> => {
     const ext = file.name.split(".").pop() ?? "jpg";
-    const signRes = await fetch(`${projectUrl}/functions/v1/admin-upload-poster`, {
+    const signRes = await fetch(`${projectUrl}/admin/upload-poster`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": pwd },
       body: JSON.stringify({ slug: slug || `curated-${Date.now()}`, ext, mimeType: file.type || "image/jpeg" }),
@@ -2795,7 +2795,7 @@ function CuratedEventsTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-curated-events`, { headers });
+      const res = await fetch(`${projectUrl}/admin/curated-events`, { headers });
       const data = await res.json();
       if (res.ok) {
         setRows(data.events ?? []);
@@ -2813,7 +2813,7 @@ function CuratedEventsTab() {
 
   const upsert = async (row: CuratedRow) => {
     if (!row.title || !row.url) { toast.error("Title and URL are required"); return; }
-    const res = await fetch(`${projectUrl}/functions/v1/admin-curated-events`, {
+    const res = await fetch(`${projectUrl}/admin/curated-events`, {
       method: "POST", headers,
       body: JSON.stringify({ action: "upsert", payload: row }),
     });
@@ -2823,7 +2823,7 @@ function CuratedEventsTab() {
 
   const remove = async (id: string) => {
     if (!confirm("Delete this curated event?")) return;
-    const res = await fetch(`${projectUrl}/functions/v1/admin-curated-events`, {
+    const res = await fetch(`${projectUrl}/admin/curated-events`, {
       method: "POST", headers,
       body: JSON.stringify({ action: "delete", payload: { id } }),
     });
@@ -2835,7 +2835,7 @@ function CuratedEventsTab() {
     setRefreshing(true);
     setLastRun(null);
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/curate-events`, {
+      const res = await fetch(`${projectUrl}/admin/enrich-artists`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${""}` },
         body: JSON.stringify({ source: crawlSource, city: crawlCity, mode: "single", limit: 10 }),
@@ -2883,7 +2883,7 @@ function CuratedEventsTab() {
 
   const setupStorage = async () => {
     try {
-      const r = await fetch(`${projectUrl}/functions/v1/setup-storage`, {
+      const r = await fetch(`${projectUrl}/admin/setup-storage`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pwd },
         body: JSON.stringify({}),
@@ -3246,7 +3246,7 @@ function BlogTab() {
 
   const loadPublished = async () => {
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-publish-blog`, {
+      const res = await fetch(`${projectUrl}/admin/blog`, {
         headers: {
           "x-admin-password": pwd,
           apikey: "",
@@ -3316,7 +3316,7 @@ function BlogTab() {
         if (seedKeyword.trim()) body.keyword = seedKeyword.trim();
         if (seedAngle.trim()) body.angle = seedAngle.trim();
       }
-      const res = await fetch(`${projectUrl}/functions/v1/admin-generate-blog`, {
+      const res = await fetch(`${projectUrl}/admin/blog`, {
         method: "POST",
         headers: {
           "x-admin-password": pwd,
@@ -3360,7 +3360,7 @@ function BlogTab() {
     }
     setPublishing(true);
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-publish-blog`, {
+      const res = await fetch(`${projectUrl}/admin/blog`, {
         method: "POST",
         headers: {
           "x-admin-password": pwd,
@@ -3393,7 +3393,7 @@ function BlogTab() {
     if (!confirm(`Delete post "${slug}"?`)) return;
     try {
       const res = await fetch(
-        `${projectUrl}/functions/v1/admin-publish-blog?action=delete&slug=${encodeURIComponent(slug)}`,
+        `${projectUrl}/admin/blog?action=delete&slug=${encodeURIComponent(slug)}`,
         {
           method: "POST",
           headers: {
@@ -3733,7 +3733,7 @@ function PromoterApplicationsTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-promoters`, { headers });
+      const res = await fetch(`${projectUrl}/admin/promoters`, { headers });
       const data = await res.json();
       if (res.ok) setRows((data.promoters ?? []).map((p: any) => ({
         ...p, cities: p.cities ?? [], genres: p.genres ?? [], crawl_urls: p.crawl_urls ?? [],
@@ -3748,7 +3748,7 @@ function PromoterApplicationsTab() {
   const save = async () => {
     if (!draft.slug || !draft.name) { toast.error("Slug and name required"); return; }
     try {
-      const res = await fetch(`${projectUrl}/functions/v1/admin-promoters`, {
+      const res = await fetch(`${projectUrl}/admin/promoters`, {
         method: "POST", headers,
         body: JSON.stringify({ action: "upsert", payload: editingId ? { ...draft, id: editingId } : draft }),
       });
@@ -3758,7 +3758,7 @@ function PromoterApplicationsTab() {
   };
 
   const toggleTrust = async (id: string, trusted: boolean) => {
-    const res = await fetch(`${projectUrl}/functions/v1/admin-promoters`, {
+    const res = await fetch(`${projectUrl}/admin/promoters`, {
       method: "POST", headers,
       body: JSON.stringify({ action: "toggle_trust", payload: { id, trusted } }),
     });
@@ -3768,7 +3768,7 @@ function PromoterApplicationsTab() {
 
   const del = async (id: string) => {
     if (!confirm("Delete this promoter?")) return;
-    const res = await fetch(`${projectUrl}/functions/v1/admin-promoters`, {
+    const res = await fetch(`${projectUrl}/admin/promoters`, {
       method: "POST", headers,
       body: JSON.stringify({ action: "delete", payload: { id } }),
     });
@@ -4034,7 +4034,7 @@ function ArtistsTab({ artists: initialArtists, reload, enrichAll, enrichOne, bus
     if (!newArtist.name.trim()) { toast.error("Name required"); return; }
     const slug = newArtist.slug || newArtist.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     try {
-      const res = await fetch("/api/functions/v1/admin-artists", {
+      const res = await fetch("/api/admin/artists", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pwd() },
         body: JSON.stringify({
