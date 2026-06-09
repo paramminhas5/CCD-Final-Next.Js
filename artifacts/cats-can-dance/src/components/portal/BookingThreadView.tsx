@@ -16,7 +16,7 @@ import {
   Clock, MapPin, Calendar, User, MessageSquare, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BookingRequest {
@@ -158,7 +158,7 @@ export default function BookingThreadView({
   onClose: () => void;
   onStatusChange?: (id: string, newStatus: string) => void;
 }) {
-  const { getToken } = useAuth();
+  const { getToken } = useSafeAuth();
   const [messages, setMessages] = useState<BookingMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [msgBody, setMsgBody] = useState("");

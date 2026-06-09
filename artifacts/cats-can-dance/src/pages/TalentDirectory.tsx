@@ -20,7 +20,7 @@ import {
   Search, MapPin, X, ChevronDown, CalendarDays,
   Zap, Bookmark, BookmarkCheck, Music,
 } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -55,7 +55,7 @@ const BUDGETS = [
 
 // ── Shortlist button ───────────────────────────────────────────────────────────
 function ShortlistBtn({ slug, name }: { slug: string; name: string }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn } = useSafeAuth();
   const [saved, setSaved] = useState(false);
   const [busy, setBusy]   = useState(false);
 

@@ -8,7 +8,7 @@
  * Admin:   redirect to /admin
  */
 import { useEffect, useState, useCallback } from "react";
-import { useUser, useClerk } from "@clerk/react";
+import { useSafeUser, useSafeClerk } from "@/lib/clerk-safe";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import Nav from "@/components/Nav";
@@ -698,8 +698,8 @@ function PromoterPortal({ user }: { user: any }) {
 
 /* ── Main ── */
 const UserDashboard = () => {
-  const { user, isLoaded } = useUser();
-  const { openSignIn } = useClerk();
+  const { user, isLoaded } = useSafeUser();
+  const { openSignIn } = useSafeClerk();
   const router = useRouter();
   const roleInfo = useUserRole();
   const [fanProfile, setFanProfile] = useState<FanProfile|null>(null);

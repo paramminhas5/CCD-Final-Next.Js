@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X, Check, Loader2, Trash2, MapPin, Info } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@clerk/react";
+import { useSafeAuth } from "@/lib/clerk-safe";
 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -356,7 +356,7 @@ function MonthGrid({
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CalendarManager({ artistId }: { artistId: string }) {
-  const { getToken } = useAuth();
+  const { getToken } = useSafeAuth();
 
   // Calendar navigation: start from current month
   const now = new Date();

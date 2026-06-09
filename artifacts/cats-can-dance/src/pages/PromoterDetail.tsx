@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useUser } from "@clerk/react";
+import { useSafeUser } from "@/lib/clerk-safe";
 import { ArrowLeft, MapPin, Music, ExternalLink, Instagram, Globe, Mail, CheckCircle, Lock } from "lucide-react";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
@@ -90,7 +90,7 @@ function ClaimButton({ promoter, userId }: { promoter: Promoter; userId: string 
 interface Props { slug: string; }
 
 export default function PromoterDetail({ slug }: Props) {
-  const { user, isSignedIn } = useUser();
+  const { user, isSignedIn } = useSafeUser();
   const [promoter, setPromoter] = useState<Promoter | null>(null);
   const [events, setEvents] = useState<CuratedEvent[]>([]);
   const [loading, setLoading] = useState(true);
