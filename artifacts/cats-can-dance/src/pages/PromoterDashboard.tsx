@@ -397,7 +397,7 @@ function MessageThread({
   const load = useCallback(async () => {
     try {
       const hdrs = await authHdrs();
-      const r = await fetch(`/api/booking-requests/${bookingId}/thread`, { headers: hdrs });
+      const r = await fetch(`/api/bookings/${bookingId}/thread`, { headers: hdrs });
       if (r.ok) setThread(await r.json());
     } catch { toast.error("Failed to load thread"); }
     finally { setLoading(false); }

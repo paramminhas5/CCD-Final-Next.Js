@@ -736,7 +736,7 @@ function BookingInbox({ artistId }: { artistId: string }) {
     // Query both artist_id and artist_id_resolved to catch all bookings regardless
     // of which path they came in on (v1 legacy uses artist_id, v2 uses artist_id_resolved).
     Promise.all([
-      fetch(`/api/booking-requests?artist_id_resolved=${artistId}&order=created_at:desc`)
+      fetch(`/api/bookings?artist_id=${artistId}`)
         .then(r => r.ok ? r.json() : []).catch(() => []),
       // Fallback: also fetch by legacy artist_id column via shim
       supabase.from("booking_requests")

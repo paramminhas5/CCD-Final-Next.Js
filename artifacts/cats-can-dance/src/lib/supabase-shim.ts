@@ -45,24 +45,23 @@ type QueryBuilder = {
 
 /** Map Supabase table names (underscores) → our API route slugs (hyphens) */
 const TABLE_ROUTE: Record<string, string> = {
-  site_settings: "site-settings",
-  curated_events: "curated-events",
-  artist_dates: "artist-dates",
-  artist_milestones: "artist-milestones",
-  artist_press: "artist-press",
-  artist_discography: "artist-discography",
-  artist_packages: "artist-packages",
+  site_settings:              "site-settings",
+  curated_events:             "curated-events",
+  artist_dates:               "artist-dates",
+  artist_milestones:          "artist-milestones",
+  artist_press:               "artist-press",
+  artist_discography:         "artist-discography",
+  artist_packages:            "artist-packages",
   artist_availability_blocks: "availability-blocks",
-  artist_submissions: "artist-submissions",
-  booking_requests: "booking-requests",
-  booking_messages: "booking-messages",
-  booking_otp_codes: "booking-otp-codes",
-  contact_messages: "contact",
-  early_access_signups: "early-access",
-  event_rsvps: "event-rsvp",
-  site_videos: "videos",
-  // promoter_applications does not have a DB table — routes to contact_messages via proxy
-  promoter_applications: "promoter-applications",
+  artist_submissions:         "artist-submissions",
+  booking_requests:           "bookings",
+  booking_messages:           "booking-messages",
+  booking_otp_codes:          "booking-otp-codes",
+  contact_messages:           "contact",
+  early_access_signups:       "early-access",
+  event_rsvps:                "event-rsvp",
+  site_videos:                "youtube-videos",
+  promoter_applications:      "promoter-applications",
 };
 
 function tableRoute(table: string): string {
@@ -147,28 +146,31 @@ const storageShim = {
   }),
 };
 
-/** Map Supabase edge-function names → our API route slugs */
+/** Map Supabase edge-function names → our dedicated API route slugs */
 const FUNCTION_ROUTE: Record<string, string> = {
-  "contact-submit": "contact",
-  "early-access-signup": "early-access",
-  "event-rsvp": "event-rsvp",
-  "booking-otp-start": "booking-otp/start",
-  "booking-otp-verify": "booking-otp/verify",
-  "cat-generate": "cat-generate",
-  "instagram-feed": "instagram-feed",
-  "youtube-videos": "youtube-videos",
-  "enrich-artists": "functions/v1/enrich-artists",
-  "admin-videos": "functions/v1/admin-videos",
-  "admin-content": "functions/v1/admin-content",
-  "admin-rsvps": "functions/v1/admin-rsvps",
-  "admin-signups": "functions/v1/admin-signups",
-  "admin-upload-poster": "functions/v1/admin-upload-poster",
-  "admin-curated-events": "functions/v1/admin-curated-events",
-  "curate-events": "functions/v1/curate-events",
-  "scheduled-curate": "functions/v1/scheduled-curate",
-  "admin-publish-blog": "functions/v1/admin-publish-blog",
-  "admin-generate-blog": "functions/v1/admin-generate-blog",
-  "admin-promoters": "functions/v1/admin-promoters",
+  // Public / user-facing
+  "contact-submit":       "contact",
+  "early-access-signup":  "early-access",
+  "event-rsvp":           "event-rsvp",
+  "booking-otp-start":    "booking-otp/start",
+  "booking-otp-verify":   "booking-otp/verify",
+  "cat-generate":         "cat-generate",
+  "instagram-feed":       "instagram-feed",
+  "youtube-videos":       "youtube-videos",
+  // Admin — now dedicated files under /api/admin/*
+  "enrich-artists":       "admin/enrich-artists",
+  "admin-videos":         "admin/videos",
+  "admin-content":        "admin/content",
+  "admin-rsvps":          "admin/rsvps",
+  "admin-signups":        "admin/signups",
+  "admin-upload-poster":  "admin/upload-poster",
+  "admin-curated-events": "admin/curated-events",
+  "curate-events":        "admin/enrich-artists",
+  "scheduled-curate":     "admin/enrich-artists",
+  "admin-publish-blog":   "admin/blog",
+  "admin-generate-blog":  "admin/blog",
+  "admin-promoters":      "admin/promoters",
+  "setup-storage":        "admin/setup-storage",
 };
 
 const GET_FUNCTIONS = new Set([
@@ -179,6 +181,7 @@ const GET_FUNCTIONS = new Set([
   "admin-rsvps",
   "admin-signups",
   "admin-promoters",
+  "admin-curated-events",
 ]);
 
 const functionsShim = {
