@@ -13,7 +13,9 @@
 [build.environment]
   # Use pnpm (Netlify ships npm by default — override it)
   NODE_VERSION   = "20"
-  PNPM_VERSION   = "9"
+  # Do NOT pin PNPM_VERSION — let Netlify use the version already installed
+  # (10.x). Pinning to "9" causes a lockfile config mismatch since the
+  # pnpm-lock.yaml was generated with pnpm 10.
   # Increase Node memory for the large Admin.tsx page (~3500 lines)
   NODE_OPTIONS   = "--max-old-space-size=4096"
 
