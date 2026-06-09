@@ -55,6 +55,9 @@ Thumbs.db
 # Legacy migration backup — historical reference only, not active code
 .migration-backup/
 
+# Netlify build artifacts — must never be committed (contains resolved env values)
+.netlify/
+
 # Dead library packages (removed — using direct Supabase REST fetch pattern)
 lib/db/
 lib/api-spec/

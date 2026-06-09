@@ -15,7 +15,7 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const SB      = "https://nrzgyippztzenoyrtszr.supabase.co";
+const SB      = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SK      = process.env.SUPABASE_SERVICE_KEY ?? "";
 const ADMIN_PW = process.env.ADMIN_PASSWORD ?? "";
 const BUCKET  = "event-posters";

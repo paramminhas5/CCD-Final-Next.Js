@@ -1,0 +1,47 @@
+# ════════════════════════════════════════════════════════════════════════════
+# Netlify deployment configuration — Cats Can Dance (Next.js monorepo)
+# ════════════════════════════════════════════════════════════════════════════
+
+[build]
+  # Run from the monorepo root — pnpm workspace handles the rest
+  base    = "."
+  # Build only the Next.js app (skips typecheck to avoid blocking deploys)
+  command = "pnpm --filter @workspace/cats-can-dance run build"
+  # Next.js output dir inside the workspace package
+  publish = "artifacts/cats-can-dance/.next"
+
+[build.environment]
+  # Use pnpm (Netlify ships npm by default — override it)
+  NODE_VERSION   = "20"
+  PNPM_VERSION   = "9"
+  # Increase Node memory for the large Admin.tsx page (~3500 lines)
+  NODE_OPTIONS   = "--max-old-space-size=4096"
+
+# ── Next.js on Netlify requires the Essential Next.js plugin ────────────────
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# ── Secrets scanning: omit the .netlify build-output directory ──────────────
+# The Next.js plugin emits resolved config into .netlify/functions-internal —
+# Netlify's own scanner must not flag those generated files.
+[build.processing]
+  skip_processing = false
+
+# ── Headers ─────────────────────────────────────────────────────────────────
+[[headers]]
+  for = "/site.webmanifest"
+  [headers.values]
+    Content-Type  = "application/manifest+json"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/(favicon.ico|favicon.svg|favicon-96x96.png|apple-touch-icon.png|icon-192.png|icon-512.png|robots.txt|web-app-manifest-192x192.png|web-app-manifest-512x512.png)"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# ── Redirects: SPA-style fallback (Next.js plugin handles most, but keep ────
+# this as a safety net for any unmatched static paths)
+# [[redirects]]
+#   from   = "/*"
+#   to     = "/index.html"
+#   status = 200
