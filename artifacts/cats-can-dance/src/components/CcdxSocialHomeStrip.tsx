@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "@/lib/compat-router";
+import DownloadSponsorPDF from "@/components/pdf/DownloadSponsorPDF";
 
 // Jun 29 2026 20:00 IST = 14:30 UTC
 const NEXT_SHOW_DATE = new Date("2026-06-29T14:30:00Z");
@@ -225,6 +226,18 @@ const CcdxSocialHomeStrip = () => {
             >
               SPONSOR THE SERIES ✦
             </Link>
+            <DownloadSponsorPDF
+              variant="one-pager"
+              className="font-display text-lime text-sm border-2 border-lime/30 px-4 py-2 hover:border-lime hover:bg-lime/10 transition-colors"
+            >
+              ONE-PAGER PDF ↓
+            </DownloadSponsorPDF>
+            <DownloadSponsorPDF
+              variant="full"
+              className="font-display text-cream text-sm border-2 border-cream/30 px-4 py-2 hover:border-cream hover:bg-cream/10 transition-colors"
+            >
+              FULL DECK PDF ↓
+            </DownloadSponsorPDF>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-display text-cream/40 uppercase tracking-widest">
             <span className="border border-cream/20 px-2 py-1">🐾 PETS WELCOME</span>
