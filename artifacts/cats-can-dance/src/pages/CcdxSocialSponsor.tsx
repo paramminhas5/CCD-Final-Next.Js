@@ -4,6 +4,7 @@ import PageHero from "@/components/PageHero";
 import Marquee from "@/components/Marquee";
 import SEO from "@/components/SEO";
 import PartnerContactDialog from "@/components/PartnerContactDialog";
+import DownloadSponsorPDF from "@/components/pdf/DownloadSponsorPDF";
 import { Link } from "@/lib/compat-router";
 
 // ── Sponsor tier data ─────────────────────────────────────────────────────────
@@ -113,6 +114,16 @@ const CcdxSocialSponsor = () => (
         {["200 pax per show", "2,000+ at finale", "Outdoor pet zone", "Startdawg · Merman + more", "Jun–Oct 2026"].map((f) => (
           <span key={f} className="bg-white/10 border border-white/20 text-cream font-display text-xs px-3 py-1.5">{f}</span>
         ))}
+      </div>
+      <div className="flex flex-wrap gap-3 mt-8">
+        <DownloadSponsorPDF
+          variant="one-pager"
+          className="bg-acid-yellow text-ink font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-transform"
+        />
+        <DownloadSponsorPDF
+          variant="full"
+          className="bg-cream text-ink font-display text-sm px-6 py-3 border-4 border-ink chunk-shadow hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-transform"
+        />
       </div>
     </PageHero>
 
@@ -311,6 +322,20 @@ const CcdxSocialSponsor = () => (
           <a href="mailto:hello@catscandance.com?subject=CCDxSocial%20Sponsorship" className="bg-transparent text-cream font-display text-lg px-8 py-4 border-4 border-cream hover:bg-ink transition-colors">
             EMAIL US DIRECTLY
           </a>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+          <DownloadSponsorPDF
+            variant="one-pager"
+            className="bg-cream/20 text-cream font-display text-base px-8 py-4 border-4 border-cream hover:bg-cream hover:text-ink transition-colors"
+          >
+            DOWNLOAD ONE-PAGER PDF ↓
+          </DownloadSponsorPDF>
+          <DownloadSponsorPDF
+            variant="full"
+            className="bg-cream/20 text-cream font-display text-base px-8 py-4 border-4 border-cream hover:bg-cream hover:text-ink transition-colors"
+          >
+            DOWNLOAD FULL DECK PDF ↓
+          </DownloadSponsorPDF>
         </div>
         <p className="mt-8 text-cream/60 font-display text-sm">
           hello@catscandance.com · @catscan.dance
