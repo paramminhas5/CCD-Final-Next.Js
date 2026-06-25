@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Cats Can Dance — Blog</title>
+    <link>https://catscandance.com/blog</link>
+    <atom:link href="https://catscandance.com/rss.xml" rel="self" type="application/rss+xml" />
+    <description>Long-form guides on Bangalore's party scene, India's drop culture, and the Cats Can Dance brand — events and streetwear from Bangalore.</description>
+    <language>en-IN</language>
+    <copyright>© Cats Can Dance</copyright>
+    <lastBuildDate>Tue, 21 Apr 2026 00:00:00 +0530</lastBuildDate>
+
+    <item>
+      <title>Limited Drops 101: Why Scarcity Sells</title>
+      <link>https://catscandance.com/blog/limited-drops-101-scarcity-sells</link>
+      <guid>https://catscandance.com/blog/limited-drops-101-scarcity-sells</guid>
+      <pubDate>Wed, 18 Mar 2026 00:00:00 +0530</pubDate>
+      <description>A field guide to drop culture for India's emerging streetwear and music brands — written from inside the room.</description>
+    </item>
+    <item>
+      <title>How Bangalore's Underground Brands Build Cult Followings</title>
+      <link>https://catscandance.com/blog/bangalore-underground-brands-cult</link>
+      <guid>https://catscandance.com/blog/bangalore-underground-brands-cult</guid>
+      <pubDate>Wed, 11 Mar 2026 00:00:00 +0530</pubDate>
+      <description>From RSVP nights to limited streetwear drops — the playbook independent Bangalore brands use to build real loyalty.</description>
+    </item>
+    <item>
+      <title>The Rise of Music Merch as Collectibles in India</title>
+      <link>https://catscandance.com/blog/music-merch-collectibles-india</link>
+      <guid>https://catscandance.com/blog/music-merch-collectibles-india</guid>
+      <pubDate>Wed, 04 Mar 2026 00:00:00 +0530</pubDate>
+      <description>Why a 2026 hoodie from a Bangalore party brand is the new vinyl — and how India's music merch culture finally caught up.</description>
+    </item>
+    <item>
+      <title>Inside the Cats Can Dance Streetwear Drop</title>
+      <link>https://catscandance.com/blog/streetwear-drop-cats-can-dance</link>
+      <guid>https://catscandance.com/blog/streetwear-drop-cats-can-dance</guid>
+      <pubDate>Wed, 25 Feb 2026 00:00:00 +0530</pubDate>
+      <description>How a Bangalore streetwear label turns a music night into a wearable archive.</description>
+    </item>
+    <item>
+      <title>Behind the Decks: Bangalore's Rising DJs</title>
+      <link>https://catscandance.com/blog/behind-the-decks-bangalore-rising-djs</link>
+      <guid>https://catscandance.com/blog/behind-the-decks-bangalore-rising-djs</guid>
+      <pubDate>Wed, 18 Feb 2026 00:00:00 +0530</pubDate>
+      <description>Six artists from Bangalore reshaping how the city sounds at 2am.</description>
+    </item>
+    <item>
+      <title>A Guide to Techno &amp; House Nights in Bangalore</title>
+      <link>https://catscandance.com/blog/guide-techno-house-nights-bangalore</link>
+      <guid>https://catscandance.com/blog/guide-techno-house-nights-bangalore</guid>
+      <pubDate>Wed, 11 Feb 2026 00:00:00 +0530</pubDate>
+      <description>Where the city actually plays techno and house in 2026.</description>
+    </item>
+    <item>
+      <title>RSVP Culture: How Bangalore's Party Scene Works</title>
+      <link>https://catscandance.com/blog/rsvp-culture-bangalore-party-scene</link>
+      <guid>https://catscandance.com/blog/rsvp-culture-bangalore-party-scene</guid>
+      <pubDate>Wed, 04 Feb 2026 00:00:00 +0530</pubDate>
+      <description>Why the best nights in Bangalore aren't sold by the ticket.</description>
+    </item>
+    <item>
+      <title>Top 10 Event Organisers in India for Dance Music</title>
+      <link>https://catscandance.com/blog/top-event-organisers-india-dance-music</link>
+      <guid>https://catscandance.com/blog/top-event-organisers-india-dance-music</guid>
+      <pubDate>Wed, 28 Jan 2026 00:00:00 +0530</pubDate>
+      <description>The independent crews shaping India's dance music scene right now.</description>
+    </item>
+    <item>
+      <title>Where to Find Electronic Music Events in Bangalore</title>
+      <link>https://catscandance.com/blog/where-to-find-electronic-music-events-bangalore</link>
+      <guid>https://catscandance.com/blog/where-to-find-electronic-music-events-bangalore</guid>
+      <pubDate>Wed, 21 Jan 2026 00:00:00 +0530</pubDate>
+      <description>The actual sources Bangalore promoters use to fill rooms in 2026.</description>
+    </item>
+    <item>
+      <title>The Best Underground Parties in Bangalore (2026 Guide)</title>
+      <link>https://catscandance.com/blog/best-underground-parties-bangalore-2026</link>
+      <guid>https://catscandance.com/blog/best-underground-parties-bangalore-2026</guid>
+      <pubDate>Wed, 14 Jan 2026 00:00:00 +0530</pubDate>
+      <description>A working guide to where Bangalore actually dances when the lights go down.</description>
+    </item>
+  </channel>
+</rss>
